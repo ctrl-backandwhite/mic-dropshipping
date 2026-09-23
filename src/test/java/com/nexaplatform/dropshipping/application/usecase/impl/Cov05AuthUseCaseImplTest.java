@@ -212,8 +212,7 @@ class Cov05AuthUseCaseImplTest {
         when(userUseCase.findById(USER_ID)).thenReturn(stored);
         when(userUseCase.updateUser(any())).thenAnswer(i -> i.getArgument(0));
 
-        useCase.updateProfile(authOf(USER_ID.toString()),
-                profile().companyName("  Nexa SL  ").language("pt").build());
+        useCase.updateProfile(authOf(USER_ID.toString()), profile().companyName("  Nexa SL  ").language("pt").build());
 
         assertThat(stored.getCompanyName()).isEqualTo("Nexa SL");
         assertThat(stored.getLanguage()).isEqualTo("pt");

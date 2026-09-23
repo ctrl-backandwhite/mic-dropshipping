@@ -130,20 +130,13 @@ public class CustomsDeclarationGroupSync {
     /** Un grupo nuevo: el borrador, sin firma y por tanto sin agrupar todavía. */
     private static CustomsDeclarationGroupEntity borradorDe(Terna terna, Instant ahora) {
         Optional<Hs6DeclarationText> partida = Hs6DeclarationText.byCode(terna.hs6());
-        String enPartida = partida.map(Hs6DeclarationText::ename)
-                .orElseGet(() -> enGenerico(terna.hs6()));
-        String zhPartida = partida.map(Hs6DeclarationText::cname)
-                .orElseGet(() -> zhGenerico(terna.hs6()));
-        return CustomsDeclarationGroupEntity.builder()
-                .hs6(terna.hs6())
-                .material(terna.material())
+        String enPartida = partida.map(Hs6DeclarationText::ename).orElseGet(() -> enGenerico(terna.hs6()));
+        String zhPartida = partida.map(Hs6DeclarationText::cname).orElseGet(() -> zhGenerico(terna.hs6()));
+        return CustomsDeclarationGroupEntity.builder().hs6(terna.hs6()).material(terna.material())
                 .usageCode(terna.usageCode())
                 .ename(recortada(enPartida + parte(terna.materialCrudo()) + parte(terna.usoCrudo())))
-                .cname(recortada(zhPartida))
-                .productCount(Math.toIntExact(terna.total()))
-                .createdAt(ahora)
-                .updatedAt(ahora)
-                .build();
+                .cname(recortada(zhPartida)).productCount(Math.toIntExact(terna.total())).createdAt(ahora)
+                .updatedAt(ahora).build();
     }
 
     /** Lo único que la siembra toca de un grupo que ya existe. Ver el javadoc de la clase. */

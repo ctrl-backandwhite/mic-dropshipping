@@ -68,8 +68,7 @@ class EmailContentIT extends EmailITSupport {
         String html = cuerpoHtml(correo);
 
         assertThat(asuntoDe(correo)).isEqualTo(AuthEmailLabel.CONFIRM_SUBJECT.of("es"));
-        assertThat(html).contains("Ana López")
-                .contains(AuthEmailLabel.CONFIRM_CTA.of("es"));
+        assertThat(html).contains("Ana López").contains(AuthEmailLabel.CONFIRM_CTA.of("es"));
 
         String codigo = extraer(html, PATRON_CODIGO);
         assertThat(codigo).as("el correo debe traer el enlace de activación con el código").isNotBlank();
@@ -77,8 +76,8 @@ class EmailContentIT extends EmailITSupport {
 
         // El código del correo tiene que ser EL de la cuenta y tiene que servir para activarla.
         assertThat(codigoActivacionEnBd(email)).isEqualTo(codigo);
-        client.post().uri(ACTIVAR).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("code", codigo)).exchange().expectStatus().isNoContent();
+        client.post().uri(ACTIVAR).contentType(MediaType.APPLICATION_JSON).bodyValue(Map.of("code", codigo)).exchange()
+                .expectStatus().isNoContent();
         assertThat(estaActiva(email)).as("tras pulsar el enlace la cuenta queda activa").isTrue();
     }
 
@@ -90,8 +89,7 @@ class EmailContentIT extends EmailITSupport {
         despacharCola();
         String codigoOriginal = extraer(cuerpoHtml(correosPara(email).get(0)), PATRON_CODIGO);
 
-        client.post().uri(REENVIAR).contentType(MediaType.APPLICATION_JSON)
-                .header("CF-Connecting-IP", ipDeCliente())
+        client.post().uri(REENVIAR).contentType(MediaType.APPLICATION_JSON).header("CF-Connecting-IP", ipDeCliente())
                 .bodyValue(Map.of("email", email)).exchange().expectStatus().isNoContent();
         despacharCola();
 
@@ -103,11 +101,11 @@ class EmailContentIT extends EmailITSupport {
         assertThat(codigoNuevo).isNotBlank().isNotEqualTo(codigoOriginal);
 
         // El código viejo ya no vale (se ha reemplazado); el que acaba de llegar, sí.
-        client.post().uri(ACTIVAR).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("code", codigoOriginal)).exchange().expectStatus().is4xxClientError();
+        client.post().uri(ACTIVAR).contentType(MediaType.APPLICATION_JSON).bodyValue(Map.of("code", codigoOriginal))
+                .exchange().expectStatus().is4xxClientError();
         assertThat(estaActiva(email)).isFalse();
-        client.post().uri(ACTIVAR).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("code", codigoNuevo)).exchange().expectStatus().isNoContent();
+        client.post().uri(ACTIVAR).contentType(MediaType.APPLICATION_JSON).bodyValue(Map.of("code", codigoNuevo))
+                .exchange().expectStatus().isNoContent();
         assertThat(estaActiva(email)).isTrue();
     }
 
@@ -118,13 +116,11 @@ class EmailContentIT extends EmailITSupport {
         alta(email, "es", "Rosa");
         userUseCase.activate(codigoActivacionEnBd(email));
 
-        client.post().uri(REENVIAR).contentType(MediaType.APPLICATION_JSON)
-                .header("CF-Connecting-IP", ipDeCliente())
+        client.post().uri(REENVIAR).contentType(MediaType.APPLICATION_JSON).header("CF-Connecting-IP", ipDeCliente())
                 .bodyValue(Map.of("email", email)).exchange().expectStatus().isNoContent();
         despacharCola();
 
-        assertThat(correosPara(email))
-                .as("solo el correo del alta: reenviar a una cuenta activa no puede generar otro")
+        assertThat(correosPara(email)).as("solo el correo del alta: reenviar a una cuenta activa no puede generar otro")
                 .hasSize(1);
     }
 
@@ -147,8 +143,7 @@ class EmailContentIT extends EmailITSupport {
         assertThat(html).contains(AuthEmailLabel.CONFIRM_TITLE.of(idioma))
                 .contains(AuthEmailLabel.CONFIRM_CTA.of(idioma));
         assertThat(sinClavesDeTraduccion(html))
-                .as("el cuerpo no puede llevar claves sin traducir (email.x.y) ni variables sin resolver")
-                .isTrue();
+                .as("el cuerpo no puede llevar claves sin traducir (email.x.y) ni variables sin resolver").isTrue();
         assertThat(sinClavesDeTraduccion(asuntoDe(correo))).isTrue();
     }
 
@@ -167,11 +162,7 @@ class EmailContentIT extends EmailITSupport {
      * ================================================================================== */
 
     @ParameterizedTest(name = "nombre \"{0}\"")
-    @CsvSource(delimiter = '|', value = {
-            "Begoña Núñez-Ángel|es",
-            "李小龙 张伟|zh",
-            "Jean-François Sørensen|fr"
-    })
+    @CsvSource(delimiter = '|', value = {"Begoña Núñez-Ángel|es", "李小龙 张伟|zh", "Jean-François Sørensen|fr"})
     @DisplayName("los nombres con acentos, eñes o caracteres CJK llegan intactos al cuerpo del correo")
     void nombresConAcentosYCjkNoSeRompen(String nombre, String idioma) {
         String email = "nombre-" + UUID.randomUUID() + "@example.com";
@@ -236,8 +227,8 @@ class EmailContentIT extends EmailITSupport {
     @DisplayName("si el SMTP está caído, la cuenta se crea igual y el correo queda para reintentar (no se pierde)")
     void unFalloDeSmtpNoTumbaElAltaNiPierdeElCorreo() {
         String email = "smtp-caido-" + UUID.randomUUID() + "@example.com";
-        doThrow(new MailSendException("Connection refused: no route to SMTP host"))
-                .when(mailSender).send(any(MimeMessage.class));
+        doThrow(new MailSendException("Connection refused: no route to SMTP host")).when(mailSender)
+                .send(any(MimeMessage.class));
 
         registrar(email, "es", Map.of("firstName", "Sonia"));
         despacharCola();
@@ -292,9 +283,8 @@ class EmailContentIT extends EmailITSupport {
         // Correo de campaña tal y como lo compone la plataforma: el pie lleva el enlace de baja firmado.
         String enlaceBaja = "http://localhost:18082/api/campaigns/unsubscribe?lang=es&token="
                 + unsubscribeService.tokenFor(usuario.getId());
-        emailQueue.enqueue(email, "Novedades de esta semana · NX036", "emails/notification",
-                Map.of("title", "Novedades", "bodyHtml", "Productos nuevos para ti.",
-                        "unsubscribeUrl", enlaceBaja, "footer", "NX036"));
+        emailQueue.enqueue(email, "Novedades de esta semana · NX036", "emails/notification", Map.of("title",
+                "Novedades", "bodyHtml", "Productos nuevos para ti.", "unsubscribeUrl", enlaceBaja, "footer", "NX036"));
         despacharCola();
 
         String html = cuerpoHtml(correosPara(email).get(1));
@@ -306,14 +296,11 @@ class EmailContentIT extends EmailITSupport {
 
         // Manipulado (se cambia la firma): el usuario NO puede quedar dado de baja.
         String manipulado = token.substring(0, token.lastIndexOf('.')) + ".00000000000000000000000000000000";
-        client.get().uri("/api/campaigns/unsubscribe?lang=es&token=" + manipulado)
-                .exchange().expectStatus().isOk();
-        assertThat(estaDadoDeBajaDeMarketing(email))
-                .as("una firma falsa no puede dar de baja a nadie").isFalse();
+        client.get().uri("/api/campaigns/unsubscribe?lang=es&token=" + manipulado).exchange().expectStatus().isOk();
+        assertThat(estaDadoDeBajaDeMarketing(email)).as("una firma falsa no puede dar de baja a nadie").isFalse();
 
         // El del correo, tal cual: da de baja.
-        client.get().uri("/api/campaigns/unsubscribe?lang=es&token=" + token)
-                .exchange().expectStatus().isOk();
+        client.get().uri("/api/campaigns/unsubscribe?lang=es&token=" + token).exchange().expectStatus().isOk();
         assertThat(estaDadoDeBajaDeMarketing(email)).isTrue();
     }
 
@@ -333,12 +320,12 @@ class EmailContentIT extends EmailITSupport {
         assertThat(estadoDeSuscripcion(email)).isEqualTo("PENDING");
 
         // Un token inventado no puede confirmar el alta de otro.
-        client.get().uri("/api/newsletter/confirm?token=" + UUID.randomUUID().toString().replace("-", ""))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.confirmed").isEqualTo(false);
+        client.get().uri("/api/newsletter/confirm?token=" + UUID.randomUUID().toString().replace("-", "")).exchange()
+                .expectStatus().isOk().expectBody().jsonPath("$.confirmed").isEqualTo(false);
         assertThat(estadoDeSuscripcion(email)).isEqualTo("PENDING");
 
-        client.get().uri("/api/newsletter/confirm?token=" + token)
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.confirmed").isEqualTo(true);
+        client.get().uri("/api/newsletter/confirm?token=" + token).exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.confirmed").isEqualTo(true);
         assertThat(estadoDeSuscripcion(email)).isEqualTo("SUBSCRIBED");
     }
 
@@ -362,8 +349,7 @@ class EmailContentIT extends EmailITSupport {
         cuerpo.put("language", idioma);
         cuerpo.put("acceptedTerms", true);
         cuerpo.put("acceptedTermsVersion", "2026-07-31");
-        client.post().uri(REGISTRO).contentType(MediaType.APPLICATION_JSON)
-                .header("CF-Connecting-IP", ipDeCliente())
+        client.post().uri(REGISTRO).contentType(MediaType.APPLICATION_JSON).header("CF-Connecting-IP", ipDeCliente())
                 .bodyValue(cuerpo).exchange().expectStatus().isCreated();
     }
 
@@ -373,8 +359,7 @@ class EmailContentIT extends EmailITSupport {
      * mismo camino de negocio que usa el controlador, sin pasar por el limitador.
      */
     private User alta(String email, String idioma, String nombre) {
-        return userUseCase.register(User.builder().email(email).language(idioma).displayName(nombre).build(),
-                PASSWORD);
+        return userUseCase.register(User.builder().email(email).language(idioma).displayName(nombre).build(), PASSWORD);
     }
 
     private String codigoActivacionEnBd(String email) {
@@ -382,8 +367,8 @@ class EmailContentIT extends EmailITSupport {
     }
 
     private boolean estaActiva(String email) {
-        return Boolean.TRUE.equals(
-                jdbcTemplate.queryForObject("SELECT active FROM users WHERE email = ?", Boolean.class, email));
+        return Boolean.TRUE
+                .equals(jdbcTemplate.queryForObject("SELECT active FROM users WHERE email = ?", Boolean.class, email));
     }
 
     private boolean existeUsuario(String email) {
@@ -392,8 +377,8 @@ class EmailContentIT extends EmailITSupport {
     }
 
     private boolean estaDadoDeBajaDeMarketing(String email) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                "SELECT marketing_opt_out FROM users WHERE email = ?", Boolean.class, email));
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT marketing_opt_out FROM users WHERE email = ?",
+                Boolean.class, email));
     }
 
     private String estadoDeSuscripcion(String email) {
@@ -403,8 +388,8 @@ class EmailContentIT extends EmailITSupport {
 
     private String estadoDelCorreo(String email) {
         return jdbcTemplate.queryForObject(
-                "SELECT status FROM outbound_email WHERE to_address = ? ORDER BY created_at DESC LIMIT 1",
-                String.class, email);
+                "SELECT status FROM outbound_email WHERE to_address = ? ORDER BY created_at DESC LIMIT 1", String.class,
+                email);
     }
 
     private int intentosDelCorreo(String email) {
@@ -416,8 +401,8 @@ class EmailContentIT extends EmailITSupport {
 
     private boolean tieneProximoIntento(String email) {
         Integer n = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM outbound_email WHERE to_address = ? AND next_attempt_at > now()",
-                Integer.class, email);
+                "SELECT count(*) FROM outbound_email WHERE to_address = ? AND next_attempt_at > now()", Integer.class,
+                email);
         return n != null && n > 0;
     }
 
@@ -427,8 +412,7 @@ class EmailContentIT extends EmailITSupport {
      * idioma: el usuario recibe la clave en crudo.
      */
     private static boolean sinClavesDeTraduccion(String texto) {
-        return !texto.matches("(?s).*\\b(email|order|invoice|auth)\\.[a-z]+\\.[a-z.]+\\b.*")
-                && !texto.contains("${")
+        return !texto.matches("(?s).*\\b(email|order|invoice|auth)\\.[a-z]+\\.[a-z.]+\\b.*") && !texto.contains("${")
                 && !texto.contains("th:text");
     }
 }

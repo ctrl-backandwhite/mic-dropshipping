@@ -99,12 +99,11 @@ public class NewsletterService {
     private void sendConfirmation(NewsletterSubscriberEntity sub) {
         try {
             emailQueueService.enqueue(sub.getEmail(), "Confirma tu suscripción · NX036", "emails/welcome",
-                    Map.of("title", "Un último paso",
-                            "bodyHtml", "Pulsa el botón para confirmar que quieres recibir nuestras novedades."
+                    Map.of("title", "Un último paso", "bodyHtml",
+                            "Pulsa el botón para confirmar que quieres recibir nuestras novedades."
                                     + " Si no has sido tú, ignora este correo: sin confirmar no te escribiremos.",
-                            "ctaLabel", "Confirmar suscripción",
-                            "ctaUrl", storefrontBaseUrl + "/newsletter/confirm?token=" + sub.getToken(),
-                            "icon", "circle-check"));
+                            "ctaLabel", "Confirmar suscripción", "ctaUrl",
+                            storefrontBaseUrl + "/newsletter/confirm?token=" + sub.getToken(), "icon", "circle-check"));
         } catch (RuntimeException e) {
             log.warn("::> [NEWSLETTER] No se pudo enviar la confirmación a un alta pendiente: {}", e.getMessage());
         }

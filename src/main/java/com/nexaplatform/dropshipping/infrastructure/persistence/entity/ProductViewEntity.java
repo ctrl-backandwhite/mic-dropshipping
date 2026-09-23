@@ -20,7 +20,7 @@ import java.util.UUID;
  * historial no se llena del mismo producto repetido por recargar la página.
  */
 @Entity
-@Table(name = "product_view", uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "product_id" }))
+@Table(name = "product_view", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "product_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

@@ -32,8 +32,7 @@ class DeepSeekChatProviderTest {
     void sinClaveNoEstaDisponible() {
         ReflectionTestUtils.setField(provider, "apiKey", "");
         assertFalse(provider.available());
-        assertThrows(ChatProviderException.class,
-                () -> provider.reply(List.of(ChatMessage.user("hola")), List.of()));
+        assertThrows(ChatProviderException.class, () -> provider.reply(List.of(ChatMessage.user("hola")), List.of()));
     }
 
     @Test
@@ -86,8 +85,7 @@ class DeepSeekChatProviderTest {
     @Test
     @DisplayName("El cuerpo lleva el modelo, los papeles de cada turno y las herramientas declaradas")
     void cuerpoDeLaPeticion() throws Exception {
-        List<ChatMessage> messages = List.of(
-                ChatMessage.system("Eres el asistente de la tienda."),
+        List<ChatMessage> messages = List.of(ChatMessage.system("Eres el asistente de la tienda."),
                 ChatMessage.user("¿Tenéis zapatillas?"));
         ChatToolSpec tool = new ChatToolSpec("buscar_productos", "Busca en el catálogo",
                 "{\"type\":\"object\",\"properties\":{\"consulta\":{\"type\":\"string\"}}}");

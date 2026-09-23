@@ -24,19 +24,14 @@ class UserAddressUpdateMapperTest {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         Instant createdAt = Instant.parse("2020-01-01T00:00:00Z");
-        UserAddress target = UserAddress.builder()
-                .id(id).userId(userId).label("Home").fullName("Old Name").phone("000")
-                .line1("Old 1").line2("Old 2").city("OldCity").state("OldState")
-                .postalCode("00000").country("ES").isDefault(true)
-                .createdAt(createdAt).createdBy("creator").updatedBy("editor1")
-                .build();
+        UserAddress target = UserAddress.builder().id(id).userId(userId).label("Home").fullName("Old Name").phone("000")
+                .line1("Old 1").line2("Old 2").city("OldCity").state("OldState").postalCode("00000").country("ES")
+                .isDefault(true).createdAt(createdAt).createdBy("creator").updatedBy("editor1").build();
 
-        UserAddress source = UserAddress.builder()
-                .id(UUID.randomUUID()).userId(UUID.randomUUID()).label("Work").fullName("New Name").phone("123")
-                .line1("New 1").line2("New 2").city("NewCity").state("NewState")
-                .postalCode("11111").country("FR").isDefault(false)
-                .createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2")
-                .build();
+        UserAddress source = UserAddress.builder().id(UUID.randomUUID()).userId(UUID.randomUUID()).label("Work")
+                .fullName("New Name").phone("123").line1("New 1").line2("New 2").city("NewCity").state("NewState")
+                .postalCode("11111").country("FR").isDefault(false).createdAt(Instant.parse("2099-01-01T00:00:00Z"))
+                .createdBy("attacker").updatedBy("editor2").build();
 
         mapper.updateFromModel(source, target);
 

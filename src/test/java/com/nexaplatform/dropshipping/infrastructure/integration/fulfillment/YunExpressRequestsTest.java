@@ -22,49 +22,40 @@ class YunExpressRequestsTest {
 
     @Test
     void elAltaDeEnvioSerializaLosNombresQueEsperaLaApi() throws IOException {
-        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
-                "BPA", "NX-TEST-0001", "KG", "CM", "W", "PDF",
+        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment("BPA", "NX-TEST-0001", "KG", "CM",
+                "W", "PDF",
                 List.of(new YunExpressRequests.Parcel(new BigDecimal("0.500"), new BigDecimal("32.0"),
                         new BigDecimal("24.0"), new BigDecimal("5.0"))),
-                new YunExpressRequests.Receiver("Ana", "Lopez", "ES", "Zaragoza", "Zaragoza",
-                        List.of("Calle Mayor 1"), "50001", "+34600000000", "test@example.com"),
-                List.of(new YunExpressRequests.DeclarationLine("Cotton T-shirt", "棉T恤", 1,
-                        new BigDecimal("12.5"), new BigDecimal("0.3"), "USD", "6109100000",
-                        "Cotton", "Daily wear", "https://example.com/p/1", "SKU-1")),
-                null,
-                List.of(new YunExpressRequests.ExtraService("V1", "云途预缴")));
+                new YunExpressRequests.Receiver("Ana", "Lopez", "ES", "Zaragoza", "Zaragoza", List.of("Calle Mayor 1"),
+                        "50001", "+34600000000", "test@example.com"),
+                List.of(new YunExpressRequests.DeclarationLine("Cotton T-shirt", "棉T恤", 1, new BigDecimal("12.5"),
+                        new BigDecimal("0.3"), "USD", "6109100000", "Cotton", "Daily wear", "https://example.com/p/1",
+                        "SKU-1")),
+                null, List.of(new YunExpressRequests.ExtraService("V1", "云途预缴")));
 
         String json = mapper.writeValueAsString(req);
 
-        assertThat(json)
-                .contains("\"product_code\":\"BPA\"")
-                .contains("\"customer_order_number\":\"NX-TEST-0001\"")
-                .contains("\"weight_unit\":\"KG\"")
-                .contains("\"size_unit\":\"CM\"")
-                .contains("\"label_type\":\"PDF\"")
-                .contains("\"country_code\":\"ES\"")
-                .contains("\"address_lines\":[\"Calle Mayor 1\"]")
-                .contains("\"postal_code\":\"50001\"")
-                .contains("\"name_local\":\"棉T恤\"")
-                .contains("\"hs_code\":\"6109100000\"")
-                .contains("\"sku_code\":\"SKU-1\"");
+        assertThat(json).contains("\"product_code\":\"BPA\"").contains("\"customer_order_number\":\"NX-TEST-0001\"")
+                .contains("\"weight_unit\":\"KG\"").contains("\"size_unit\":\"CM\"").contains("\"label_type\":\"PDF\"")
+                .contains("\"country_code\":\"ES\"").contains("\"address_lines\":[\"Calle Mayor 1\"]")
+                .contains("\"postal_code\":\"50001\"").contains("\"name_local\":\"棉T恤\"")
+                .contains("\"hs_code\":\"6109100000\"").contains("\"sku_code\":\"SKU-1\"");
     }
 
     @Test
     void sinIossNoSeEnviaElBloqueAduanero() throws IOException {
         // Por encima del umbral de minimis el régimen IOSS no aplica: mandarlo vacío hace que la aduana
         // rechace la liquidación, así que el campo no debe aparecer en el JSON.
-        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
-                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null, null);
+        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment("BPA", "NX-1", "KG", "CM", "W",
+                "PDF", List.of(), null, List.of(), null, null);
 
         assertThat(mapper.writeValueAsString(req)).doesNotContain("customs_number");
     }
 
     @Test
     void elPrepagoDeIvaViajaConLosNombresQueEsperaLaApi() throws IOException {
-        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
-                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null,
-                List.of(new YunExpressRequests.ExtraService("V1", "云途预缴")));
+        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment("BPA", "NX-1", "KG", "CM", "W",
+                "PDF", List.of(), null, List.of(), null, List.of(new YunExpressRequests.ExtraService("V1", "云途预缴")));
 
         String json = mapper.writeValueAsString(req);
 
@@ -76,16 +67,15 @@ class YunExpressRequestsTest {
     void sinServicioDePrepagoElCampoNoAparece() throws IOException {
         // Mandar `extra_services: []` no es lo mismo que no mandarlo: hay validaciones del transportista
         // que rechazan el array vacío.
-        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
-                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null, null);
+        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment("BPA", "NX-1", "KG", "CM", "W",
+                "PDF", List.of(), null, List.of(), null, null);
 
         assertThat(mapper.writeValueAsString(req)).doesNotContain("extra_services");
     }
 
     @Test
     void unBultoSinMedidasSoloDeclaraElPeso() throws IOException {
-        YunExpressRequests.Parcel parcel =
-                new YunExpressRequests.Parcel(new BigDecimal("1.000"), null, null, null);
+        YunExpressRequests.Parcel parcel = new YunExpressRequests.Parcel(new BigDecimal("1.000"), null, null, null);
 
         String json = mapper.writeValueAsString(parcel);
 
@@ -94,10 +84,9 @@ class YunExpressRequestsTest {
 
     @Test
     void laSuscripcionYLaAnulacionUsanSusNombresDeCampo() throws IOException {
-        assertThat(mapper.writeValueAsString(new YunExpressRequests.SubscribeTracking(
-                List.of("YT2621101299000012"), "A", List.of("Y"))))
-                .contains("\"waybill_numbers\":[\"YT2621101299000012\"]")
-                .contains("\"subscribe_type\":\"A\"")
+        assertThat(mapper.writeValueAsString(
+                new YunExpressRequests.SubscribeTracking(List.of("YT2621101299000012"), "A", List.of("Y"))))
+                .contains("\"waybill_numbers\":[\"YT2621101299000012\"]").contains("\"subscribe_type\":\"A\"")
                 .contains("\"query_type\":[\"Y\"]");
         assertThat(mapper.writeValueAsString(new YunExpressRequests.CancelShipment("YT1")))
                 .isEqualTo("{\"waybill_number\":\"YT1\"}");

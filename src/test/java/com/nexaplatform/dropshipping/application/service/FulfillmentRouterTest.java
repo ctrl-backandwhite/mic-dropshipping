@@ -70,17 +70,17 @@ class FulfillmentRouterTest {
         lenient().when(segundo.nombre()).thenReturn("SEGUNDO");
         lenient().when(yunexpress.isSupported(anyString())).thenReturn(true);
         lenient().when(segundo.isSupported(anyString())).thenReturn(true);
-        lenient().when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("FZZXR", "Apparel line", 785, 5, 8),
-                new ShippingOption("THPHR", "Global line", 900, 6, 10)));
-        lenient().when(segundo.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15),
-                new ShippingOption("1564849338719199233", "Segundo Ordinary", 883, 4, 8)));
+        lenient().when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("FZZXR", "Apparel line", 785, 5, 8),
+                        new ShippingOption("THPHR", "Global line", 900, 6, 10)));
+        lenient().when(segundo.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15),
+                        new ShippingOption("1564849338719199233", "Segundo Ordinary", 883, 4, 8)));
     }
 
     private static ShippingQuote cotizacion(ShippingOption... opciones) {
-        return new ShippingQuote(true, PAIS, opciones[0].amountUsdCents(), "Transportista",
-                "Standard", opciones[0].etaMinDays(), opciones[0].etaMaxDays(), "EU", List.of(opciones));
+        return new ShippingQuote(true, PAIS, opciones[0].amountUsdCents(), "Transportista", "Standard",
+                opciones[0].etaMinDays(), opciones[0].etaMaxDays(), "EU", List.of(opciones));
     }
 
     private List<ShippingOption> opcionesPara(List<ProductEntity> productos) {
@@ -94,8 +94,7 @@ class FulfillmentRouterTest {
     void fundeLasDosListasPorPrecio() {
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
-        assertThat(opciones).extracting(ShippingOption::amountUsdCents)
-                .containsExactly(767, 785, 883, 900);
+        assertThat(opciones).extracting(ShippingOption::amountUsdCents).containsExactly(767, 785, 883, 900);
     }
 
     @Test
@@ -103,21 +102,20 @@ class FulfillmentRouterTest {
     void cadaOpcionSabeDeQuienEs() {
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
-        assertThat(opciones).extracting(ShippingOption::carrier)
-                .containsExactly("SEGUNDO", "YUNEXPRESS", "SEGUNDO", "YUNEXPRESS");
+        assertThat(opciones).extracting(ShippingOption::carrier).containsExactly("SEGUNDO", "YUNEXPRESS", "SEGUNDO",
+                "YUNEXPRESS");
     }
 
     @Test
     @DisplayName("a igual precio se ofrece antes la que llega antes")
     void aIgualPrecioGanaElPlazoCorto() {
-        when(segundo.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("rapida", "Segundo Fast", 785, 3, 5)));
+        when(segundo.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("rapida", "Segundo Fast", 785, 3, 5)));
 
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
         assertThat(opciones.get(0).code())
-                .as("mismo precio que la línea de ropa (785) pero llega en 5 días en vez de en 8")
-                .isEqualTo("rapida");
+                .as("mismo precio que la línea de ropa (785) pero llega en 5 días en vez de en 8").isEqualTo("rapida");
     }
 
     // ------------------------------------------------------------------ qué puede llevar cada uno
@@ -128,8 +126,7 @@ class FulfillmentRouterTest {
         List<ShippingOption> opciones = opcionesPara(List.of(taza()));
 
         assertThat(opciones).extracting(ShippingOption::code)
-                .as("FZZXR solo admite textil: ofrecerla para una taza acaba en guía rechazada")
-                .doesNotContain("FZZXR")
+                .as("FZZXR solo admite textil: ofrecerla para una taza acaba en guía rechazada").doesNotContain("FZZXR")
                 .contains("THPHR", "1564849338719199233");
     }
 
@@ -161,8 +158,8 @@ class FulfillmentRouterTest {
         when(yunexpress.quote(anyString(), any())).thenThrow(new IllegalStateException("caído"));
         when(segundo.quote(anyString(), any())).thenThrow(new IllegalStateException("caído"));
 
-        ShippingQuote cotizacion = enrutador.cotizar(PAIS,
-                FulfillmentProvider.ParcelSpec.ofWeight(500), List.of(camiseta()));
+        ShippingQuote cotizacion = enrutador.cotizar(PAIS, FulfillmentProvider.ParcelSpec.ofWeight(500),
+                List.of(camiseta()));
 
         assertThat(cotizacion.options()).isEmpty();
     }
@@ -186,16 +183,15 @@ class FulfillmentRouterTest {
         // Al cliente le da igual quién lleve el paquete: mira cuánto cuesta y cuándo llega. Si dos
         // opciones prometen lo mismo, la cara no le aporta nada — solo le hace elegir entre dos cosas
         // que para él son idénticas, y deja la tienda con pinta de estar cobrando de más.
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("FZZXR", "Apparel line", 850, 8, 15)));
-        when(segundo.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15)));
+        when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("FZZXR", "Apparel line", 850, 8, 15)));
+        when(segundo.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15)));
 
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
         assertThat(opciones).hasSize(1);
-        assertThat(opciones.get(0).amountUsdCents())
-                .as("mismo plazo, precios distintos: se queda la barata")
+        assertThat(opciones.get(0).amountUsdCents()).as("mismo plazo, precios distintos: se queda la barata")
                 .isEqualTo(767);
         assertThat(opciones.get(0).carrier()).isEqualTo("SEGUNDO");
     }
@@ -208,16 +204,14 @@ class FulfillmentRouterTest {
         // son el mismo servicio: SEGUNDO es más barato porque vende uno más lento. Fundirlas por el nombre
         // —que menciona a YunExpress en las dos— le quitaría al cliente la opción rápida, que además
         // es la más barata de su tramo.
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("FZZXR", "YunExpress Apparel", 1079, 5, 8)));
-        when(segundo.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("1868922929754472449", "YunExpress Ordinary", 960, 8, 15)));
+        when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("FZZXR", "YunExpress Apparel", 1079, 5, 8)));
+        when(segundo.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("1868922929754472449", "YunExpress Ordinary", 960, 8, 15)));
 
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
-        assertThat(opciones)
-                .as("plazos distintos son servicios distintos, aunque el nombre se parezca")
-                .hasSize(2);
+        assertThat(opciones).as("plazos distintos son servicios distintos, aunque el nombre se parezca").hasSize(2);
         assertThat(opciones.get(0).amountUsdCents()).isEqualTo(960);
     }
 
@@ -226,10 +220,10 @@ class FulfillmentRouterTest {
     void ganaLaBarataSeaDeQuienSea() {
         // Y al revés que en el caso anterior: si el directo es el barato, se queda el directo. La regla
         // es el precio, no el transportista.
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("FZZXR", "Apparel line", 700, 5, 8)));
-        when(segundo.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("otra", "Segundo Ordinary", 900, 5, 8)));
+        when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("FZZXR", "Apparel line", 700, 5, 8)));
+        when(segundo.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("otra", "Segundo Ordinary", 900, 5, 8)));
 
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
@@ -242,14 +236,10 @@ class FulfillmentRouterTest {
 
     /** Ocho canales con plazos distintos —para que la deduplicación por plazo no se lleve ninguno—. */
     private static ShippingQuote ochoCanales() {
-        return cotizacion(
-                new ShippingOption("c900", "Canal 900", 900, 1, 2),
-                new ShippingOption("c800", "Canal 800", 800, 2, 3),
-                new ShippingOption("c700", "Canal 700", 700, 3, 4),
-                new ShippingOption("c600", "Canal 600", 600, 4, 5),
-                new ShippingOption("c500", "Canal 500", 500, 5, 6),
-                new ShippingOption("c400", "Canal 400", 400, 6, 7),
-                new ShippingOption("c300", "Canal 300", 300, 7, 8),
+        return cotizacion(new ShippingOption("c900", "Canal 900", 900, 1, 2),
+                new ShippingOption("c800", "Canal 800", 800, 2, 3), new ShippingOption("c700", "Canal 700", 700, 3, 4),
+                new ShippingOption("c600", "Canal 600", 600, 4, 5), new ShippingOption("c500", "Canal 500", 500, 5, 6),
+                new ShippingOption("c400", "Canal 400", 400, 6, 7), new ShippingOption("c300", "Canal 300", 300, 7, 8),
                 new ShippingOption("c200", "Canal 200", 200, 8, 9));
     }
 
@@ -258,14 +248,13 @@ class FulfillmentRouterTest {
     void soloLasCincoMasBaratas() {
         // Con quince opciones —lo que devuelve SEGUNDO para España— la pantalla se vuelve un catálogo y el
         // cliente abandona. Se le enseña un abanico corto, y el criterio del recorte es el precio.
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
+        when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
         when(segundo.quote(anyString(), any())).thenReturn(ochoCanales());
 
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
-        assertThat(opciones).extracting(ShippingOption::amountUsdCents)
-                .containsExactly(200, 300, 400, 500, 600);
+        assertThat(opciones).extracting(ShippingOption::amountUsdCents).containsExactly(200, 300, 400, 500, 600);
     }
 
     @Test
@@ -273,14 +262,11 @@ class FulfillmentRouterTest {
     void elRecorteEsPorPrecioNoPorOrdenDeLlegada() {
         // Si el transportista que contesta antes trae las caras, sus opciones NO pueden desplazar a las
         // baratas del otro: el recorte va después de ordenar, nunca sobre la lista sin ordenar.
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("y1", "Cara 1", 2000, 1, 3),
-                new ShippingOption("y2", "Cara 2", 2100, 2, 4),
-                new ShippingOption("y3", "Cara 3", 2200, 3, 5),
-                new ShippingOption("y4", "Cara 4", 2300, 4, 6),
-                new ShippingOption("y5", "Cara 5", 2400, 5, 7)));
-        when(segundo.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("barata", "Barata", 300, 9, 14)));
+        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(new ShippingOption("y1", "Cara 1", 2000, 1, 3),
+                new ShippingOption("y2", "Cara 2", 2100, 2, 4), new ShippingOption("y3", "Cara 3", 2200, 3, 5),
+                new ShippingOption("y4", "Cara 4", 2300, 4, 6), new ShippingOption("y5", "Cara 5", 2400, 5, 7)));
+        when(segundo.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("barata", "Barata", 300, 9, 14)));
 
         List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
 
@@ -302,8 +288,8 @@ class FulfillmentRouterTest {
     void laCabeceraSigueSiendoLaMasBarata() {
         // El recorte no puede mover el importe que el resto del checkout ya usaba: la más barata
         // sobrevive siempre al recorte, porque el recorte empieza justo por ella.
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
+        when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
         when(segundo.quote(anyString(), any())).thenReturn(ochoCanales());
 
         ShippingQuote cotizacion = enrutador.cotizar(PAIS, FulfillmentProvider.ParcelSpec.ofWeight(500),
@@ -316,8 +302,8 @@ class FulfillmentRouterTest {
     @DisplayName("un tope de cero deja pasar todas: es la vía de escape para depurar")
     void unTopeDeCeroNoRecorta() {
         FulfillmentRouter sinTope = new FulfillmentRouter(List.of(yunexpress, segundo), elegibilidad, 0);
-        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
+        when(yunexpress.quote(anyString(), any()))
+                .thenReturn(cotizacion(new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
         when(segundo.quote(anyString(), any())).thenReturn(ochoCanales());
 
         List<ShippingOption> opciones = sinTope

@@ -77,12 +77,13 @@ class CartSuggestionServiceTest {
 
     /** Un presupuesto de checkout con el subtotal indicado; lo demás no interviene aquí. */
     private static CheckoutPreviewService.Preview preview(int subtotalUsdCents) {
-        return new CheckoutPreviewService.Preview(null, subtotalUsdCents, 0, 0, 0, 0, null, null, null, null, null, null, null, null, null, null, null);
+        return new CheckoutPreviewService.Preview(null, subtotalUsdCents, 0, 0, 0, 0, null, null, null, null, null,
+                null, null, null, null, null, null);
     }
 
     /** Un producto de verdad, con su peso: es lo que el servicio usa para saber si cabe. */
-    private static com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity producto(
-            UUID id, int gramos) {
+    private static com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity producto(UUID id,
+            int gramos) {
         var e = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity();
         e.setId(id);
         e.setWeightGrams(gramos);
@@ -92,7 +93,9 @@ class CartSuggestionServiceTest {
     private ProductSummaryView producto(UUID id, String slug, String titulo) {
         // Veintiséis componentes, de los que a esta prueba solo le importan cuatro:
         // identificador, ruta, título e imagen. El resto va vacío a propósito.
-        return new ProductSummaryView(id, slug, titulo, "http://img/" + slug, null, null, null, 0, 0, null, null, null, new java.math.BigDecimal("10.00"), null, null, null, null, null, false, null, null, null, null, null, null, false, false);
+        return new ProductSummaryView(id, slug, titulo, "http://img/" + slug, null, null, null, 0, 0, null, null, null,
+                new java.math.BigDecimal("10.00"), null, null, null, null, null, false, null, null, null, null, null,
+                null, false, false);
     }
 
     private void conCandidatos(ProductSummaryView... vistas) {
@@ -121,11 +124,10 @@ class CartSuggestionServiceTest {
     @Test
     @DisplayName("Solo se sugiere lo que NO suma arancel; lo que sí suma se descarta")
     void soloLoQueNoSumaArancel() {
-        conCandidatos(producto(candidatoGratis, "calcetines", "Calcetines"),
-                producto(candidatoCaro, "reloj", "Reloj"));
-        Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Map.of(
-                candidatoGratis, new DutyBadge(0, "0,00 €", grupo, false),
-                candidatoCaro, new DutyBadge(330, "3,00 €", UUID.randomUUID(), false)));
+        conCandidatos(producto(candidatoGratis, "calcetines", "Calcetines"), producto(candidatoCaro, "reloj", "Reloj"));
+        Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Map.of(candidatoGratis, new DutyBadge(0, "0,00 €", grupo, false), candidatoCaro,
+                        new DutyBadge(330, "3,00 €", UUID.randomUUID(), false)));
         Mockito.when(shippingQuotes.quote(Mockito.any(), Mockito.any()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YunExpress", "BPA", 5, 9, "EU"))
                 .thenReturn(new ShippingQuote(true, "ES", 540, "YunExpress", "BPA", 5, 9, "EU"));
@@ -225,8 +227,7 @@ class CartSuggestionServiceTest {
         java.util.Map<UUID, Integer> pesos = java.util.Map.of(enCarrito, 1700, ligero, 200, pesado, 900);
         Mockito.when(productRepository.findAllById(Mockito.any())).thenAnswer(i -> {
             Iterable<UUID> pedidos = i.getArgument(0);
-            List<com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity> salida =
-                    new java.util.ArrayList<>();
+            List<com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity> salida = new java.util.ArrayList<>();
             for (UUID id : pedidos) {
                 if (pesos.containsKey(id)) {
                     salida.add(producto(id, pesos.get(id)));
@@ -234,8 +235,8 @@ class CartSuggestionServiceTest {
             }
             return salida;
         });
-        Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Map.of(
-                ligero, new DutyBadge(0, "0,00 €", grupo, false), pesado, new DutyBadge(0, "0,00 €", grupo, false)));
+        Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Map.of(ligero,
+                new DutyBadge(0, "0,00 €", grupo, false), pesado, new DutyBadge(0, "0,00 €", grupo, false)));
         Mockito.when(shippingQuotes.quote(Mockito.any(), Mockito.any()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YunExpress", "BPA", 5, 9, "EU"));
 

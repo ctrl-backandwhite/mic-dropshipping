@@ -41,8 +41,7 @@ class OperatorCommissionServiceTest {
     OperatorCommissionService service;
 
     private static Order order(String source, OrderItem... items) {
-        return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").source(source)
-                .items(List.of(items)).build();
+        return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").source(source).items(List.of(items)).build();
     }
 
     private static OrderItem item(long costCnyCents, int qty) {
@@ -77,8 +76,8 @@ class OperatorCommissionServiceTest {
         UUID subject = UUID.randomUUID();
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::currentSubject).thenReturn(subject.toString());
-            when(userRepository.findById(subject))
-                    .thenReturn(Optional.of(UserEntity.builder().email("ops@nx036.local").displayName("Carlos").build()));
+            when(userRepository.findById(subject)).thenReturn(
+                    Optional.of(UserEntity.builder().email("ops@nx036.local").displayName("Carlos").build()));
             when(actionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // 11300 * 2 = 22600 gross; base = 22600/1.13 = 20000; 10% = 2000 cents

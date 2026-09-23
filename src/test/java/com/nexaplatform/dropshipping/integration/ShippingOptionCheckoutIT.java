@@ -68,8 +68,7 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
             new ShippingOption(CANAL_CARO, "Global line", PORTE_CARO, 6, 10));
 
     private static final ObjectMapper JSON = JsonMapper.builder()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-            .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     /** El transportista, sustituido: ver la nota de la clase. */
     @MockitoBean
@@ -109,8 +108,8 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
         assertThat(previa.get("options").get(0).get("code").asText()).isEqualTo(CANAL_BARATO);
         assertThat(previa.get("options").get(0).get("etaMinDays").asInt()).isEqualTo(5);
         assertThat(previa.get("options").get(1).get("code").asText()).isEqualTo(CANAL_CARO);
-        assertThat(previa.get("selectedShippingOptionCode").asText())
-                .as("sin elegir nada se cotiza el más barato").isEqualTo(CANAL_BARATO);
+        assertThat(previa.get("selectedShippingOptionCode").asText()).as("sin elegir nada se cotiza el más barato")
+                .isEqualTo(CANAL_BARATO);
         assertThat(previa.get("amountUsdCents").asInt()).isEqualTo(PORTE_BARATO);
     }
 
@@ -151,8 +150,7 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
 
         assertThat(centimos(pedido, "shipping")).isEqualTo(PORTE_CARO);
         assertThat(centimos(pedido, "total")).isEqualTo(UNIDAD_CENTS + PORTE_CARO);
-        assertThat(canalGuardado())
-                .as("sin la columna, la guía saldría por un canal distinto del cotizado")
+        assertThat(canalGuardado()).as("sin la columna, la guía saldría por un canal distinto del cotizado")
                 .isEqualTo(CANAL_CARO);
     }
 
@@ -216,21 +214,20 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
 
     private JsonNode checkout(String canal) {
         String canalJson = canal == null ? "" : ",\"shippingOptionCode\":\"" + canal + "\"";
-        String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\""
-                + canalJson + ",\"items\":[{\"productId\":\"" + productId + "\",\"quantity\":1}]}";
+        String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\"" + canalJson
+                + ",\"items\":[{\"productId\":\"" + productId + "\",\"quantity\":1}]}";
         return cuerpo(client.post().uri(CHECKOUT).header(HttpHeaders.AUTHORIZATION, bearer(token))
                 // La clave de idempotencia es OBLIGATORIA en todo lo que mueve dinero: sin ella el
                 // servidor responde 400. Un arnés de prueba es un cliente más y tiene que mandarla.
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+                .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(cuerpo).exchange().expectStatus().isCreated());
     }
 
     /* ---------- Lecturas y siembra ---------- */
 
     private String canalGuardado() {
-        return jdbcTemplate.queryForObject(
-                "SELECT shipping_channel_code FROM customer_order WHERE user_id = ?", String.class, userId);
+        return jdbcTemplate.queryForObject("SELECT shipping_channel_code FROM customer_order WHERE user_id = ?",
+                String.class, userId);
     }
 
     private void insertarUsuario(UUID id, String email) {
@@ -250,18 +247,19 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
         // La partida 6109 (camisetas de punto) no es decorativa: desde que hay dos transportistas, el
         // enrutador solo ofrece la línea de ropa —la más barata de las dos de esta prueba— si TODO el
         // pedido es textil. Un producto sin partida perdería esa opción y aquí se cotizaría la cara.
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, shipping_cny, iva_cny, weight_grams, hs_code, created_at,"
-                + " updated_at)"
-                + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
-                + " 'USD', 0, 0, 500, '610910', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                        + " base_price, currency, shipping_cny, iva_cny, weight_grams, hs_code, created_at,"
+                        + " updated_at)" + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
+                        + " 'USD', 0, 0, 500, '610910', now(), now())",
                 id, "producto-" + sufijo, "ext-" + sufijo, basePrice);
         return id;
     }
 
     private void insertarIva(String pais, int rateBps) {
-        jdbcTemplate.update("INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
-                + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
+                        + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
                 pais, rateBps);
     }
 
@@ -270,10 +268,8 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
                 {"fullName":"Comprador de prueba","phone":"+34600000000","line1":"Gran Via 1",
                  "city":"Madrid","postalCode":"28013","country":"%s","isDefault":true}
                 """.formatted(pais);
-        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES)
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(creada.get("id").asText());
     }
 
@@ -297,7 +293,6 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
     /** Céntimos de un importe ya formateado por el backend ("$17.85"). */
     private static int centimosDeTexto(String formateado) {
         String limpio = formateado.replace(",", "").replaceAll("[^0-9.\\-]", "");
-        return new java.math.BigDecimal(limpio).movePointRight(2).setScale(0, RoundingMode.HALF_UP)
-                .intValueExact();
+        return new java.math.BigDecimal(limpio).movePointRight(2).setScale(0, RoundingMode.HALF_UP).intValueExact();
     }
 }

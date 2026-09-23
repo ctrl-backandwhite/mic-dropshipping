@@ -166,9 +166,8 @@ class AdminDeclarationGroupControllerTest {
     }
 
     private static CustomsDeclarationGroupEntity grupo(String ename, Instant aprobado) {
-        return CustomsDeclarationGroupEntity.builder().id(ID).hs6("620443").material("COTTON")
-                .usageCode("CASUAL WEAR").ename(ename).cname("男式棉制机织长裤").productCount(728)
-                .approvedAt(aprobado).build();
+        return CustomsDeclarationGroupEntity.builder().id(ID).hs6("620443").material("COTTON").usageCode("CASUAL WEAR")
+                .ename(ename).cname("男式棉制机织长裤").productCount(728).approvedAt(aprobado).build();
     }
 
     private static Authentication autenticacionDe(String email) {

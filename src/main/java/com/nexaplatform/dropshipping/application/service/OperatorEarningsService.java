@@ -57,7 +57,7 @@ public class OperatorEarningsService {
     /** Reindexa en OpenSearch todas las acciones de operador (botón admin "Reindexar"). Devuelve el nº indexado. */
     @Transactional(readOnly = true)
     public int reindexAll() {
-        int[] n = { 0 };
+        int[] n = {0};
         repository.findAll().forEach(a -> {
             indexer.index(a);
             n[0]++;
@@ -77,19 +77,18 @@ public class OperatorEarningsService {
      * sin llamarse a sí misma: la autoinvocación no pasa por el proxy, así que el {@code @Transactional}
      * del método invocado no se aplicaba. La transacción la abre el método público de entrada.
      */
-    private OperatorActionPage historyPage(String operatorSubject, String fromDate, String toDate, int page,
-            int size) {
+    private OperatorActionPage historyPage(String operatorSubject, String fromDate, String toDate, int page, int size) {
         Instant from = startOf(fromDate, 90);
         Instant to = endOf(toDate);
         int pageSize = Math.clamp(size, 1, 200);
         // Consulta preferente desde OpenSearch (indexado); si no responde, fallback a Postgres.
         try {
-            Map<String,Object> res = indexer.search(operatorSubject, from, to, page, pageSize);
+            Map<String, Object> res = indexer.search(operatorSubject, from, to, page, pageSize);
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> hits = (List<Map<String, Object>>) res.get("items");
             if (hits != null) {
                 List<OperatorAction> items = new ArrayList<>();
-                for (Map<String,Object> m : hits) {
+                for (Map<String, Object> m : hits) {
                     items.add(new OperatorAction(str(m, "operatorSubject"), str(m, "operatorEmail"),
                             str(m, "operatorName"), str(m, "orderId"), str(m, "orderNumber"), str(m, "action"),
                             lng(m, "commissionCnyCents"), (int) lng(m, "itemCount"), inst(m.get("processedAt"))));
@@ -115,8 +114,8 @@ public class OperatorEarningsService {
         Instant to = endOf(toDate);
         List<OperatorReportRow> rows = new ArrayList<>();
         for (Object[] r : repository.aggregateByOperator(from, to)) {
-            rows.add(new OperatorReportRow((String) r[0], (String) r[1], (String) r[2],
-                    ((Number) r[3]).longValue(), ((Number) r[4]).longValue(), CNY));
+            rows.add(new OperatorReportRow((String) r[0], (String) r[1], (String) r[2], ((Number) r[3]).longValue(),
+                    ((Number) r[4]).longValue(), CNY));
         }
         return rows;
     }

@@ -76,7 +76,6 @@ public final class ChatPrompt {
 
                     """).append(hechos).append('\n');
         }
-        return sb.append("\nIdioma en el que debes responder (código ISO): ").append(lang).append('\n')
-                .toString();
+        return sb.append("\nIdioma en el que debes responder (código ISO): ").append(lang).append('\n').toString();
     }
 }

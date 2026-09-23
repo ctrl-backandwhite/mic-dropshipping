@@ -71,9 +71,8 @@ class InvoiceAmountsTest {
 
         // OrderAmounts real (no un doble): la factura tiene que hacer la MISMA cuenta que el cobro, y con
         // un doble el test dejaría de medir precisamente eso.
-        service = new InvoiceService(engine, currency, mock(EuComplianceService.class),
-                new OrderAmounts(currency), payments,
-                mock(ProductRepository.class), mock(ProductVariantRepository.class),
+        service = new InvoiceService(engine, currency, mock(EuComplianceService.class), new OrderAmounts(currency),
+                payments, mock(ProductRepository.class), mock(ProductVariantRepository.class),
                 mock(ObjectStorageService.class));
     }
 
@@ -222,15 +221,14 @@ class InvoiceAmountsTest {
     @Test
     void lasFilasQueLaFacturaImprimeSumanSuTotal() {
         Order o = order(0);
-        o.setShippingCents(1000);      // 6,51 de porte + 3,49 de arancel, todo junto
+        o.setShippingCents(1000); // 6,51 de porte + 3,49 de arancel, todo junto
         o.setCustomsDutyCents(349);
 
         Map<String, Object> m = modelOf(o, "EUR");
 
-        BigDecimal suma = importe(m, "subtotal").subtract(importe(m, "discount"))
-                .add(importe(m, "shipping")).add(importe(m, "customsDuty")).add(importe(m, "tax"));
-        assertThat(suma)
-                .as("subtotal − descuento + envío + arancel + IVA debe dar el total impreso")
+        BigDecimal suma = importe(m, "subtotal").subtract(importe(m, "discount")).add(importe(m, "shipping"))
+                .add(importe(m, "customsDuty")).add(importe(m, "tax"));
+        assertThat(suma).as("subtotal − descuento + envío + arancel + IVA debe dar el total impreso")
                 .isEqualByComparingTo(importe(m, "total"));
     }
 

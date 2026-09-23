@@ -76,7 +76,8 @@ class Cov03WalletAdminAndDisplayTest {
         // El saldo se mueve con un UPDATE atómico en la base (applyBalanceDelta), no leyendo y guardando la
         // entidad: es lo que impide el doble gasto entre checkouts simultáneos. Se reproduce esa semántica
         // sobre la wallet simulada para que la prueba siga comprobando la regla, no el mecanismo.
-        org.mockito.Mockito.lenient().when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
+        org.mockito.Mockito.lenient()
+                .when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenAnswer(inv -> {
                     var actual = walletRepository.findByUserId(inv.getArgument(0));
                     if (actual.isEmpty()) {
@@ -89,9 +90,8 @@ class Cov03WalletAdminAndDisplayTest {
                     actual.get().setBalanceUsdCents(nuevo);
                     return true;
                 });
-        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any()))
-                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0))
-                        .map(w -> w.getBalanceUsdCents()).orElse(0L));
+        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any())).thenAnswer(
+                inv -> walletRepository.findByUserId(inv.getArgument(0)).map(w -> w.getBalanceUsdCents()).orElse(0L));
     }
 
     @AfterEach
@@ -100,8 +100,8 @@ class Cov03WalletAdminAndDisplayTest {
     }
 
     private Wallet wallet(long saldo, long retenido) {
-        Wallet w = Wallet.builder().userId(userId).balanceUsdCents(saldo).holdUsdCents(retenido)
-                .currencyDefault("USD").status("ACTIVE").build();
+        Wallet w = Wallet.builder().userId(userId).balanceUsdCents(saldo).holdUsdCents(retenido).currencyDefault("USD")
+                .status("ACTIVE").build();
         w.setId(UUID.randomUUID());
         return w;
     }
@@ -221,8 +221,7 @@ class Cov03WalletAdminAndDisplayTest {
         // La libra vale la mitad que el dólar en este doble: lo que importa es que la conversión se aplique.
         when(currencyService.usdTo(any(), anyString()))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("2")));
-        when(currencyService.formatIn(any(), anyString(), anyString()))
-                .thenAnswer(inv -> "£" + inv.getArgument(0));
+        when(currencyService.formatIn(any(), anyString(), anyString())).thenAnswer(inv -> "£" + inv.getArgument(0));
 
         CurrencyHolder.set("GBP");
         try {
@@ -239,8 +238,7 @@ class Cov03WalletAdminAndDisplayTest {
     void elExtractoNuncaPideMasDeCienMovimientosPorPagina() {
         Wallet w = wallet(0L, 0L);
         when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(w));
-        when(txRepository.findByWalletIdOrderByCreatedAtDesc(eq(w.getId()), anyInt(), anyInt()))
-                .thenReturn(List.of());
+        when(txRepository.findByWalletIdOrderByCreatedAtDesc(eq(w.getId()), anyInt(), anyInt())).thenReturn(List.of());
         when(currencyService.localeOf(anyString())).thenReturn("es-ES");
 
         useCase.getMyTransactions(userId, 0, 100_000);
@@ -282,8 +280,7 @@ class Cov03WalletAdminAndDisplayTest {
         when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(w));
         UUID orderId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> useCase.hold(userId, 2_000L, orderId, "hold-2"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.hold(userId, 2_000L, orderId, "hold-2")).isInstanceOf(BusinessException.class);
         verify(txRepository, never()).save(any());
     }
 

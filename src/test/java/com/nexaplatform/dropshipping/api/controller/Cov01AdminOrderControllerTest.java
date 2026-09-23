@@ -151,8 +151,8 @@ class Cov01AdminOrderControllerTest {
         when(orderUseCase.createManualOrder(eq("ok2@test.com"), any()))
                 .thenReturn(Order.builder().orderNumber("NX-2").build());
 
-        ResponseEntity<AdminImportResultDtoOut> resp = controller.importOrders(new AdminImportOrdersDtoIn(
-                List.of(row("ok1@test.com"), row("malo@test.com"), row("ok2@test.com"))));
+        ResponseEntity<AdminImportResultDtoOut> resp = controller.importOrders(
+                new AdminImportOrdersDtoIn(List.of(row("ok1@test.com"), row("malo@test.com"), row("ok2@test.com"))));
 
         AdminImportResultDtoOut body = resp.getBody();
         assertThat(body).isNotNull();
@@ -166,8 +166,8 @@ class Cov01AdminOrderControllerTest {
     void unaImportacionCompletaNoDevuelveErrores() {
         when(orderUseCase.createManualOrder(any(), any())).thenReturn(Order.builder().orderNumber("NX-1").build());
 
-        AdminImportResultDtoOut body = controller
-                .importOrders(new AdminImportOrdersDtoIn(List.of(row("a@test.com")))).getBody();
+        AdminImportResultDtoOut body = controller.importOrders(new AdminImportOrdersDtoIn(List.of(row("a@test.com"))))
+                .getBody();
 
         assertThat(body).isNotNull();
         assertThat(body.failed()).isZero();

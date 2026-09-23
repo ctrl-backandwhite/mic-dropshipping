@@ -109,8 +109,7 @@ class SubscriptionLifecycleTest {
         CustomerSubscription sub = useCase.createSubscription(userId, "FREE", "MONTHLY");
 
         assertThat(sub.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
-        assertThat(sub.getCurrentPeriodEnd())
-                .isAfter(Instant.now().plus(14, ChronoUnit.DAYS))
+        assertThat(sub.getCurrentPeriodEnd()).isAfter(Instant.now().plus(14, ChronoUnit.DAYS))
                 .isBefore(Instant.now().plus(16, ChronoUnit.DAYS));
         assertThat(u.isFreeTrialUsed()).isTrue();
         verify(userRepository).save(u);
@@ -123,8 +122,7 @@ class SubscriptionLifecycleTest {
         user(true);
 
         assertThatThrownBy(() -> useCase.createSubscription(userId, "FREE", "MONTHLY"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Elige un plan de pago");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Elige un plan de pago");
 
         verify(customerSubscriptionRepository, never()).save(any());
     }
@@ -168,11 +166,11 @@ class SubscriptionLifecycleTest {
 
     // ---------------------------------------------------------------- vencimiento del mes de prueba
 
-    private CustomerSubscription subscription(String planCode, int monthly, SubscriptionStatus status,
-            Instant end, String stripeId) {
-        return CustomerSubscription.builder().id(UUID.randomUUID()).userId(userId).planId(planId)
-                .planCode(planCode).priceMonthly(monthly).priceYearly(0).status(status)
-                .currentPeriodEnd(end).stripeSubscriptionId(stripeId).build();
+    private CustomerSubscription subscription(String planCode, int monthly, SubscriptionStatus status, Instant end,
+            String stripeId) {
+        return CustomerSubscription.builder().id(UUID.randomUUID()).userId(userId).planId(planId).planCode(planCode)
+                .priceMonthly(monthly).priceYearly(0).status(status).currentPeriodEnd(end)
+                .stripeSubscriptionId(stripeId).build();
     }
 
     @Test
@@ -184,8 +182,8 @@ class SubscriptionLifecycleTest {
 
         useCase.expireFreeTrials();
 
-        verify(customerSubscriptionRepository).save(org.mockito.ArgumentMatchers.argThat(
-                s -> s.getStatus() == SubscriptionStatus.CANCELED && s.getCanceledAt() != null));
+        verify(customerSubscriptionRepository).save(org.mockito.ArgumentMatchers
+                .argThat(s -> s.getStatus() == SubscriptionStatus.CANCELED && s.getCanceledAt() != null));
     }
 
     @Test
@@ -249,11 +247,11 @@ class SubscriptionLifecycleTest {
     @Test
     void conVariasSuscripcionesVivasManadaLaMasReciente() {
         CustomerSubscription antigua = CustomerSubscription.builder().id(UUID.randomUUID()).userId(userId)
-                .planCode("FREE").status(SubscriptionStatus.ACTIVE)
-                .createdAt(Instant.now().minus(60, ChronoUnit.DAYS)).build();
+                .planCode("FREE").status(SubscriptionStatus.ACTIVE).createdAt(Instant.now().minus(60, ChronoUnit.DAYS))
+                .build();
         CustomerSubscription reciente = CustomerSubscription.builder().id(UUID.randomUUID()).userId(userId)
-                .planCode("PRO").status(SubscriptionStatus.ACTIVE)
-                .createdAt(Instant.now().minus(1, ChronoUnit.DAYS)).build();
+                .planCode("PRO").status(SubscriptionStatus.ACTIVE).createdAt(Instant.now().minus(1, ChronoUnit.DAYS))
+                .build();
         when(customerSubscriptionRepository.findByUserId(userId)).thenReturn(List.of(antigua, reciente));
 
         assertThat(useCase.currentSubscription(userId).getPlanCode()).isEqualTo("PRO");
@@ -269,18 +267,11 @@ class SubscriptionLifecycleTest {
     // ---------------------------------------------------------------- sincronización con Stripe
 
     @ParameterizedTest
-    @CsvSource({
-            "active,    ACTIVE",
-            "trialing,  TRIALING",
-            "past_due,  PAST_DUE",
-            "canceled,  CANCELED",
+    @CsvSource({"active,    ACTIVE", "trialing,  TRIALING", "past_due,  PAST_DUE", "canceled,  CANCELED",
             "paused,    PAUSED",
             // Estados de Stripe que no tienen equivalente propio caen en INCOMPLETE, que es la opción
             // segura: deja al usuario SIN plan activo en vez de darle acceso a algo que no está pagando.
-            "unpaid,       INCOMPLETE",
-            "incomplete,   INCOMPLETE",
-            "algo_nuevo,   INCOMPLETE"
-    })
+            "unpaid,       INCOMPLETE", "incomplete,   INCOMPLETE", "algo_nuevo,   INCOMPLETE"})
     void elEstadoDeStripeSeTraduceAlEstadoLocal(String stripeStatus, String expected) {
         CustomerSubscription sub = subscription("PRO", 2900, SubscriptionStatus.ACTIVE, null, "sub_123");
         when(customerSubscriptionRepository.findByStripeSubscriptionId("sub_123")).thenReturn(Optional.of(sub));
@@ -288,8 +279,8 @@ class SubscriptionLifecycleTest {
 
         useCase.syncFromStripe("sub_123", stripeStatus, null, null);
 
-        verify(customerSubscriptionRepository).save(org.mockito.ArgumentMatchers.argThat(
-                s -> s.getStatus() == SubscriptionStatus.valueOf(expected)));
+        verify(customerSubscriptionRepository)
+                .save(org.mockito.ArgumentMatchers.argThat(s -> s.getStatus() == SubscriptionStatus.valueOf(expected)));
     }
 
     @Test
@@ -300,8 +291,8 @@ class SubscriptionLifecycleTest {
 
         useCase.syncFromStripe("sub_123", "canceled", null, null);
 
-        verify(customerSubscriptionRepository).save(org.mockito.ArgumentMatchers.argThat(
-                s -> s.getCanceledAt() != null));
+        verify(customerSubscriptionRepository)
+                .save(org.mockito.ArgumentMatchers.argThat(s -> s.getCanceledAt() != null));
     }
 
     @Test
@@ -314,8 +305,8 @@ class SubscriptionLifecycleTest {
 
         useCase.syncFromStripe("sub_123", "active", renovadoHasta, null);
 
-        verify(customerSubscriptionRepository).save(org.mockito.ArgumentMatchers.argThat(
-                s -> s.getCurrentPeriodEnd() != null && s.getCurrentPeriodEnd().isAfter(Instant.now())));
+        verify(customerSubscriptionRepository).save(org.mockito.ArgumentMatchers
+                .argThat(s -> s.getCurrentPeriodEnd() != null && s.getCurrentPeriodEnd().isAfter(Instant.now())));
     }
 
     @ParameterizedTest
@@ -329,8 +320,7 @@ class SubscriptionLifecycleTest {
 
     @Test
     void unEventoDeUnaSuscripcionDesconocidaNoCreaNadaNiRevienta() {
-        when(customerSubscriptionRepository.findByStripeSubscriptionId("sub_desconocida"))
-                .thenReturn(Optional.empty());
+        when(customerSubscriptionRepository.findByStripeSubscriptionId("sub_desconocida")).thenReturn(Optional.empty());
 
         useCase.syncFromStripe("sub_desconocida", "active", null, null);
 

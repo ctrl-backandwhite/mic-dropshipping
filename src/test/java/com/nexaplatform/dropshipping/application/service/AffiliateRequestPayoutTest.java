@@ -45,21 +45,35 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AffiliateRequestPayoutTest {
 
-    @Mock AffiliateJpaRepositoryAdapter affiliateRepo;
-    @Mock AffiliateReferralCodeRepository codeRepo;
-    @Mock AffiliateAttributionRepository attrRepo;
-    @Mock AffiliateConversionRepository conversionRepo;
-    @Mock AffiliateCommissionRepository commissionRepo;
-    @Mock AffiliateProgramConfigRepository configRepo;
-    @Mock AffiliatePayoutRepository payoutRepo;
-    @Mock UserRepository userRepository;
-    @Mock PasswordEncoder passwordEncoder;
-    @Mock NotificationJpaRepositoryAdapter notificationRepo;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock WalletUseCase walletUseCase;
-    @Mock AffiliateIndexer affiliateIndexer;
+    @Mock
+    AffiliateJpaRepositoryAdapter affiliateRepo;
+    @Mock
+    AffiliateReferralCodeRepository codeRepo;
+    @Mock
+    AffiliateAttributionRepository attrRepo;
+    @Mock
+    AffiliateConversionRepository conversionRepo;
+    @Mock
+    AffiliateCommissionRepository commissionRepo;
+    @Mock
+    AffiliateProgramConfigRepository configRepo;
+    @Mock
+    AffiliatePayoutRepository payoutRepo;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    PasswordEncoder passwordEncoder;
+    @Mock
+    NotificationJpaRepositoryAdapter notificationRepo;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    AffiliateIndexer affiliateIndexer;
 
-    @InjectMocks AffiliateProgramService service;
+    @InjectMocks
+    AffiliateProgramService service;
 
     private final UUID userId = UUID.randomUUID();
     private final UUID affiliateId = UUID.randomUUID();
@@ -80,16 +94,15 @@ class AffiliateRequestPayoutTest {
     }
 
     private AffiliateEntity affiliate() {
-        AffiliateEntity a = AffiliateEntity.builder().user(user()).code("ref-1").active(true).status("ACTIVE")
-                .build();
+        AffiliateEntity a = AffiliateEntity.builder().user(user()).code("ref-1").active(true).status("ACTIVE").build();
         a.setId(affiliateId);
         return a;
     }
 
     private List<AffiliateCommissionEntity> approvedCommissions(long amountCents) {
         AffiliateCommissionEntity c = AffiliateCommissionEntity.builder().affiliateId(affiliateId)
-                .conversionId(UUID.randomUUID()).amountCents(amountCents).currency("EUR")
-                .percentage(BigDecimal.TEN).status("APPROVED").build();
+                .conversionId(UUID.randomUUID()).amountCents(amountCents).currency("EUR").percentage(BigDecimal.TEN)
+                .status("APPROVED").build();
         return List.of(c);
     }
 
@@ -97,10 +110,8 @@ class AffiliateRequestPayoutTest {
     void requestPayout_bank_withoutIban_throwsPayoutDetailsMissing() {
         when(affiliateRepo.findByUser_Id(userId)).thenReturn(Optional.of(affiliate()));
 
-        assertThatThrownBy(() -> service.requestPayout(userId, "BANK"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(ex -> ((BusinessException) ex).getCode())
-                .isEqualTo("PAYOUT_DETAILS_MISSING");
+        assertThatThrownBy(() -> service.requestPayout(userId, "BANK")).isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getCode()).isEqualTo("PAYOUT_DETAILS_MISSING");
 
         verify(payoutRepo, never()).save(any());
     }
@@ -109,20 +120,16 @@ class AffiliateRequestPayoutTest {
     void requestPayout_paypal_withoutEmail_throwsPayoutDetailsMissing() {
         when(affiliateRepo.findByUser_Id(userId)).thenReturn(Optional.of(affiliate()));
 
-        assertThatThrownBy(() -> service.requestPayout(userId, "PAYPAL"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(ex -> ((BusinessException) ex).getCode())
-                .isEqualTo("PAYOUT_DETAILS_MISSING");
+        assertThatThrownBy(() -> service.requestPayout(userId, "PAYPAL")).isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getCode()).isEqualTo("PAYOUT_DETAILS_MISSING");
 
         verify(payoutRepo, never()).save(any());
     }
 
     @Test
     void requestPayout_invalidMethod_throwsInvalidPayoutMethod() {
-        assertThatThrownBy(() -> service.requestPayout(userId, "CRYPTO"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(ex -> ((BusinessException) ex).getCode())
-                .isEqualTo("INVALID_PAYOUT_METHOD");
+        assertThatThrownBy(() -> service.requestPayout(userId, "CRYPTO")).isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getCode()).isEqualTo("INVALID_PAYOUT_METHOD");
 
         verify(payoutRepo, never()).save(any());
     }
@@ -132,11 +139,9 @@ class AffiliateRequestPayoutTest {
         stubConfig();
         when(affiliateRepo.findByUser_Id(userId)).thenReturn(Optional.of(affiliate()));
         when(payoutRepo.existsByAffiliateIdAndStatus(affiliateId, "REQUESTED")).thenReturn(false);
-        when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED"))
-                .thenReturn(approvedCommissions(1000));
+        when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED")).thenReturn(approvedCommissions(1000));
 
-        assertThatThrownBy(() -> service.requestPayout(userId, "WALLET"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.requestPayout(userId, "WALLET")).isInstanceOf(BusinessException.class);
 
         verify(payoutRepo, never()).save(any());
     }
@@ -150,8 +155,7 @@ class AffiliateRequestPayoutTest {
         a.setBankBic("CAIXESBBXXX");
         when(affiliateRepo.findByUser_Id(userId)).thenReturn(Optional.of(a));
         when(payoutRepo.existsByAffiliateIdAndStatus(affiliateId, "REQUESTED")).thenReturn(false);
-        when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED"))
-                .thenReturn(approvedCommissions(6000));
+        when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED")).thenReturn(approvedCommissions(6000));
         when(payoutRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         AffiliatePayoutEntity result = service.requestPayout(userId, "BANK");

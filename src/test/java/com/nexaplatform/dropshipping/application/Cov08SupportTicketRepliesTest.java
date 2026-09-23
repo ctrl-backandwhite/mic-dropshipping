@@ -73,8 +73,8 @@ class Cov08SupportTicketRepliesTest {
     }
 
     private static SupportTicketReplyEntity mensaje(UUID authorId, String body) {
-        SupportTicketReplyEntity e = SupportTicketReplyEntity.builder().ticketId(UUID.randomUUID())
-                .authorId(authorId).body(body).createdAt(Instant.now()).build();
+        SupportTicketReplyEntity e = SupportTicketReplyEntity.builder().ticketId(UUID.randomUUID()).authorId(authorId)
+                .body(body).createdAt(Instant.now()).build();
         e.setId(UUID.randomUUID());
         return e;
     }
@@ -86,8 +86,7 @@ class Cov08SupportTicketRepliesTest {
         ticketExistente("OPEN");
         UUID intruso = UUID.randomUUID();
 
-        assertThatThrownBy(() -> useCase.listReplies(ticketId, intruso, false))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.listReplies(ticketId, intruso, false)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -115,8 +114,7 @@ class Cov08SupportTicketRepliesTest {
     void unTicketQueNoExisteDaNoEncontradoTantoAlLeerComoAlEscribir() {
         when(ticketRepository.getById(ticketId)).thenReturn(null);
 
-        assertThatThrownBy(() -> useCase.listReplies(ticketId, clienteId, true))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.listReplies(ticketId, clienteId, true)).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> useCase.addReply(ticketId, clienteId, true, "hola"))
                 .isInstanceOf(NotFoundException.class);
     }
@@ -209,10 +207,10 @@ class Cov08SupportTicketRepliesTest {
     @Test
     void elMensajeDelClienteAvisaATodosLosAdministradores() {
         ticketExistente("OPEN");
-        when(userRepository.findAll()).thenReturn(List.of(
-                User.builder().id(UUID.randomUUID()).role(UserRole.ADMIN).build(),
-                User.builder().id(UUID.randomUUID()).role(UserRole.ADMIN).build(),
-                User.builder().id(clienteId).role(UserRole.USER).build()));
+        when(userRepository.findAll())
+                .thenReturn(List.of(User.builder().id(UUID.randomUUID()).role(UserRole.ADMIN).build(),
+                        User.builder().id(UUID.randomUUID()).role(UserRole.ADMIN).build(),
+                        User.builder().id(clienteId).role(UserRole.USER).build()));
 
         useCase.addReply(ticketId, clienteId, false, "sigo esperando");
 

@@ -37,8 +37,8 @@ class CountryTaxServiceTest {
     }
 
     private static CountryRegionEntity region(String country, String code, Integer bps, boolean active) {
-        return CountryRegionEntity.builder().countryCode(country).regionCode(code).regionName(code)
-                .rateBps(bps).active(active).build();
+        return CountryRegionEntity.builder().countryCode(country).regionCode(code).regionName(code).rateBps(bps)
+                .active(active).build();
     }
 
     // ===== IVA resuelto por REGIÓN (estado/provincia) =====

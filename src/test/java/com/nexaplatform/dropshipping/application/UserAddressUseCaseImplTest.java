@@ -67,8 +67,7 @@ class UserAddressUseCaseImplTest {
         when(userAddressRepository.getById(id)).thenReturn(other);
 
         UserAddress cambios = UserAddress.builder().build();
-        assertThatThrownBy(() -> useCase.update(userId, id, cambios))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.update(userId, id, cambios)).isInstanceOf(NotFoundException.class);
         verify(userAddressRepository, never()).update(other);
     }
 

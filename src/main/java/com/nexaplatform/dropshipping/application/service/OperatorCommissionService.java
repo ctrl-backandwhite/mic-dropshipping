@@ -31,7 +31,7 @@ public class OperatorCommissionService {
 
     private static final String ACTION_DELIVERED = "DELIVERED";
     // % de comisión del operador según el ORIGEN de la orden.
-    private static final BigDecimal PCT_PLATFORM = new BigDecimal("10");   // tienda propia
+    private static final BigDecimal PCT_PLATFORM = new BigDecimal("10"); // tienda propia
     private static final BigDecimal PCT_INTEGRATION = new BigDecimal("5"); // tienda integrada
     // IVA chino (13%) incluido en el precio CNY del proveedor. La comisión se calcula sobre la BASE sin IVA:
     // base = precioCNY / 1.13 (p. ej. 113 → 100). NO se calcula sobre el precio con IVA.
@@ -68,8 +68,7 @@ public class OperatorCommissionService {
                 BigDecimal lineGrossCny = BigDecimal.valueOf(it.getCostCnyCents())
                         .multiply(BigDecimal.valueOf(it.getQuantity()));
                 BigDecimal lineBaseCny = lineGrossCny.divide(IVA_DIVISOR, 4, RoundingMode.HALF_UP);
-                commissionCny = commissionCny.add(lineBaseCny.multiply(pct).divide(HUNDRED, 4,
-                        RoundingMode.HALF_UP));
+                commissionCny = commissionCny.add(lineBaseCny.multiply(pct).divide(HUNDRED, 4, RoundingMode.HALF_UP));
                 itemCount += it.getQuantity();
             }
         }
@@ -91,8 +90,8 @@ public class OperatorCommissionService {
         OperatorOrderActionEntity action = OperatorOrderActionEntity.builder().operatorSubject(subject)
                 .operatorEmail(email).operatorName(name).orderId(order.getId()).orderNumber(order.getOrderNumber())
                 .action(ACTION_DELIVERED).commissionCnyCents(commissionCnyCents).itemCount(itemCount)
-                .orderSource(integration ? "INTEGRATION" : "PLATFORM").commissionPct(pct)
-                .processedAt(Instant.now()).build();
+                .orderSource(integration ? "INTEGRATION" : "PLATFORM").commissionPct(pct).processedAt(Instant.now())
+                .build();
         OperatorOrderActionEntity saved = actionRepository.save(action);
         indexer.index(saved);
         log.info("::> [OPERATOR] {} entregó orden {} → comisión {} CNY-cents", subject, order.getOrderNumber(),

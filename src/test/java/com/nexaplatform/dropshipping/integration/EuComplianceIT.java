@@ -60,15 +60,10 @@ class EuComplianceIT extends BaseIntegration {
         void completoSePublica() {
             guardarOperador(true, "50001");
 
-            client.get().uri(RUTA_PUBLICA + "?lang=es").exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.name").isEqualTo("Jesus Enrique Finol Finol")
-                    .jsonPath("$.postalCode").isEqualTo("50001")
-                    .jsonPath("$.country").isEqualTo("ES")
-                    .jsonPath("$.email").isEqualTo("jfinol02@gmail.com")
-                    .jsonPath("$.role").isEqualTo("IMPORTER")
-                    .jsonPath("$.roleLabel").isEqualTo("Importador")
+            client.get().uri(RUTA_PUBLICA + "?lang=es").exchange().expectStatus().isOk().expectBody().jsonPath("$.name")
+                    .isEqualTo("Jesus Enrique Finol Finol").jsonPath("$.postalCode").isEqualTo("50001")
+                    .jsonPath("$.country").isEqualTo("ES").jsonPath("$.email").isEqualTo("jfinol02@gmail.com")
+                    .jsonPath("$.role").isEqualTo("IMPORTER").jsonPath("$.roleLabel").isEqualTo("Importador")
                     .jsonPath("$.complete").isEqualTo(true);
         }
 
@@ -77,9 +72,8 @@ class EuComplianceIT extends BaseIntegration {
         void figuraTraducida() {
             guardarOperador(true, "50001");
 
-            client.get().uri(RUTA_PUBLICA + "?lang=de").exchange()
-                    .expectStatus().isOk()
-                    .expectBody().jsonPath("$.roleLabel").isEqualTo("Importeur");
+            client.get().uri(RUTA_PUBLICA + "?lang=de").exchange().expectStatus().isOk().expectBody()
+                    .jsonPath("$.roleLabel").isEqualTo("Importeur");
         }
 
         @Test
@@ -89,8 +83,7 @@ class EuComplianceIT extends BaseIntegration {
 
             client.get().uri(RUTA_PUBLICA + "?lang=es").exchange().expectStatus().isNoContent();
             // Pero el panel SÍ lo ve, marcado como incompleto: su trabajo es enseñar lo que falta.
-            client.get().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin()).exchange()
-                    .expectStatus().isOk()
+            client.get().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin()).exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.complete").isEqualTo(false);
         }
 
@@ -105,17 +98,15 @@ class EuComplianceIT extends BaseIntegration {
         @Test
         @DisplayName("guardar exige ADMIN: un usuario normal recibe 403")
         void guardarExigeAdmin() {
-            client.put().uri(RUTA_ADMIN + "?lang=es")
-                    .header("Authorization", "Bearer " + jwt.userToken("USER"))
-                    .bodyValue(cuerpo(true, "50001"))
-                    .exchange().expectStatus().isForbidden();
+            client.put().uri(RUTA_ADMIN + "?lang=es").header("Authorization", "Bearer " + jwt.userToken("USER"))
+                    .bodyValue(cuerpo(true, "50001")).exchange().expectStatus().isForbidden();
         }
 
         @Test
         @DisplayName("guardar sin credenciales recibe 401")
         void guardarSinCredenciales() {
-            client.put().uri(RUTA_ADMIN + "?lang=es").bodyValue(cuerpo(true, "50001"))
-                    .exchange().expectStatus().isUnauthorized();
+            client.put().uri(RUTA_ADMIN + "?lang=es").bodyValue(cuerpo(true, "50001")).exchange().expectStatus()
+                    .isUnauthorized();
         }
 
         @Test
@@ -124,8 +115,8 @@ class EuComplianceIT extends BaseIntegration {
             Map<String, Object> malo = cuerpo(true, "50001");
             malo.put("country", "España");
 
-            client.put().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin()).bodyValue(malo)
-                    .exchange().expectStatus().isBadRequest();
+            client.put().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin()).bodyValue(malo).exchange()
+                    .expectStatus().isBadRequest();
         }
 
         @Test
@@ -134,8 +125,8 @@ class EuComplianceIT extends BaseIntegration {
             Map<String, Object> malo = cuerpo(true, "50001");
             malo.put("email", "no-es-un-correo");
 
-            client.put().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin()).bodyValue(malo)
-                    .exchange().expectStatus().isBadRequest();
+            client.put().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin()).bodyValue(malo).exchange()
+                    .expectStatus().isBadRequest();
         }
 
         @Test
@@ -144,9 +135,8 @@ class EuComplianceIT extends BaseIntegration {
             guardarOperador(true, "50001");
             guardarOperador(true, "50018");
 
-            client.get().uri(RUTA_PUBLICA + "?lang=es").exchange()
-                    .expectStatus().isOk()
-                    .expectBody().jsonPath("$.postalCode").isEqualTo("50018");
+            client.get().uri(RUTA_PUBLICA + "?lang=es").exchange().expectStatus().isOk().expectBody()
+                    .jsonPath("$.postalCode").isEqualTo("50018");
             assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM eu_responsible_person", Long.class))
                     .isEqualTo(1L);
         }
@@ -162,19 +152,15 @@ class EuComplianceIT extends BaseIntegration {
 
             // Sin invalidación esto devolvería 50001 durante cinco minutos, que es el fallo que ya costó
             // depurar con el margen en tiempo real.
-            client.get().uri(RUTA_PUBLICA + "?lang=es").exchange()
-                    .expectStatus().isOk()
-                    .expectBody().jsonPath("$.postalCode").isEqualTo("50999");
+            client.get().uri(RUTA_PUBLICA + "?lang=es").exchange().expectStatus().isOk().expectBody()
+                    .jsonPath("$.postalCode").isEqualTo("50999");
         }
 
         @Test
         @DisplayName("las cuatro figuras del art. 4.2 se ofrecen traducidas")
         void listaDeFiguras() {
-            client.get().uri("/api/admin/compliance/operator-roles?lang=fr")
-                    .header("Authorization", admin()).exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.length()").isEqualTo(4)
+            client.get().uri("/api/admin/compliance/operator-roles?lang=fr").header("Authorization", admin()).exchange()
+                    .expectStatus().isOk().expectBody().jsonPath("$.length()").isEqualTo(4)
                     .jsonPath("$[?(@.code=='IMPORTER')].label").isEqualTo("Importateur");
         }
     }
@@ -188,27 +174,21 @@ class EuComplianceIT extends BaseIntegration {
         @Test
         @DisplayName("la advertencia del padre alcanza al producto de la categoría hija")
         void seHeredanDelPadre() {
-            crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY",
-                    Map.of("es", "Aparato eléctrico: no sumergir en agua.",
-                            "fr", "Appareil électrique : ne pas immerger."));
+            crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY", Map.of("es",
+                    "Aparato eléctrico: no sumergir en agua.", "fr", "Appareil électrique : ne pas immerger."));
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.compliance.safetyWarnings.length()").isEqualTo(1)
-                    .jsonPath("$.compliance.safetyWarnings[0]")
-                    .isEqualTo("Aparato eléctrico: no sumergir en agua.");
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
+                    .expectBody().jsonPath("$.compliance.safetyWarnings.length()").isEqualTo(1)
+                    .jsonPath("$.compliance.safetyWarnings[0]").isEqualTo("Aparato eléctrico: no sumergir en agua.");
         }
 
         @Test
         @DisplayName("se muestran en el idioma del comprador")
         void enElIdiomaDelComprador() {
-            crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY",
-                    Map.of("es", "Aparato eléctrico: no sumergir en agua.",
-                            "fr", "Appareil électrique : ne pas immerger."));
+            crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY", Map.of("es",
+                    "Aparato eléctrico: no sumergir en agua.", "fr", "Appareil électrique : ne pas immerger."));
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=fr").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=fr").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.safetyWarnings[0]")
                     .isEqualTo("Appareil électrique : ne pas immerger.");
         }
@@ -221,8 +201,7 @@ class EuComplianceIT extends BaseIntegration {
             crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY",
                     Map.of("es", "Aparato eléctrico: no sumergir en agua."));
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=nl").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=nl").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.safetyWarnings[0]")
                     .isEqualTo("Aparato eléctrico: no sumergir en agua.");
         }
@@ -233,8 +212,7 @@ class EuComplianceIT extends BaseIntegration {
             crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY", Map.of("es", "Aviso del padre"));
             crearAdvertencia(categoriaHija, "ELECTRICAL_SAFETY", Map.of("es", "Aviso de la hija"));
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.safetyWarnings.length()").isEqualTo(1);
         }
 
@@ -245,8 +223,7 @@ class EuComplianceIT extends BaseIntegration {
             jdbcTemplate.update("UPDATE category_safety_warning SET active = false");
             vaciarCaches();
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.safetyWarnings.length()").isEqualTo(0);
         }
 
@@ -256,10 +233,8 @@ class EuComplianceIT extends BaseIntegration {
             crearAdvertencia(categoriaPadre, "SEGUNDA", 20, Map.of("es", "Va segunda"));
             crearAdvertencia(categoriaPadre, "PRIMERA", 10, Map.of("es", "Va primera"));
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.compliance.safetyWarnings[0]").isEqualTo("Va primera")
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
+                    .expectBody().jsonPath("$.compliance.safetyWarnings[0]").isEqualTo("Va primera")
                     .jsonPath("$.compliance.safetyWarnings[1]").isEqualTo("Va segunda");
         }
 
@@ -268,8 +243,7 @@ class EuComplianceIT extends BaseIntegration {
         void gestionarExigeAdmin() {
             client.put().uri("/api/admin/compliance/categories/" + categoriaPadre + "/warnings")
                     .header("Authorization", "Bearer " + jwt.userToken("USER"))
-                    .bodyValue(Map.of("code", "X", "texts", Map.of("es", "y")))
-                    .exchange().expectStatus().isForbidden();
+                    .bodyValue(Map.of("code", "X", "texts", Map.of("es", "y"))).exchange().expectStatus().isForbidden();
         }
 
         @Test
@@ -277,8 +251,8 @@ class EuComplianceIT extends BaseIntegration {
         void codigoInvalido() {
             client.put().uri("/api/admin/compliance/categories/" + categoriaPadre + "/warnings")
                     .header("Authorization", admin())
-                    .bodyValue(Map.of("code", "no válido; drop", "texts", Map.of("es", "y")))
-                    .exchange().expectStatus().isBadRequest();
+                    .bodyValue(Map.of("code", "no válido; drop", "texts", Map.of("es", "y"))).exchange().expectStatus()
+                    .isBadRequest();
         }
 
         @Test
@@ -286,14 +260,12 @@ class EuComplianceIT extends BaseIntegration {
         void borrarLaRetira() {
             crearAdvertencia(categoriaPadre, "ELECTRICAL_SAFETY", Map.of("es", "Aviso"));
             String id = jdbcTemplate.queryForObject(
-                    "SELECT id::text FROM category_safety_warning WHERE code = 'ELECTRICAL_SAFETY'",
-                    String.class);
+                    "SELECT id::text FROM category_safety_warning WHERE code = 'ELECTRICAL_SAFETY'", String.class);
 
-            client.delete().uri("/api/admin/compliance/warnings/" + id).header("Authorization", admin())
-                    .exchange().expectStatus().isNoContent();
+            client.delete().uri("/api/admin/compliance/warnings/" + id).header("Authorization", admin()).exchange()
+                    .expectStatus().isNoContent();
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.safetyWarnings.length()").isEqualTo(0);
         }
     }
@@ -307,23 +279,21 @@ class EuComplianceIT extends BaseIntegration {
         @Test
         @DisplayName("la ficha marca el fabricante como incompleto cuando falta")
         void incompletoCuandoFalta() {
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.manufacturerComplete").isEqualTo(false);
         }
 
         @Test
         @DisplayName("con los tres datos, la ficha lo publica y lo da por completo")
         void completoConLosTresDatos() {
-            jdbcTemplate.update("UPDATE product SET manufacturer_name = ?, manufacturer_address = ?, "
-                    + "manufacturer_email = ? WHERE slug = ?", "Fábrica Ejemplo S.L.",
-                    "Calle Industria 1, 50001 Zaragoza", "fabrica@ejemplo.com", slugProducto);
+            jdbcTemplate.update(
+                    "UPDATE product SET manufacturer_name = ?, manufacturer_address = ?, "
+                            + "manufacturer_email = ? WHERE slug = ?",
+                    "Fábrica Ejemplo S.L.", "Calle Industria 1, 50001 Zaragoza", "fabrica@ejemplo.com", slugProducto);
             vaciarCaches();
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.compliance.manufacturerComplete").isEqualTo(true)
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
+                    .expectBody().jsonPath("$.compliance.manufacturerComplete").isEqualTo(true)
                     .jsonPath("$.compliance.manufacturerName").isEqualTo("Fábrica Ejemplo S.L.")
                     .jsonPath("$.compliance.manufacturerEmail").isEqualTo("fabrica@ejemplo.com");
         }
@@ -331,25 +301,22 @@ class EuComplianceIT extends BaseIntegration {
         @Test
         @DisplayName("con dos de tres sigue incompleto: el art. 19.a exige los tres")
         void dosDeTresSigueIncompleto() {
-            jdbcTemplate.update("UPDATE product SET manufacturer_name = ?, manufacturer_address = ? "
-                    + "WHERE slug = ?", "Fábrica", "Calle 1", slugProducto);
+            jdbcTemplate.update(
+                    "UPDATE product SET manufacturer_name = ?, manufacturer_address = ? " + "WHERE slug = ?", "Fábrica",
+                    "Calle 1", slugProducto);
             vaciarCaches();
 
-            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange()
-                    .expectStatus().isOk()
+            client.get().uri("/api/catalog/products/" + slugProducto + "?lang=es").exchange().expectStatus().isOk()
                     .expectBody().jsonPath("$.compliance.manufacturerComplete").isEqualTo(false);
         }
 
         @Test
         @DisplayName("el estado del catálogo cuenta las referencias activas sin fabricante")
         void estadoCuentaLasIncompletas() {
-            client.get().uri("/api/admin/compliance/status?lang=es").header("Authorization", admin())
-                    .exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.activeProducts").isEqualTo(1)
-                    .jsonPath("$.missingManufacturer").isEqualTo(1)
-                    .jsonPath("$.responsiblePersonReady").isEqualTo(false);
+            client.get().uri("/api/admin/compliance/status?lang=es").header("Authorization", admin()).exchange()
+                    .expectStatus().isOk().expectBody().jsonPath("$.activeProducts").isEqualTo(1)
+                    .jsonPath("$.missingManufacturer").isEqualTo(1).jsonPath("$.responsiblePersonReady")
+                    .isEqualTo(false);
         }
 
         @Test
@@ -357,11 +324,8 @@ class EuComplianceIT extends BaseIntegration {
         void elBorradorNoCuenta() {
             jdbcTemplate.update("UPDATE product SET status = 'DRAFT' WHERE slug = ?", slugProducto);
 
-            client.get().uri("/api/admin/compliance/status?lang=es").header("Authorization", admin())
-                    .exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.activeProducts").isEqualTo(0)
+            client.get().uri("/api/admin/compliance/status?lang=es").header("Authorization", admin()).exchange()
+                    .expectStatus().isOk().expectBody().jsonPath("$.activeProducts").isEqualTo(0)
                     .jsonPath("$.missingManufacturer").isEqualTo(0);
         }
 
@@ -369,11 +333,8 @@ class EuComplianceIT extends BaseIntegration {
         @DisplayName("el listado de incompletos devuelve la referencia con su título")
         void listadoDeIncompletos() {
             client.get().uri("/api/admin/compliance/products/missing-manufacturer?page=0&size=20&lang=es")
-                    .header("Authorization", admin()).exchange()
-                    .expectStatus().isOk()
-                    .expectBody()
-                    .jsonPath("$.content.length()").isEqualTo(1)
-                    .jsonPath("$.content[0].slug").isEqualTo(slugProducto)
+                    .header("Authorization", admin()).exchange().expectStatus().isOk().expectBody()
+                    .jsonPath("$.content.length()").isEqualTo(1).jsonPath("$.content[0].slug").isEqualTo(slugProducto)
                     .jsonPath("$.content[0].title").isEqualTo("Secador de pelo profesional");
         }
 
@@ -381,8 +342,7 @@ class EuComplianceIT extends BaseIntegration {
         @DisplayName("el estado del catálogo exige ADMIN")
         void estadoExigeAdmin() {
             client.get().uri("/api/admin/compliance/status?lang=es")
-                    .header("Authorization", "Bearer " + jwt.userToken("USER"))
-                    .exchange().expectStatus().isForbidden();
+                    .header("Authorization", "Bearer " + jwt.userToken("USER")).exchange().expectStatus().isForbidden();
         }
     }
 
@@ -408,8 +368,7 @@ class EuComplianceIT extends BaseIntegration {
 
     private void guardarOperador(boolean habilitado, String codigoPostal) {
         client.put().uri(RUTA_ADMIN + "?lang=es").header("Authorization", admin())
-                .bodyValue(cuerpo(habilitado, codigoPostal))
-                .exchange().expectStatus().isOk();
+                .bodyValue(cuerpo(habilitado, codigoPostal)).exchange().expectStatus().isOk();
     }
 
     private void crearAdvertencia(UUID categoria, String codigo, Map<String, String> textos) {
@@ -417,10 +376,9 @@ class EuComplianceIT extends BaseIntegration {
     }
 
     private void crearAdvertencia(UUID categoria, String codigo, int posicion, Map<String, String> textos) {
-        client.put().uri("/api/admin/compliance/categories/" + categoria + "/warnings")
-                .header("Authorization", admin())
-                .bodyValue(Map.of("code", codigo, "position", posicion, "active", true, "texts", textos))
-                .exchange().expectStatus().isOk();
+        client.put().uri("/api/admin/compliance/categories/" + categoria + "/warnings").header("Authorization", admin())
+                .bodyValue(Map.of("code", codigo, "position", posicion, "active", true, "texts", textos)).exchange()
+                .expectStatus().isOk();
         vaciarCaches();
     }
 
@@ -444,17 +402,19 @@ class EuComplianceIT extends BaseIntegration {
 
     private void insertProduct(String slug, UUID categoryId, String tituloEs) {
         UUID id = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, category_id, title_zh, "
-                + "status, base_price, currency, review_count, monthly_sales, trend_score, free_shipping, "
-                + "self_pickup, has_video, inventory_count, moq, shipping_cny, iva_cny, created_at, "
-                + "updated_at, ingested_at) "
-                + "VALUES (?, ?, ?, '1688', ?, ?, 'ACTIVE', ?, 'CNY', 0, 0, 0, false, false, false, 10, 1, "
-                + "5, 1, now(), now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, category_id, title_zh, "
+                        + "status, base_price, currency, review_count, monthly_sales, trend_score, free_shipping, "
+                        + "self_pickup, has_video, inventory_count, moq, shipping_cny, iva_cny, created_at, "
+                        + "updated_at, ingested_at) "
+                        + "VALUES (?, ?, ?, '1688', ?, ?, 'ACTIVE', ?, 'CNY', 0, 0, 0, false, false, false, 10, 1, "
+                        + "5, 1, now(), now(), now())",
                 id, slug, "EXT-" + slug, categoryId, tituloEs, new BigDecimal("50.00"));
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, description) "
                 + "VALUES (gen_random_uuid(), ?, 'es', ?, ?)", id, tituloEs, tituloEs + " — descripción");
-        jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
-                + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)", id,
-                "https://origen.test/" + slug + ".jpg", "https://cdn.test/" + slug + ".jpg");
+        jdbcTemplate.update(
+                "INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
+                        + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)",
+                id, "https://origen.test/" + slug + ".jpg", "https://cdn.test/" + slug + ".jpg");
     }
 }

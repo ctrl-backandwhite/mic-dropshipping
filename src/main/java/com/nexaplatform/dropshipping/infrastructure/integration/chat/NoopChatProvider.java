@@ -23,8 +23,7 @@ import java.util.List;
 // Con las dos condiciones enfrentadas —una con enabled=true y esta con
 // enabled=false o ausente— siempre existe exactamente uno, cualquiera que sea el
 // orden.
-@ConditionalOnProperty(prefix = "nexadrop.chat", name = "enabled",
-                       havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "nexadrop.chat", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class NoopChatProvider implements ChatProvider {
 
     @Override

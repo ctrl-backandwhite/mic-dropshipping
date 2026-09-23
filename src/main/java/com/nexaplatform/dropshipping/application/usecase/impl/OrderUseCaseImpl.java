@@ -52,11 +52,13 @@ import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSear
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -83,6 +85,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Customer-order use case. Operates on the {@link Order} domain model and delegates
@@ -128,6 +131,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     /** El buzón de la aplicación; el publicador de arriba solo saca el evento al bus. */
     private final NotificationUseCase notificationUseCase;
     private final PricingService pricingService;
+    /** Los tramos por cantidad, para cobrar el precio que la ficha promete a partir de N unidades. */
+    private final ProductPriceTierRepository priceTierRepository;
     private final AffiliateProgramService affiliateProgramService;
     private final StockService stockService;
     private final PaymentUseCase paymentUseCase;
@@ -178,9 +183,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Determina la comisión del operador (10% propias / 5% integradas).
         String orderSource = PricingChannelHolder.get() == PriceRuleChannel.INTEGRATION ? "INTEGRATION" : "PLATFORM";
         Order order = Order.builder().orderNumber(generateOrderNumber()).partnerAppId(partnerAppId).userId(userId)
-                .source(orderSource)
-                .externalOrderId(req.externalOrderId()).status(OrderStatus.PENDING).currency("USD").notes(req.notes())
-                .placedAt(Instant.now()).items(new ArrayList<>()).build();
+                .source(orderSource).externalOrderId(req.externalOrderId()).status(OrderStatus.PENDING).currency("USD")
+                .notes(req.notes()).placedAt(Instant.now()).items(new ArrayList<>()).build();
 
         applyAddress(order, req.shippingAddress(), false);
         if (req.billingAddress() != null) {
@@ -224,15 +228,28 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // calculan con `order.getShippingCountry()` explícito, más abajo, en checkoutTotalsService.
         //
         // Lo fija PedidoPaisDelMargenTest; ese test falla si alguien vuelve a pisar el país aquí.
+        // Unidades de cada producto en TODO el pedido, para resolver el tramo por cantidad (23-sep-2026).
+        // Se cuenta igual que el pedido mínimo —sumando las líneas del mismo producto— porque el lote se
+        // compone mezclando variantes: a quien se lleva cien unidades en dos tallas hay que hacerle el
+        // mismo precio que a quien se lleva cien de una, que es lo que le cuesta al proveedor.
+        Map<UUID, Integer> unidadesPorProducto = new HashMap<>();
         for (OrderItemInput itemReq : req.items()) {
-            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct,
-                    order.getShippingCountry());
+            unidadesPorProducto.merge(itemReq.productId(), Math.max(0, itemReq.quantity()), Integer::sum);
+        }
+        // Las escaleras de todos los productos de golpe: una consulta en vez de una por línea.
+        Map<UUID, List<ProductPriceTierEntity>> escaleras = unidadesPorProducto.isEmpty()
+                ? Map.of()
+                : priceTierRepository.findByProductIdInOrderByMinQtyAsc(unidadesPorProducto.keySet()).stream()
+                        .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        for (OrderItemInput itemReq : req.items()) {
+            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct, order.getShippingCountry(),
+                    unidadesPorProducto, escaleras);
             order.getItems().add(line);
             subtotal = Math.addExact(subtotal, line.getLineTotalCents());
         }
         requireMinimumOrderQuantities(order.getItems());
-        cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(),
-                grossByProduct, req.shippingOptionCode());
+        cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(), grossByProduct,
+                req.shippingOptionCode());
 
         Order saved = orderRepository.save(order);
         // El canje se apunta con el pedido ya guardado: si el guardado falla, el cupón no se gasta.
@@ -267,9 +284,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
     }
 
-    private OrderItem buildLine(OrderItemInput itemReq, String orderLang,
-            ParcelAggregator parcel, GrossSubtotal gross, Map<UUID, Integer> grossByProduct,
-            String shippingCountry) {
+    private OrderItem buildLine(OrderItemInput itemReq, String orderLang, ParcelAggregator parcel, GrossSubtotal gross,
+            Map<UUID, Integer> grossByProduct, String shippingCountry, Map<UUID, Integer> unidadesPorProducto,
+            Map<UUID, List<ProductPriceTierEntity>> escaleras) {
         // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
         // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
         if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
@@ -284,9 +301,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // semana que viene. Sin esta comprobación el pedido se aceptaba y se cobraba igual, y el
         // escaparate ni siquiera enseñaba ya el producto.
         if (product.getStatus() != ProductStatus.ACTIVE) {
-            throw new BusinessException("PRODUCT_UNAVAILABLE",
-                    "«" + orderTitle(product, orderLang) + "» ya no está disponible. Quítalo del carrito"
-                            + " para continuar.");
+            throw new BusinessException("PRODUCT_UNAVAILABLE", "«" + orderTitle(product, orderLang)
+                    + "» ya no está disponible. Quítalo del carrito" + " para continuar.");
         }
         ProductVariantEntity variant = itemReq.variantId() == null
                 ? null
@@ -304,7 +320,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
         // CNY value. The order currency is USD, so we bill retailUsd — the same figure the
         // storefront showed — instead of the stored 14.90 CNY mis-billed as $14.90.
-        PricedAmount priced = pricingService.priceFor(product, variant);
+        // El precio del TRAMO que corresponde a las unidades de este producto en el pedido. Antes se
+        // tarificaba sin mirar la cantidad, así que la tabla de cantidades de la ficha anunciaba una
+        // rebaja por volumen que el cobro no aplicaba: se enseñaba «1000+ → 5,14 €» y se cobraban 5,78 €.
+        int unidadesDelProducto = unidadesPorProducto.getOrDefault(itemReq.productId(), itemReq.quantity());
+        PricedAmount priced = pricingService.priceFor(product, variant, unidadesDelProducto,
+                escaleras.getOrDefault(product.getId(), List.of()));
         BigDecimal unitPrice = priced.retailUsd();
         if (unitPrice == null) {
             throw new BusinessException("Product " + product.getSlug() + " has no price");
@@ -326,7 +347,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 : unitCents;
         // DROP: coste en YUAN (CNY) congelado al crear la orden = precio del proveedor (variante o base),
         // SIEMPRE en CNY (los productos se persisten solo en CNY). Base de la comisión del operador (15%).
-        BigDecimal cnyUnit = variant != null && variant.getPrice() != null ? variant.getPrice()
+        BigDecimal cnyUnit = variant != null && variant.getPrice() != null
+                ? variant.getPrice()
                 : product.getBasePrice();
         long costCnyCents = cnyUnit != null
                 ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
@@ -342,18 +364,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // coincide con el de venta, así que la resta que mide la rebaja da cero.
         BigDecimal sinRebaja = priced.originalRetailUsd() != null ? priced.originalRetailUsd() : unitPrice;
         int lineGross = Math.multiplyExact(
-                sinRebaja.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact(),
-                itemReq.quantity());
+                sinRebaja.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact(), itemReq.quantity());
         gross.add(lineGross);
         grossByProduct.merge(product.getId(), lineGross, Integer::sum);
 
         parcel.add(product, variant, itemReq.quantity());
-        return OrderItem.builder().productId(product.getId())
-                .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
-                .imageUrlSnapshot(snapshotImage(product, variant))
-                .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
-                .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
-                .lineTotalCents(lineTotal)
+        return OrderItem.builder().productId(product.getId()).variantId(variant != null ? variant.getId() : null)
+                .titleSnapshot(orderTitle(product, orderLang)).imageUrlSnapshot(snapshotImage(product, variant))
+                .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents).costCents(costCents)
+                .costCnyCents(costCnyCents).quantity(itemReq.quantity()).lineTotalCents(lineTotal)
                 // Se congela AQUÍ la descripción con la que se va a declarar, con el mismo país del
                 // arancel que usa checkoutTotalsService. Si el grupo se aprueba después de cobrar, este
                 // pedido seguirá contando por lo que se declaró: es lo que impide que la vista previa
@@ -381,9 +400,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         for (Map.Entry<UUID, Integer> e : qtyByProduct.entrySet()) {
             int moq = productRepository.findById(e.getKey()).map(ProductEntity::getMoq).orElse(1);
             if (moq > 1 && e.getValue() < moq) {
-                throw new BusinessException(ErrorCode.MOQ_NOT_REACHED.name(),
-                        "El pedido mínimo de este producto es de " + moq + " unidades y solo hay "
-                                + e.getValue() + ".");
+                throw new BusinessException(ErrorCode.MOQ_NOT_REACHED.name(), "El pedido mínimo de este producto es de "
+                        + moq + " unidades y solo hay " + e.getValue() + ".");
             }
         }
     }
@@ -421,8 +439,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // cliente eligió del OTRO no aparecería en esta cotización, el resolutor la daría por inválida y
         // caería a la más barata de quien sí contestó. El cliente elegiría una cosa y se le cobraría y
         // enviaría otra — la misma familia de fallo que el descuadre del 18-ago-2026, por otra puerta.
-        ShippingQuote quote = router.cotizar(order.getShippingCountry(), parcel.build(),
-                productosDe(order));
+        ShippingQuote quote = router.cotizar(order.getShippingCountry(), parcel.build(), productosDe(order));
         // La forma de envío que eligió el cliente, revalidada contra lo que cotiza AHORA: el código
         // llega del navegador y aceptarlo sin comprobar dejaría pagar el precio de un canal más barato
         // —o colarse por uno postal, fuera del IVA prepagado—. El importe sale de la cotización.
@@ -435,9 +452,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             // El nombre, además del código: es lo que el transportista exige para emitir la guía.
             order.setShippingChannelName(chosen.name());
         }
-        int shippingCents = quote.supported()
-                ? (chosen != null ? chosen.amountUsdCents() : quote.amountUsdCents())
-                : 0;
+        int shippingCents = quote.supported() ? (chosen != null ? chosen.amountUsdCents() : quote.amountUsdCents()) : 0;
 
         // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
         // de afiliado viva (y no es su propio código). El envío y el IVA se calculan sobre (subtotal −
@@ -491,8 +506,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
             // ve el cliente lo localiza el front por el CODE; este es el fallback técnico.
             String limite = totals.customs().deMinimisLabel();
             throw new BusinessException("CUSTOMS_THRESHOLD_EXCEEDED",
-                    "El valor de los productos supera el límite de importación de "
-                            + order.getShippingCountry() + (limite.isBlank() ? "" : " (" + limite + ")")
+                    "El valor de los productos supera el límite de importación de " + order.getShippingCountry()
+                            + (limite.isBlank() ? "" : " (" + limite + ")")
                             + ", por encima del cual se aplican aranceles de aduana. Reduce el carrito por"
                             + " debajo de ese importe para completar la compra.");
         }
@@ -548,8 +563,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .orElseThrow(() -> new NotFoundException("No existe un usuario con email: " + customerEmail));
         }
         Order order = newOrder(null, userId, req);
-        log.info("Admin manual order {} created ({} items, customer={})", order.getOrderNumber(),
-                req.items().size(), customerEmail != null ? customerEmail : "guest");
+        log.info("Admin manual order {} created ({} items, customer={})", order.getOrderNumber(), req.items().size(),
+                customerEmail != null ? customerEmail : "guest");
         return order;
     }
 
@@ -718,8 +733,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (o.getStatus() != OrderStatus.PENDING && o.getStatus() != OrderStatus.AWAITING_PAYMENT
                 && o.getStatus() != OrderStatus.PAID) {
             throw new BusinessException(
-                    "Solo se puede enviar al proveedor un pedido pendiente o pagado; este está "
-                            + o.getStatus());
+                    "Solo se puede enviar al proveedor un pedido pendiente o pagado; este está " + o.getStatus());
         }
         requireCustomsDataOnItems(o);
         o.setStatus(OrderStatus.FORWARDED);
@@ -775,7 +789,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     /** Cómo se nombra el producto en el aviso: por lo que el administrador ve en el pedido. */
     private static String nombreDeLinea(OrderItem item, ProductEntity product) {
         String titulo = item.getTitleSnapshot() != null && !item.getTitleSnapshot().isBlank()
-                ? item.getTitleSnapshot() : product.getTitleZh();
+                ? item.getTitleSnapshot()
+                : product.getTitleZh();
         String sku = item.getSkuSnapshot();
         return sku != null && !sku.isBlank() ? titulo + " (" + sku + ")" : String.valueOf(titulo);
     }
@@ -988,13 +1003,14 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // ya produjo un pedido PAGADO debe devolver ESE pedido tal cual, nunca crear otro. Sin esto —como el
         // cargo al wallet es idempotente por clave— reenviar el idem creaba un pedido nuevo que se marcaba
         // PAID sin volver a cobrar (minteo de pedidos gratis ilimitados).
-        CustomerOrderEntity reusable = idemKeyTrim == null ? null
-                : orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
-                        userId, idemKeyTrim,
-                        List.of(OrderStatus.PENDING, OrderStatus.AWAITING_PAYMENT, OrderStatus.PAID)).orElse(null);
+        CustomerOrderEntity reusable = idemKeyTrim == null
+                ? null
+                : orderEntityRepository
+                        .findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(userId, idemKeyTrim,
+                                List.of(OrderStatus.PENDING, OrderStatus.AWAITING_PAYMENT, OrderStatus.PAID))
+                        .orElse(null);
         if (reusable != null && reusable.getStatus() == OrderStatus.PAID) {
-            return orderRepository.findById(reusable.getId())
-                    .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
+            return orderRepository.findById(reusable.getId()).orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         }
         boolean reused = reusable != null;
 
@@ -1012,8 +1028,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // For CARD/PAYPAL/USDT the order stays PENDING and the client follows up
         // with /me/orders/{id}/payment-intent for the external flow.
         String method = req.getPaymentMethod() == null ? WALLET : req.getPaymentMethod().toUpperCase();
-        Order o = orderRepository.findById(created.getId())
-                .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
+        Order o = orderRepository.findById(created.getId()).orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         if (WALLET.equals(method)) {
             long charge = created.getTotalCents();
             // Clave de idempotencia del cargo ACOTADA AL PEDIDO: el débito es único por pedido y no se puede
@@ -1084,8 +1099,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         try {
             cartService.removePurchased(order);
         } catch (RuntimeException e) {
-            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(),
-                    ErrorMessages.humanize(e), e);
+            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(), ErrorMessages.humanize(e),
+                    e);
         }
     }
 
@@ -1122,9 +1137,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Canarias, Ceuta y Melilla—. Se comprueba AQUÍ, antes de cobrar: aceptarlo dejaría un pedido
         // pagado que nadie puede despachar.
         if (unserviceableZoneService.isUnserviceable(addr.country(), addr.postalCode())) {
-            throw new BusinessException("UNSERVICEABLE_POSTAL_CODE",
-                    "El transportista no entrega en el código postal " + addr.postalCode()
-                            + ". Prueba con otra dirección.");
+            throw new BusinessException("UNSERVICEABLE_POSTAL_CODE", "El transportista no entrega en el código postal "
+                    + addr.postalCode() + ". Prueba con otra dirección.");
         }
         return addr;
     }
@@ -1156,13 +1170,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
                             o.getOrderNumber(), o.getCarrier(), o.getTrackingNumber(), u.getLanguage());
                     case "DELIVERED" -> notificationsPublisher.orderDelivered(o.getUserId(), u.getEmail(),
                             o.getOrderNumber(), u.getLanguage());
-                    default -> notificationsPublisher.dispatch("ORDER_FORWARDED", o.getUserId(),
-                            u.getEmail(), Map.of("orderNumber", o.getOrderNumber()), u.getLanguage());
+                    default -> notificationsPublisher.dispatch("ORDER_FORWARDED", o.getUserId(), u.getEmail(),
+                            Map.of("orderNumber", o.getOrderNumber()), u.getLanguage());
                 }
             });
         } catch (RuntimeException e) {
-            log.warn("No se pudo avisar del avance a {} del pedido {}: {}", estado, o.getOrderNumber(),
-                    e.getMessage());
+            log.warn("No se pudo avisar del avance a {} del pedido {}: {}", estado, o.getOrderNumber(), e.getMessage());
         }
     }
 
@@ -1182,8 +1195,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 try {
                     notificationUseCase.orderPaid(userId, placed.getOrderNumber(), u.getLanguage());
                 } catch (RuntimeException e) {
-                    log.warn("No se pudo dejar el aviso de pago del pedido {}: {}",
-                            placed.getOrderNumber(), e.getMessage());
+                    log.warn("No se pudo dejar el aviso de pago del pedido {}: {}", placed.getOrderNumber(),
+                            e.getMessage());
                 }
             }
         });
@@ -1241,10 +1254,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED).findFirst().orElse(null);
         String method = paid != null && paid.getMethod() != null ? paid.getMethod().name() : WALLET;
         // Se devuelve en la divisa en que se COBRÓ; si el pago no la fijó, la del pedido.
-        String ccy = Texts.firstNonBlankOr("USD",
-                paid != null ? paid.getSettlementCurrency() : null, o.getCurrency());
-        userRepository.findById(o.getUserId()).ifPresent(u -> orderEmailService.refunded(
-                o, u.getEmail(), u.getLanguage(), toWallet, ccy, method));
+        String ccy = Texts.firstNonBlankOr("USD", paid != null ? paid.getSettlementCurrency() : null, o.getCurrency());
+        userRepository.findById(o.getUserId())
+                .ifPresent(u -> orderEmailService.refunded(o, u.getEmail(), u.getLanguage(), toWallet, ccy, method));
     }
 
     /** Fills the cross-aggregate read fields (customerEmail/shopName/shopHandle/supplierName). */
@@ -1342,9 +1354,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (p.getTranslations() == null || lang == null) {
             return null;
         }
-        return p.getTranslations().stream()
-                .filter(tr -> lang.equalsIgnoreCase(tr.getLanguage()) && tr.getTitle() != null
-                        && !tr.getTitle().isBlank())
+        return p.getTranslations().stream().filter(
+                tr -> lang.equalsIgnoreCase(tr.getLanguage()) && tr.getTitle() != null && !tr.getTitle().isBlank())
                 .map(ProductTranslationEntity::getTitle).findFirst().orElse(null);
     }
 
@@ -1403,13 +1414,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
             if (yaLoContoElTransportista(o, status)) {
                 return;
             }
-            trackingRepository.save(OrderTrackingEventEntity.builder()
-                    .orderId(o.getId()).status(status.name()).description(description)
-                    .location(o.getShippingCountry()).source("ADMIN")
-                    .occurredAt(Instant.now()).createdAt(Instant.now()).build());
+            trackingRepository.save(OrderTrackingEventEntity.builder().orderId(o.getId()).status(status.name())
+                    .description(description).location(o.getShippingCountry()).source("ADMIN").occurredAt(Instant.now())
+                    .createdAt(Instant.now()).build());
         } catch (RuntimeException e) {
-            log.warn("No se pudo anotar el paso {} en el seguimiento del pedido {}: {}",
-                    status, o.getOrderNumber(), e.getMessage());
+            log.warn("No se pudo anotar el paso {} en el seguimiento del pedido {}: {}", status, o.getOrderNumber(),
+                    e.getMessage());
         }
     }
 
@@ -1426,8 +1436,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
      */
     private boolean yaLoContoElTransportista(Order o, OrderStatus status) {
         for (OrderTrackingEventEntity evento : trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())) {
-            boolean delCarrier = evento.getSource() != null
-                    && !"ADMIN".equals(evento.getSource()) && !"SYSTEM".equals(evento.getSource());
+            boolean delCarrier = evento.getSource() != null && !"ADMIN".equals(evento.getSource())
+                    && !"SYSTEM".equals(evento.getSource());
             if (delCarrier && status.name().equals(evento.getStatus())) {
                 return true;
             }
@@ -1482,25 +1492,20 @@ public class OrderUseCaseImpl implements OrderUseCase {
             // contado una línea y el despacho contaría dos, y esos 3 EUR los pondría el comercio.
             String descripcionDeclarada = item.getDeclaredDescription() != null
                     && !item.getDeclaredDescription().isBlank()
-                    ? item.getDeclaredDescription()
-                    : item.getProductTitles() != null
-                            && item.getProductTitles().get("en") != null
-                            && !item.getProductTitles().get("en").isBlank()
-                            ? item.getProductTitles().get("en")
-                            : CustomsDutyLinesService.declaredDescriptionOf(p);
-            lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
-                    descripcionDeclarada, p.getCountryOfOrigin(),
-                    Math.max(1, item.getQuantity()),
-                    item.getUnitPriceCents(), ParcelAggregator.unitWeightGrams(p, v), 0, 0, 0,
-                    ParcelAggregator.hasBattery(p)));
+                            ? item.getDeclaredDescription()
+                            : item.getProductTitles() != null && item.getProductTitles().get("en") != null
+                                    && !item.getProductTitles().get("en").isBlank()
+                                            ? item.getProductTitles().get("en")
+                                            : CustomsDutyLinesService.declaredDescriptionOf(p);
+            lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(), descripcionDeclarada,
+                    p.getCountryOfOrigin(), Math.max(1, item.getQuantity()), item.getUnitPriceCents(),
+                    ParcelAggregator.unitWeightGrams(p, v), 0, 0, 0, ParcelAggregator.hasBattery(p)));
         }
         // Mismo canal y mismo país que usará el despacho: el peso máximo por bulto sale de ese par y, si
         // aquí se contasen menos bultos, el derecho por partida cobrado se quedaría corto respecto al que
         // liquida la aduana — y la diferencia la pone el comercio.
-        return customsDutyLinesService.parcelsOf(lines, order.getShippingChannelCode(),
-                order.getShippingCountry());
+        return customsDutyLinesService.parcelsOf(lines, order.getShippingChannelCode(), order.getShippingCountry());
     }
-
 
     /**
      * Los productos del pedido, para que la bolsa los cuente UNA VEZ CADA UNO.

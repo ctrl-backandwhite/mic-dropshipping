@@ -66,13 +66,12 @@ class ExpoPushSenderTest {
 
     @SuppressWarnings("unchecked")
     private void respondeCon(Map<String, Object> cuerpo) {
-        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
-                .thenReturn((Mono) Mono.just(cuerpo));
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class))).thenReturn((Mono) Mono.just(cuerpo));
     }
 
     private static UserDevice dispositivo(String token) {
-        return UserDevice.builder().id(UUID.randomUUID()).userId(USUARIO).pushToken(token)
-                .plataforma("android").build();
+        return UserDevice.builder().id(UUID.randomUUID()).userId(USUARIO).pushToken(token).plataforma("android")
+                .build();
     }
 
     @SuppressWarnings("unchecked")
@@ -91,10 +90,8 @@ class ExpoPushSenderTest {
 
         List<Map<String, Object>> lote = ultimoLoteEnviado();
         assertThat(lote).hasSize(1);
-        assertThat(lote.get(0)).containsEntry("to", "tok-1")
-                .containsEntry("title", "Tu pedido va en camino")
-                .containsEntry("body", "NX-2026-0001 ha salido")
-                .containsEntry("data", Map.of("avisoId", "a-1"));
+        assertThat(lote.get(0)).containsEntry("to", "tok-1").containsEntry("title", "Tu pedido va en camino")
+                .containsEntry("body", "NX-2026-0001 ha salido").containsEntry("data", Map.of("avisoId", "a-1"));
     }
 
     /** Sin dispositivos no hay a quién mandar: ni se llama a Expo. */
@@ -139,8 +136,7 @@ class ExpoPushSenderTest {
     @Test
     void retiraElTokenQueExpoDeclaraInservible() {
         when(devices.deUsuario(USUARIO)).thenReturn(List.of(dispositivo("tok-viejo"), dispositivo("tok-bueno")));
-        respondeCon(Map.of("data", List.of(
-                Map.of("status", "error", "details", Map.of("error", "DeviceNotRegistered")),
+        respondeCon(Map.of("data", List.of(Map.of("status", "error", "details", Map.of("error", "DeviceNotRegistered")),
                 Map.of("status", "ok"))));
 
         sender.reparte(USUARIO, "t", "c", Map.of());
@@ -153,8 +149,8 @@ class ExpoPushSenderTest {
     @Test
     void noRetiraPorUnErrorCualquiera() {
         when(devices.deUsuario(USUARIO)).thenReturn(List.of(dispositivo("tok-1")));
-        respondeCon(Map.of("data", List.of(
-                Map.of("status", "error", "details", Map.of("error", "MessageRateExceeded")))));
+        respondeCon(
+                Map.of("data", List.of(Map.of("status", "error", "details", Map.of("error", "MessageRateExceeded")))));
 
         sender.reparte(USUARIO, "t", "c", Map.of());
 

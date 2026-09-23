@@ -124,8 +124,8 @@ public class WebhookDispatcherService {
 
     /** Cuerpo del ping de prueba, sin anotar: lo comparten las dos sobrecargas públicas. */
     private void fireTestPing(UUID subscriptionId) {
-        fanOut("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event",
-                "subscriptionId", subscriptionId.toString(), "at", Instant.now().toString()));
+        fanOut("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event", "subscriptionId",
+                subscriptionId.toString(), "at", Instant.now().toString()));
     }
 
     private static boolean matches(WebhookSubscriptionEntity s, String eventType) {

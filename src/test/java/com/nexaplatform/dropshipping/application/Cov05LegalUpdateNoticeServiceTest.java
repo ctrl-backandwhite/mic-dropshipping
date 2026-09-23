@@ -139,10 +139,8 @@ class Cov05LegalUpdateNoticeServiceTest {
         verify(emailQueue).enqueue(eq("de@test"), asunto.capture(), anyString(), vars.capture());
 
         assertThat(asunto.getValue()).isEqualTo("Wir haben unsere AGB und Datenschutzerklärung aktualisiert");
-        assertThat(vars.getValue())
-                .containsEntry("privacyUrl", "https://nx036.com/legal/privacy")
-                .containsEntry("termsUrl", "https://nx036.com/legal/terms")
-                .containsEntry("version", VERSION);
+        assertThat(vars.getValue()).containsEntry("privacyUrl", "https://nx036.com/legal/privacy")
+                .containsEntry("termsUrl", "https://nx036.com/legal/terms").containsEntry("version", VERSION);
     }
 
     @Test

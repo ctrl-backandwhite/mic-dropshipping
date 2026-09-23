@@ -266,8 +266,7 @@ class Cov03NotificationMailboxTest {
         useCase.setStatus(id, ownerId, estado);
 
         ArgumentCaptor<Map<String, Object>> vars = ArgumentCaptor.captor();
-        verify(emailQueue).enqueue(eq("cliente@example.com"), anyString(), eq("emails/notification"),
-                vars.capture());
+        verify(emailQueue).enqueue(eq("cliente@example.com"), anyString(), eq("emails/notification"), vars.capture());
         assertThat(vars.getValue().get("bodyHtml").toString()).contains("Mi pedido");
     }
 
@@ -342,8 +341,8 @@ class Cov03NotificationMailboxTest {
 
     @Test
     void elEnvioMasivoLlegaATodosLosUsuariosYDevuelveCuantosSon() {
-        when(userRepository.findAll()).thenReturn(List.of(User.builder().id(UUID.randomUUID()).build(),
-                User.builder().id(UUID.randomUUID()).build()));
+        when(userRepository.findAll()).thenReturn(
+                List.of(User.builder().id(UUID.randomUUID()).build(), User.builder().id(UUID.randomUUID()).build()));
 
         assertThat(useCase.sendAdminNotification("all", "Aviso", "Cuerpo")).isEqualTo(2);
         verify(notificationRepository, times(2)).save(any());

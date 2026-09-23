@@ -48,16 +48,16 @@ public class OperatorActionIndexer {
             if (client.indices().exists(b -> b.index(index)).value()) {
                 return;
             }
-            client.indices().create(CreateIndexRequest.of(b -> b.index(index).mappings(TypeMapping.of(tm -> tm
-                    .properties(OPERATORSUBJECT, Property.of(p -> p.keyword(k -> k)))
-                    .properties("operatorEmail", Property.of(p -> p.keyword(k -> k)))
-                    .properties("operatorName", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                    .properties("orderId", Property.of(p -> p.keyword(k -> k)))
-                    .properties("orderNumber", Property.of(p -> p.keyword(k -> k)))
-                    .properties("action", Property.of(p -> p.keyword(k -> k)))
-                    .properties("commissionCnyCents", Property.of(p -> p.long_(l -> l)))
-                    .properties("itemCount", Property.of(p -> p.integer(i -> i)))
-                    .properties(PROCESSEDAT, Property.of(p -> p.date(d -> d)))))));
+            client.indices().create(CreateIndexRequest.of(b -> b.index(index)
+                    .mappings(TypeMapping.of(tm -> tm.properties(OPERATORSUBJECT, Property.of(p -> p.keyword(k -> k)))
+                            .properties("operatorEmail", Property.of(p -> p.keyword(k -> k)))
+                            .properties("operatorName", Property.of(p -> p.text(t -> t.analyzer("standard"))))
+                            .properties("orderId", Property.of(p -> p.keyword(k -> k)))
+                            .properties("orderNumber", Property.of(p -> p.keyword(k -> k)))
+                            .properties("action", Property.of(p -> p.keyword(k -> k)))
+                            .properties("commissionCnyCents", Property.of(p -> p.long_(l -> l)))
+                            .properties("itemCount", Property.of(p -> p.integer(i -> i)))
+                            .properties(PROCESSEDAT, Property.of(p -> p.date(d -> d)))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (RuntimeException | IOException e) {
             // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
@@ -98,9 +98,8 @@ public class OperatorActionIndexer {
         Query range = Query.of(q -> q.range(r -> r.field(PROCESSEDAT).gte(jsonData(fromS)).lte(jsonData(toS))));
         Query query = operatorSubject == null || operatorSubject.isBlank()
                 ? range
-                : Query.of(q -> q.bool(b -> b.must(range)
-                        .must(Query.of(qq -> qq.term(t -> t.field(OPERATORSUBJECT).value(v -> v.stringValue(
-                                operatorSubject)))))));
+                : Query.of(q -> q.bool(b -> b.must(range).must(Query
+                        .of(qq -> qq.term(t -> t.field(OPERATORSUBJECT).value(v -> v.stringValue(operatorSubject)))))));
         SearchResponse<Map> resp = client.search(SearchRequest.of(s -> s.index(index).from(page * size).size(size)
                 .query(query).sort(srt -> srt.field(f -> f.field(PROCESSEDAT).order(SortOrder.Desc)))), Map.class);
         List<Map<String, Object>> items = new ArrayList<>();

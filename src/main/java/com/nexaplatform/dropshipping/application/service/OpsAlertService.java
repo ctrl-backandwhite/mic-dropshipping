@@ -35,8 +35,7 @@ public class OpsAlertService {
 
     /** Qué está fallando. Define el asunto y agrupa los avisos. */
     public enum AlertKind {
-        FULFILLMENT("Envío"),
-        PAYMENT("Pago");
+        FULFILLMENT("Envío"), PAYMENT("Pago");
 
         private final String label;
 
@@ -100,12 +99,13 @@ public class OpsAlertService {
             vars.put("preheader", alert.title());
             vars.put("body", alert.detail());
             vars.put("footerNote", "Aviso automático de la plataforma. No hace falta responder.");
-            emailQueue.enqueue(alertEmail, "[NX036] Fallo de " + alert.kind().label().toLowerCase()
-                    + ": " + alert.title(), "emails/notification", vars);
+            emailQueue.enqueue(alertEmail,
+                    "[NX036] Fallo de " + alert.kind().label().toLowerCase() + ": " + alert.title(),
+                    "emails/notification", vars);
             log.warn("::> [OPS-ALERT] Aviso enviado tipo={} clave={}", alert.kind(), alert.dedupeKey());
         } catch (RuntimeException e) {
-            log.error("::> [OPS-ALERT] No se pudo encolar el aviso clave={} causa={}",
-                    alert.dedupeKey(), e.getMessage());
+            log.error("::> [OPS-ALERT] No se pudo encolar el aviso clave={} causa={}", alert.dedupeKey(),
+                    e.getMessage());
         }
     }
 
@@ -124,12 +124,10 @@ public class OpsAlertService {
 
     /** Aviso de que el transportista no ha podido crear el envío de un pedido. */
     public void fulfillmentFailed(String orderNumber, String country, int attempts, String error) {
-        String detail = "No se ha podido crear el envío del pedido " + orderNumber
-                + " (destino " + country + ") tras " + attempts + " intento(s).\n\n"
-                + "Motivo: " + CarrierErrorMessage.humanize(error) + "\n\n"
+        String detail = "No se ha podido crear el envío del pedido " + orderNumber + " (destino " + country + ") tras "
+                + attempts + " intento(s).\n\n" + "Motivo: " + CarrierErrorMessage.humanize(error) + "\n\n"
                 + "El pedido queda pendiente en la bandeja de incidencias del panel de administración. "
-                + "Cuando corrijas la causa, usa «reintentar envío» para volver a lanzarlo."
-                + technicalDetail(error);
+                + "Cuando corrijas la causa, usa «reintentar envío» para volver a lanzarlo." + technicalDetail(error);
         // El asunto lleva el PEDIDO, no la causa: es lo que identifica el aviso de un vistazo. La
         // agrupación sí usa la causa, para que una caída del carrier no mande un correo por pedido.
         notifyFailure(new Alert(AlertKind.FULFILLMENT, "no se ha podido crear el envío del pedido " + orderNumber,
@@ -138,12 +136,12 @@ public class OpsAlertService {
 
     /** Aviso de que una pasarela de pago ha fallado. */
     public void paymentFailed(String provider, String operation, String reference, String error) {
-        String detail = "La pasarela " + provider + " ha fallado al " + operation + ".\n\n"
-                + "Referencia: " + (reference != null ? reference : "(sin referencia)") + "\n\n"
+        String detail = "La pasarela " + provider + " ha fallado al " + operation + ".\n\n" + "Referencia: "
+                + (reference != null ? reference : "(sin referencia)") + "\n\n"
                 + "Si el fallo persiste, los clientes no podrán completar el pago con este método."
                 + technicalDetail(error);
-        notifyFailure(new Alert(AlertKind.PAYMENT, "la pasarela " + provider + " ha fallado al " + operation,
-                detail, "PAYMENT:" + provider + ":" + operation + ":" + causeKey(error)));
+        notifyFailure(new Alert(AlertKind.PAYMENT, "la pasarela " + provider + " ha fallado al " + operation, detail,
+                "PAYMENT:" + provider + ":" + operation + ":" + causeKey(error)));
     }
 
     /**
@@ -192,9 +190,8 @@ public class OpsAlertService {
         if (code.find()) {
             return code.group();
         }
-        String normalized = error.replaceAll("\\s+", " ")
-                .replaceAll("[A-Z]{2}-\\d[\\w-]*", "#")   // referencias tipo NX-1785149919-8710
-                .replaceAll("\\d+", "#")                  // importes, pesos, ids sueltos
+        String normalized = error.replaceAll("\\s+", " ").replaceAll("[A-Z]{2}-\\d[\\w-]*", "#") // referencias tipo NX-1785149919-8710
+                .replaceAll("\\d+", "#") // importes, pesos, ids sueltos
                 .trim();
         return normalized.length() <= 60 ? normalized : normalized.substring(0, 60);
     }

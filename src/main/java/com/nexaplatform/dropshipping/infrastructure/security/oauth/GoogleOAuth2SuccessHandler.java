@@ -54,8 +54,8 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
             DeviceSessionService deviceSessionService,
-            com.nexaplatform.dropshipping.application.service.TotpService totpService,
-            OAuthRedirectResolver redirects, GeolocalizacionDelCdn cdn) {
+            com.nexaplatform.dropshipping.application.service.TotpService totpService, OAuthRedirectResolver redirects,
+            GeolocalizacionDelCdn cdn) {
         this.cdn = cdn;
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
@@ -64,13 +64,13 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         this.redirects = redirects;
     }
 
-
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
             Authentication authentication) throws IOException {
         OAuth2User principal = (OAuth2User) authentication.getPrincipal();
         String provider = authentication instanceof OAuth2AuthenticationToken token
-                ? token.getAuthorizedClientRegistrationId() : "oauth2";
+                ? token.getAuthorizedClientRegistrationId()
+                : "oauth2";
         // Quién arrancó el flujo (web o aplicación móvil). Se anotó en la sesión al iniciarlo, porque el
         // parámetro original se pierde en el viaje de ida y vuelta al proveedor.
         OAuthClientTarget target = OAuthClientTargetFilter.resolve(request);
@@ -92,7 +92,8 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         }
 
         // Nombre para el alta: GitHub trae el nombre completo en "name"; Google, given/family.
-        String firstName = "github".equals(provider) ? principal.getAttribute("name")
+        String firstName = "github".equals(provider)
+                ? principal.getAttribute("name")
                 : principal.getAttribute("given_name");
         String lastName = "github".equals(provider) ? null : principal.getAttribute("family_name");
         // País por IP del CDN para prerrellenar el país del alta social. Solo se usa al CREAR la cuenta;
@@ -101,7 +102,8 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // Pasa por `GeolocalizacionDelCdn` y no se lee la cabecera a pelo porque AQUÍ el país queda
         // GRABADO en la ficha, y la ficha es la fuente en la que más se confía luego para el precio.
         // Sin CDN de por medio, quien alcance el origen elegiría el país con el que se registra.
-        GoogleLoginOutcome outcome = userUseCase.resolveGoogleLogin(email, firstName, lastName, cdn.paisDeConfianza(request));
+        GoogleLoginOutcome outcome = userUseCase.resolveGoogleLogin(email, firstName, lastName,
+                cdn.paisDeConfianza(request));
 
         if (outcome.isLinkRequired()) {
             // Existing local account: stash the verified email and ask for password confirmation

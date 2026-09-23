@@ -38,8 +38,7 @@ class BusConfigTest {
     @Test
     @DisplayName("Encendido crea su productor y su consumidor, aparte de los de la tienda")
     void encendidoCreaLoSuyo() {
-        runner.withPropertyValues("nexadrop.bus.enabled=true",
-                        "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
+        runner.withPropertyValues("nexadrop.bus.enabled=true", "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
                 .run(contexto -> {
                     assertThat(contexto).hasNotFailed();
                     assertThat(contexto).hasBean("busKafkaTemplate");
@@ -54,10 +53,8 @@ class BusConfigTest {
     void pedirPorTipoNoSeVuelveAmbiguo() {
         // Esta es la prueba que importa. Sin marcar los beans del bus como no candidatos, aquí
         // habría dos del mismo tipo y el contexto fallaría: exactamente lo que tumbaría el arranque.
-        runner.withPropertyValues("nexadrop.bus.enabled=true",
-                        "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
-                .withUserConfiguration(QuienPideUnKafkaTemplate.class)
-                .run(contexto -> {
+        runner.withPropertyValues("nexadrop.bus.enabled=true", "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
+                .withUserConfiguration(QuienPideUnKafkaTemplate.class).run(contexto -> {
                     assertThat(contexto).hasNotFailed();
                     assertThat(contexto.getBean(QuienPideUnKafkaTemplate.class).plantilla)
                             .isSameAs(contexto.getBean("kafkaTemplate"));
@@ -69,16 +66,14 @@ class BusConfigTest {
     void llevaManejadorDeErrores() {
         // Sin él, un mensaje que no se puede aplicar se reintenta sin fin y ningún producto
         // posterior llega a la tienda, sin más señal que un registro que se repite.
-        runner.withPropertyValues("nexadrop.bus.enabled=true",
-                        "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
+        runner.withPropertyValues("nexadrop.bus.enabled=true", "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
                 .run(contexto -> {
-                    ConcurrentKafkaListenerContainerFactory<?, ?> factoria =
-                            (ConcurrentKafkaListenerContainerFactory<?, ?>)
-                                    contexto.getBean("busListenerContainerFactory");
+                    ConcurrentKafkaListenerContainerFactory<?, ?> factoria = (ConcurrentKafkaListenerContainerFactory<?, ?>) contexto
+                            .getBean("busListenerContainerFactory");
                     // Se mira en el contenedor que la factoría produce, que es la pieza que de
                     // verdad recibe los mensajes.
-                    assertThat(factoria.createContainer("catalogo.producto.certificado")
-                            .getCommonErrorHandler()).isNotNull();
+                    assertThat(factoria.createContainer("catalogo.producto.certificado").getCommonErrorHandler())
+                            .isNotNull();
                 });
     }
 

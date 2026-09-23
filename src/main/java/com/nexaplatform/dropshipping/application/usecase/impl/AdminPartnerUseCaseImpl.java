@@ -77,11 +77,13 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
         // y lo usa como customer_order.partner_app_id (FK). Sin esta fila, POST /partner/orders daba 409
         // (FK inexistente). El owner es el admin que crea el cliente.
         UUID partnerAppId = UUID.nameUUIDFromBytes(("partner:" + clientId).getBytes());
-        jdbc.update("INSERT INTO partner_app (id, owner_user_id, name, description, client_id, client_secret_hash, "
-                + "scopes) VALUES (?, ?, ?, ?, ?, ?, ?)", partnerAppId, ownerUserId, name, "OAuth API client",
-                clientId, secretHash, String.join(",", sc));
+        jdbc.update(
+                "INSERT INTO partner_app (id, owner_user_id, name, description, client_id, client_secret_hash, "
+                        + "scopes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                partnerAppId, ownerUserId, name, "OAuth API client", clientId, secretHash, String.join(",", sc));
 
-        log.info("::> [PARTNER] OAuth client + partner_app created clientId={} partnerAppId={}", clientId, partnerAppId);
+        log.info("::> [PARTNER] OAuth client + partner_app created clientId={} partnerAppId={}", clientId,
+                partnerAppId);
         return AdminOAuthClientCreated.builder().id(client.getId()).clientId(clientId).clientSecret(clientSecret)
                 .name(name).build();
     }

@@ -8,10 +8,13 @@ import com.nexaplatform.dropshipping.application.service.PricingService.PricedAm
 import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,10 +22,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -142,6 +148,159 @@ class PriceTierMatchesChargedPriceTest {
     @Test
     void unTramoDeUnProductoQueYaNoExisteNoRevienta() {
         assertThat(pricingService.priceForSupplierAmount(null, null, COSTE_CNY).displayAmount()).isNull();
+    }
+
+    /* ============ El recargo, ahora por tramo (23-sep-2026) ============ */
+
+    /**
+     * El recargo del TRAMO manda sobre el del producto.
+     *
+     * <p>Que se rompe en produccion si esta prueba falla: quien compra diez mil unidades paga diez mil
+     * veces un cargo que solo se incurre una vez -la gestion de la compra, el manipulado, la parte fija
+     * del despacho-, y lo paga justo en la tabla que le promete que comprar mas sale mas barato.
+     */
+    @Test
+    void elRecargoDelTramoMandaSobreElDelProducto() {
+        product.setSurchargeCny(new BigDecimal("3.00"));
+        when(currencyRateService.toUsd(new BigDecimal("3.00"), "CNY")).thenReturn(new BigDecimal("0.4196"));
+        when(currencyRateService.toUsd(new BigDecimal("0.50"), "CNY")).thenReturn(new BigDecimal("0.0699"));
+
+        PricedAmount conElDelProducto = pricingService.priceForSupplierAmount(product, null, COSTE_CNY);
+        PricedAmount conElDelTramo = pricingService.priceForSupplierAmount(product, null, COSTE_CNY,
+                new BigDecimal("0.50"));
+
+        assertThat(conElDelTramo.displayAmount()).isLessThan(conElDelProducto.displayAmount());
+        // 6,17 del resto + 0,07 del recargo propio, en vez de los 0,42 del producto.
+        assertThat(conElDelTramo.displayAmount()).isEqualByComparingTo(new BigDecimal("6.24"));
+    }
+
+    /**
+     * Sin recargo propio, el tramo hereda el del producto. Es lo que deja intactos los tramos ya
+     * cargados: la columna nueva esta vacia en todos ellos y el precio no se mueve ni un centimo.
+     */
+    @Test
+    void unTramoSinRecargoPropioHeredaElDelProducto() {
+        product.setSurchargeCny(new BigDecimal("3.00"));
+        when(currencyRateService.toUsd(new BigDecimal("3.00"), "CNY")).thenReturn(new BigDecimal("0.4196"));
+
+        PricedAmount heredado = pricingService.priceForSupplierAmount(product, null, COSTE_CNY, null);
+        PricedAmount delProducto = pricingService.priceForSupplierAmount(product, null, COSTE_CNY);
+
+        assertThat(heredado.displayAmount()).isEqualByComparingTo(delProducto.displayAmount());
+    }
+
+    /**
+     * Un recargo de CERO en el tramo no es lo mismo que no tener recargo: cero quiere decir que ese
+     * tramo no lleva cargo, y tiene que poder escribirse aunque el producto si lo tenga.
+     */
+    @Test
+    void unRecargoDeCeroEnElTramoAnulaElDelProducto() {
+        product.setSurchargeCny(new BigDecimal("3.00"));
+        when(currencyRateService.toUsd(new BigDecimal("3.00"), "CNY")).thenReturn(new BigDecimal("0.4196"));
+
+        PricedAmount sinCargo = pricingService.priceForSupplierAmount(product, null, COSTE_CNY, BigDecimal.ZERO);
+
+        assertThat(sinCargo.displayAmount()).isEqualByComparingTo(new BigDecimal("6.17"));
+    }
+
+    /**
+     * El envio y el arancel NO se tocan: siguen siendo uno por producto, porque esos si escalan con el
+     * bulto. Cambiar el recargo del tramo no puede moverlos.
+     */
+    @Test
+    void elRecargoPorTramoNoTocaElEnvioNiElArancel() {
+        PricedAmount conRecargoPropio = pricingService.priceForSupplierAmount(product, null, COSTE_CNY,
+                BigDecimal.ZERO);
+
+        assertThat(conRecargoPropio.supplierShippingUsd()).isEqualByComparingTo(ENVIO_USD);
+    }
+
+    /* ======= El tramo por cantidad, APLICADO de verdad (23-sep-2026) ======= */
+
+    /** La escalera del producto de esta prueba: 5,38 la unidad, 4,842 a partir de diez (un 10 % menos). */
+    private static List<ProductPriceTierEntity> escalera() {
+        return List.of(ProductPriceTierEntity.builder().minQty(1).maxQty(9).unitPrice(COSTE_CNY).build(),
+                ProductPriceTierEntity.builder().minQty(10).unitPrice(new BigDecimal("4.842")).build());
+    }
+
+    /**
+     * El cambio y el margen, para CUALQUIER importe.
+     *
+     * <p>Los dobles del arranque solo responden a los tres importes exactos del producto, y aqui la base
+     * la calcula el propio servicio multiplicando por la proporcion del tramo: sale con otra escala y con
+     * decimales que no se pueden anticipar. Se responde proporcionalmente, que es lo que hace el servicio
+     * real, para que la prueba mida la REGLA y no la aritmetica del doble.
+     */
+    private void cambioYMargenParaCualquierImporte() {
+        when(currencyRateService.toUsd(any(), eq("CNY")))
+                .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(new BigDecimal("0.1399")));
+        when(marginService.apply(any(), any(), any())).thenAnswer(inv -> {
+            BigDecimal coste = inv.getArgument(0);
+            return new PriceWithMargin(coste, coste == null ? null : coste.multiply(new BigDecimal("2.6440")), null,
+                    new BigDecimal("150"));
+        });
+    }
+
+    /**
+     * Comprar diez unidades sale mas barato POR UNIDAD que comprar una.
+     *
+     * <p>Que se rompia en produccion antes de esta prueba: la tabla de cantidades de la ficha anunciaba
+     * la rebaja por volumen, el cliente metia diez unidades en la cesta y se le cobraba el precio de una.
+     * Ni la cesta, ni la vista previa, ni el pedido consultaban los tramos: la promesa que hace vender
+     * mas unidades no se cumplia justo en la pantalla del pago.
+     */
+    @Test
+    void aPartirDeDiezUnidadesSeCobraElPrecioDelTramo() {
+        cambioYMargenParaCualquierImporte();
+
+        PricedAmount una = pricingService.priceFor(product, null, 1, escalera());
+        PricedAmount diez = pricingService.priceFor(product, null, 10, escalera());
+
+        assertThat(diez.displayAmount()).isLessThan(una.displayAmount());
+    }
+
+    /** Por debajo del primer escalon no hay descuento: se paga el precio de siempre. */
+    @Test
+    void conUnaSolaUnidadElPrecioNoSeMueve() {
+        PricedAmount conTramos = pricingService.priceFor(product, null, 1, escalera());
+        PricedAmount sinTramos = pricingService.priceFor(product, null);
+
+        assertThat(conTramos.displayAmount()).isEqualByComparingTo(sinTramos.displayAmount());
+    }
+
+    /** Un producto sin escalera se tarifica como siempre, pase la cantidad que pase. */
+    @Test
+    void sinTramosLaCantidadNoCambiaElPrecio() {
+        PricedAmount mil = pricingService.priceFor(product, null, 1000, List.of());
+
+        assertThat(mil.displayAmount()).isEqualByComparingTo(pricingService.priceFor(product, null).displayAmount());
+    }
+
+    /**
+     * El tramo se aplica como PROPORCION sobre el precio de la variante, no como importe absoluto.
+     *
+     * <p>Que se rompe en produccion si esta prueba falla: los tramos son del PRODUCTO y cada variante
+     * tiene su coste; medido el 23-sep-2026, en 713 productos hay una variante mas cara que el primer
+     * escalon —hasta 300 CNY por encima—. Cobrandole el importe literal del tramo, esa variante se
+     * vende por debajo de coste, y precisamente en los pedidos grandes.
+     */
+    @Test
+    void laVarianteCaraConservaSuSobreprecioAlAplicarElTramo() {
+        cambioYMargenParaCualquierImporte();
+        // Una variante que cuesta el doble que el encabezado de la escalera.
+        ProductVariantEntity cara = new ProductVariantEntity();
+        cara.setPrice(new BigDecimal("10.76"));
+        cara.setActive(true);
+
+        pricingService.priceFor(product, cara, 10, escalera());
+
+        // La base tarificada es el 90 % de SU precio (9,684), no los 4,842 del tramo.
+        ArgumentCaptor<BigDecimal> base = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(currencyRateService, atLeastOnce()).toUsd(base.capture(), eq("CNY"));
+        assertThat(base.getAllValues())
+                .anySatisfy(importe -> assertThat(importe).isEqualByComparingTo(new BigDecimal("9.684")));
+        assertThat(base.getAllValues())
+                .noneSatisfy(importe -> assertThat(importe).isEqualByComparingTo(new BigDecimal("4.842")));
     }
 
     @Test

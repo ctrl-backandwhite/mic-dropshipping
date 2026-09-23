@@ -39,14 +39,12 @@ public class PaymentAppReturnController {
 
     @Operation(summary = "Vuelta del Checkout hospedado a la aplicación móvil (redirección al esquema propio)")
     @GetMapping("/app-return")
-    public ResponseEntity<Void> appReturn(@RequestParam UUID paymentId,
-            @RequestParam(required = false) String status,
+    public ResponseEntity<Void> appReturn(@RequestParam UUID paymentId, @RequestParam(required = false) String status,
             @RequestParam(name = "session_id", required = false) String sessionId) {
         // Cualquier estado que no sea un «ok» explícito se trata como cancelado: anunciar un cobro que
         // no consta sería peor que pedir que se reintente.
         boolean aprobado = "ok".equalsIgnoreCase(status);
-        StringBuilder destino = new StringBuilder(appPaymentReturnUrl)
-                .append(aprobado ? "/retorno" : "/cancelado")
+        StringBuilder destino = new StringBuilder(appPaymentReturnUrl).append(aprobado ? "/retorno" : "/cancelado")
                 .append("?paymentId=").append(paymentId);
         // Qué se estaba pagando: la app tiene que cerrar el cobro por un sitio distinto según sea la
         // recarga del monedero o un pedido, y cuando vuelve del navegador ya no le queda contexto.
@@ -58,7 +56,6 @@ public class PaymentAppReturnController {
         if (aprobado && sessionId != null && !sessionId.isBlank()) {
             destino.append("&sessionId=").append(sessionId);
         }
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .header(HttpHeaders.LOCATION, destino.toString()).build();
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, destino.toString()).build();
     }
 }

@@ -77,15 +77,13 @@ public class RegisteredClientConfig {
         // FAIL-CLOSED: en un entorno real (pro/pre) NO se puede arrancar con el secreto de partner por
         // defecto ('dev-partner-secret-change-me'), o cualquiera obtendría un token con scopes de la API
         // de integración usando una credencial pública. Se exige definir PARTNER_DEFAULT_SECRET.
-        if (environment.acceptsProfiles(Profiles.of("pro", "pre"))
-                && DEFAULT_PARTNER_SECRET.equals(partnerSecret)) {
+        if (environment.acceptsProfiles(Profiles.of("pro", "pre")) && DEFAULT_PARTNER_SECRET.equals(partnerSecret)) {
             throw new IllegalStateException("El secreto del cliente OAuth de partners es el valor por defecto "
                     + "en un entorno pro/pre. Define PARTNER_DEFAULT_SECRET con un secreto único antes de arrancar.");
         }
 
         // Free / sandbox tier — 1 req/min. UPSERT: re-aplicamos settings y TTL si ya existe.
-        upsertPartnerClient("demo-partner", "Demo Partner — Sandbox / Free (server-to-server)", partnerSecret,
-                SANDBOX);
+        upsertPartnerClient("demo-partner", "Demo Partner — Sandbox / Free (server-to-server)", partnerSecret, SANDBOX);
 
         // Paid tier — 5 req/min.
         upsertPartnerClient("demo-partner-paid", "Demo Partner — Paid (server-to-server)", partnerSecret + "-paid",
@@ -110,8 +108,7 @@ public class RegisteredClientConfig {
                     "El codificador devolvió un secreto nulo para el cliente OAuth " + clientId);
         }
         repo.save(RegisteredClient.withId(internalId).clientId(clientId).clientName(clientName)
-                .clientSecret(encodedSecret)
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .clientSecret(encodedSecret).clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scope("catalog.read")
                 .scope("orders.write").scope("shop.sync")
                 .clientSettings(ClientSettings.builder().setting("nexadrop.plan", plan).build())

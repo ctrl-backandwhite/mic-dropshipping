@@ -93,11 +93,9 @@ class AdminOrderTotalIsChargedAmountTest {
         // lo que se le cobra. Redondear la unidad (14,89 €) y multiplicarla por cuatro daba 59,56 €: dos
         // céntimos que el panel enseñaría de menos justo en la pantalla desde la que se atiende una
         // reclamación. El total del panel = 59,58 − 5,96 + 9,75 + 13,31 = 76,68 €.
-        Order pedido = Order.builder()
-                .subtotalCents(6792).shippingCents(1112).taxCents(1517).discountCents(679).totalCents(8742)
-                .currency("USD")
-                .items(List.of(OrderItem.builder().unitPriceCents(1698).quantity(4).build()))
-                .build();
+        Order pedido = Order.builder().subtotalCents(6792).shippingCents(1112).taxCents(1517).discountCents(679)
+                .totalCents(8742).currency("USD")
+                .items(List.of(OrderItem.builder().unitPriceCents(1698).quantity(4).build())).build();
 
         assertThat(mapper.totalFormatted(pedido)).isEqualTo("76.68 €");
     }
@@ -113,14 +111,7 @@ class AdminOrderTotalIsChargedAmountTest {
 
     /** El pedido NX-1785433008-4345: 2 uds a 3,57 $ + 6,25 $ de envío + 2,81 $ de impuestos. */
     private static Order pedidoDeLaCertificacion() {
-        return Order.builder()
-                .subtotalCents(714)
-                .shippingCents(625)
-                .taxCents(281)
-                .discountCents(0)
-                .totalCents(1620)
-                .currency("USD")
-                .items(List.of(OrderItem.builder().unitPriceCents(357).quantity(2).build()))
-                .build();
+        return Order.builder().subtotalCents(714).shippingCents(625).taxCents(281).discountCents(0).totalCents(1620)
+                .currency("USD").items(List.of(OrderItem.builder().unitPriceCents(357).quantity(2).build())).build();
     }
 }

@@ -57,8 +57,7 @@ class AdminAffiliateQueryServiceTest {
         lenient().when(affiliates.allAffiliates()).thenReturn(todos);
         lenient().when(affiliates.listCodes(any())).thenReturn(List.of());
         lenient().when(affiliates.commissionsForAffiliate(any())).thenReturn(List.of());
-        lenient().when(mapper.toAdminRow(any(), any(), any(), anyString()))
-                .thenReturn(mock(AdminAffiliateRow.class));
+        lenient().when(mapper.toAdminRow(any(), any(), any(), anyString())).thenReturn(mock(AdminAffiliateRow.class));
     }
 
     @Test

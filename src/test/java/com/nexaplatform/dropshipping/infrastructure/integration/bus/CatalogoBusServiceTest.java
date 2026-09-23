@@ -50,8 +50,8 @@ class CatalogoBusServiceTest {
         // Sin esta cabecera el catálogo saldría por el broker de la tienda, donde no lo espera nadie.
         servicio.publicarCertificado(ficha());
 
-        assertThat(cabeceras(EventoBus.PRODUCTO_CERTIFICADO))
-                .containsEntry(OutboxDispatcher.CABECERA_DESTINO, OutboxDispatcher.DESTINO_BUS);
+        assertThat(cabeceras(EventoBus.PRODUCTO_CERTIFICADO)).containsEntry(OutboxDispatcher.CABECERA_DESTINO,
+                OutboxDispatcher.DESTINO_BUS);
     }
 
     @Test
@@ -110,10 +110,8 @@ class CatalogoBusServiceTest {
         servicio.publicarCategoria(categoria());
 
         CategoriaPublicada evento = (CategoriaPublicada) carga(EventoBus.CATEGORIA_PUBLICADA);
-        assertThat(evento.nombre())
-                .containsEntry("es", "Abrigos")
-                .containsEntry("en", "Coats")
-                .containsEntry("zh", "大衣");
+        assertThat(evento.nombre()).containsEntry("es", "Abrigos").containsEntry("en", "Coats").containsEntry("zh",
+                "大衣");
     }
 
     @Test
@@ -121,8 +119,8 @@ class CatalogoBusServiceTest {
     void laCategoriaVaAlBus() {
         servicio.publicarCategoria(categoria());
 
-        assertThat(cabeceras(EventoBus.CATEGORIA_PUBLICADA))
-                .containsEntry(OutboxDispatcher.CABECERA_DESTINO, OutboxDispatcher.DESTINO_BUS);
+        assertThat(cabeceras(EventoBus.CATEGORIA_PUBLICADA)).containsEntry(OutboxDispatcher.CABECERA_DESTINO,
+                OutboxDispatcher.DESTINO_BUS);
     }
 
     @Test
@@ -169,8 +167,8 @@ class CatalogoBusServiceTest {
         servicio.publicarCategoriaConAncestros(hoja);
 
         ArgumentCaptor<String> codigos = ArgumentCaptor.captor();
-        verify(publicador, times(3)).publish(eq(EventoBus.CATEGORIA_PUBLICADA), anyString(),
-                codigos.capture(), anyString(), any(), any());
+        verify(publicador, times(3)).publish(eq(EventoBus.CATEGORIA_PUBLICADA), anyString(), codigos.capture(),
+                anyString(), any(), any());
         assertThat(codigos.getAllValues()).containsExactly("moda", "moda-calzado", "moda-cal-30");
     }
 
@@ -183,8 +181,8 @@ class CatalogoBusServiceTest {
 
         servicio.publicarCategoriaConAncestros(a);
 
-        verify(publicador, times(1)).publish(eq(EventoBus.CATEGORIA_PUBLICADA), anyString(),
-                anyString(), anyString(), any(), any());
+        verify(publicador, times(1)).publish(eq(EventoBus.CATEGORIA_PUBLICADA), anyString(), anyString(), anyString(),
+                any(), any());
     }
 
     /** La carga útil que se ha encolado para el tema indicado. */
@@ -215,11 +213,11 @@ class CatalogoBusServiceTest {
     /** Categoría hoja con su padre y sus traducciones. */
     private CategoryEntity categoria() {
         CategoryEntity padre = CategoryEntity.builder().slug("moda-mujer").active(true).build();
-        CategoryEntity c = CategoryEntity.builder()
-                .slug("moda-mujer-abrigos").nameZh("大衣").active(true).parent(padre).build();
-        c.setTranslations(List.of(
-                CategoryTranslationEntity.builder().category(c).language("es").name("Abrigos").build(),
-                CategoryTranslationEntity.builder().category(c).language("en").name("Coats").build()));
+        CategoryEntity c = CategoryEntity.builder().slug("moda-mujer-abrigos").nameZh("大衣").active(true).parent(padre)
+                .build();
+        c.setTranslations(
+                List.of(CategoryTranslationEntity.builder().category(c).language("es").name("Abrigos").build(),
+                        CategoryTranslationEntity.builder().category(c).language("en").name("Coats").build()));
         return c;
     }
 }

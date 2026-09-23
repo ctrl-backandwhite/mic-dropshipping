@@ -37,11 +37,10 @@ class CurrencyRateServiceTest {
     void setUp() {
         // @PostConstruct.warm() is NOT invoked under plain Mockito; the cache is empty and
         // cacheStamp = Instant.EPOCH, so the first public read triggers ensureFresh() -> refreshCache().
-        lenient().when(repository.findAll()).thenReturn(List.of(
-                rate("USD", "$", "en-US", "1.00000000", true),
-                rate("EUR", "€", "es-ES", "0.90000000", true),
-                rate("CNY", "¥", "zh-CN", "7.20000000", true),
-                rate("GBP", "£", "en-GB", "0.80000000", false)));
+        lenient().when(repository.findAll())
+                .thenReturn(List.of(rate("USD", "$", "en-US", "1.00000000", true),
+                        rate("EUR", "€", "es-ES", "0.90000000", true), rate("CNY", "¥", "zh-CN", "7.20000000", true),
+                        rate("GBP", "£", "en-GB", "0.80000000", false)));
     }
 
     @AfterEach
@@ -136,8 +135,7 @@ class CurrencyRateServiceTest {
         // traducía a 404, así que TODA lectura de catálogo respondía «no existe» sin que nadie supiera por
         // qué. Como error de estado sale con 500 y queda en el log de errores.
         BigDecimal uno = new BigDecimal("1");
-        assertThatThrownBy(() -> service.toUsd(uno, "XXX"))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> service.toUsd(uno, "XXX")).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("XXX");
     }
 
@@ -160,8 +158,7 @@ class CurrencyRateServiceTest {
                 BigDecimal original = new BigDecimal(amt);
                 BigDecimal usd = service.toUsd(original, code);
                 BigDecimal back = service.usdTo(usd, code);
-                assertThat(back)
-                        .as("round-trip %s %s -> USD %s -> %s", amt, code, usd, back)
+                assertThat(back).as("round-trip %s %s -> USD %s -> %s", amt, code, usd, back)
                         .isEqualByComparingTo(original.setScale(2));
             }
         }

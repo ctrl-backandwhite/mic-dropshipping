@@ -85,8 +85,8 @@ public class StripeGateway implements PaymentGateway {
             // página de retorno correspondiente, que confirma del lado servidor).
             String mock = "cs_mock_" + p.getId();
             String url = isOrder
-                    ? storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
-                            + "&paymentId=" + p.getId() + "&mock=1"
+                    ? storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId() + "&paymentId="
+                            + p.getId() + "&mock=1"
                     : storefrontBaseUrl + "/wallet/recharge/return?provider=stripe&paymentId=" + p.getId() + "&mock=1";
             log.info("Stripe mock-mode ({}) for payment {}", isOrder ? "order checkout" : "wallet recharge", p.getId());
             return new InitiateResult(mock, null, url, null, null, null, Map.of("mock", true));
@@ -96,7 +96,6 @@ public class StripeGateway implements PaymentGateway {
         // la tarjeta se introduzca en la página segura de Stripe y el cobro se confirme al volver.
         return initiateCheckoutSession(p);
     }
-
 
     /**
      * La página de vuelta cuando el pago se ha iniciado desde la APLICACIÓN, o {@code null} si viene
@@ -126,13 +125,15 @@ public class StripeGateway implements PaymentGateway {
                                 + "&paymentId=" + p.getId() + "&session_id={CHECKOUT_SESSION_ID}"
                         : storefrontBaseUrl + "/wallet/recharge/return?provider=stripe&paymentId=" + p.getId()
                                 + "&session_id={CHECKOUT_SESSION_ID}";
-                cancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1"
+                cancelUrl = isOrder
+                        ? storefrontBaseUrl + "/checkout?cancelled=1"
                         : storefrontBaseUrl + "/wallet/recharge?cancelled=1";
             }
             String productName = isOrder
                     ? "NX036 · order " + shortId(p.getOrderId().toString())
                     : "NX036 · wallet recharge";
-            String description = isOrder ? platformId + " · order " + p.getOrderId()
+            String description = isOrder
+                    ? platformId + " · order " + p.getOrderId()
                     : platformId + " · wallet recharge";
 
             // Moneda de cobro = la liquidación fijada al iniciar el pago (EUR si el usuario navega en EUR,
@@ -144,8 +145,8 @@ public class StripeGateway implements PaymentGateway {
                     .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
                     .putMetadata("paymentId", p.getId().toString()).setDescription(description);
             SessionCreateParams.Builder builder = SessionCreateParams.builder()
-                    .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl(successUrl).setCancelUrl(cancelUrl).setCustomerEmail(p.getUser().getEmail())
+                    .setMode(SessionCreateParams.Mode.PAYMENT).setSuccessUrl(successUrl).setCancelUrl(cancelUrl)
+                    .setCustomerEmail(p.getUser().getEmail())
                     .addLineItem(SessionCreateParams.LineItem.builder().setQuantity(1L)
                             .setPriceData(SessionCreateParams.LineItem.PriceData.builder().setCurrency(chargeCcy)
                                     .setUnitAmount(chargeCents)
@@ -181,7 +182,6 @@ public class StripeGateway implements PaymentGateway {
             throw new RuntimeException("Stripe checkout session failed: " + e.getMessage(), e);
         }
     }
-
 
     /**
      * Retrieves a Checkout Session and reports whether it settled. Used by the server-side

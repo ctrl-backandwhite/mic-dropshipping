@@ -46,9 +46,8 @@ class UserAgentBlockingFilterTest {
     @Test
     void allows_normal_browser_user_agent() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
-        req.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                        + "Chrome/120.0 Safari/537.36");
+        req.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                + "Chrome/120.0 Safari/537.36");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 

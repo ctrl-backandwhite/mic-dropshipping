@@ -63,8 +63,7 @@ public class CustomsDeclarationGroupService {
      * encenderlo, sin repetir la aprobación de 185 descripciones.
      */
     public String describeFor(ProductEntity product, String countryCode) {
-        if (!agrupacionActiva
-                || !customsValuation.groupsDeclarationLinesFor(countryCode)
+        if (!agrupacionActiva || !customsValuation.groupsDeclarationLinesFor(countryCode)
                 || customsValuation.perArticleFeeUsdCents(countryCode) <= 0) {
             return CustomsDutyLinesService.declaredDescriptionOf(product);
         }
@@ -85,8 +84,7 @@ public class CustomsDeclarationGroupService {
      * respaldo —el título chino del producto— es el comportamiento de siempre y no rompe nada.
      */
     public String describeZhFor(ProductEntity product, String countryCode) {
-        if (!agrupacionActiva
-                || !customsValuation.groupsDeclarationLinesFor(countryCode)
+        if (!agrupacionActiva || !customsValuation.groupsDeclarationLinesFor(countryCode)
                 || customsValuation.perArticleFeeUsdCents(countryCode) <= 0) {
             return null;
         }
@@ -97,10 +95,8 @@ public class CustomsDeclarationGroupService {
         return groupRepository
                 .findByHs6AndMaterialAndUsageCode(hs6, normalizeKeyPart(product.getCustomsMaterial()),
                         normalizeKeyPart(product.getCustomsUsage()))
-                .filter(grupo -> grupo.getApprovedAt() != null)
-                .map(CustomsDeclarationGroupEntity::getCname)
-                .filter(CustomsDataCheck::tieneIdeogramas)
-                .orElse(null);
+                .filter(grupo -> grupo.getApprovedAt() != null).map(CustomsDeclarationGroupEntity::getCname)
+                .filter(CustomsDataCheck::tieneIdeogramas).orElse(null);
     }
 
     /**
@@ -120,8 +116,7 @@ public class CustomsDeclarationGroupService {
         return groupRepository
                 .findByHs6AndMaterialAndUsageCode(hs6, normalizeKeyPart(product.getCustomsMaterial()),
                         normalizeKeyPart(product.getCustomsUsage()))
-                .filter(grupo -> grupo.getApprovedAt() != null)
-                .map(CustomsDeclarationGroupEntity::getEname)
+                .filter(grupo -> grupo.getApprovedAt() != null).map(CustomsDeclarationGroupEntity::getEname)
                 .orElse(propia);
     }
 
@@ -152,7 +147,8 @@ public class CustomsDeclarationGroupService {
      * verificado, y de eso responde el declarante ante la aduana.
      */
     private static String hs6Of(ProductEntity product) {
-        String digits = product == null || product.getHsCode() == null ? ""
+        String digits = product == null || product.getHsCode() == null
+                ? ""
                 : product.getHsCode().replaceAll("[^0-9]", "");
         return digits.length() < 6 ? null : digits.substring(0, 6);
     }

@@ -1,0 +1,11 @@
+-- v173: el envío nacional chino, por VARIANTE y no sólo por producto.
+--
+-- El scraper lo calcula por tramos de peso —6 CNY por debajo de 500 g, 10 hasta 1 kg, 16 por
+-- encima— y cada talla o color pesa lo suyo: una misma ficha puede tener una variante de 800 g
+-- y otra de 1,2 kg. Con un único importe por producto había que elegir entre cobrar de menos en
+-- la pesada o de más en la ligera.
+--
+-- Nullable a propósito: un null es "esta variante no declara envío" y hace que se use el del
+-- producto. Poner DEFAULT 0 haría que las 225.959 variantes ya cargadas pareciesen declarar
+-- envío gratis, que es justo lo contrario de lo que significan.
+ALTER TABLE product_variant ADD COLUMN IF NOT EXISTS shipping_cny NUMERIC(12,4);

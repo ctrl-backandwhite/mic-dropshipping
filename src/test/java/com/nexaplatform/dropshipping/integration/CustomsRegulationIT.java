@@ -125,8 +125,7 @@ class CustomsRegulationIT extends BaseIntegration {
                 + "over_threshold_surcharge_cents, duty_rate_bps, vat_prepay_percent_bps, "
                 + "per_article_fee_amount, per_article_fee_currency, active) "
                 + "VALUES (gen_random_uuid(), ?, 'DDP', CAST(? AS numeric), ?, 'SURCHARGE', 0, 0, 0, 0, 0, "
-                + "CAST(? AS numeric), ?, true)",
-                pais, franquicia, divisaFranquicia, derecho, divisaDerecho);
+                + "CAST(? AS numeric), ?, true)", pais, franquicia, divisaFranquicia, derecho, divisaDerecho);
     }
 
     /** Fija los topes del canal de transporte (0 = sin tope) sobre el bean real del contexto. */
@@ -144,8 +143,9 @@ class CustomsRegulationIT extends BaseIntegration {
     private Line productoConPartida(String hsCode, int cantidad, int precioUnitarioCentimos) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, title_zh, hs_code, weight_grams, "
-                + "status) VALUES (?, ?, ?, ?, ?, 500, 'ACTIVE')",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, title_zh, hs_code, weight_grams, "
+                        + "status) VALUES (?, ?, ?, ?, ?, 500, 'ACTIVE')",
                 id, "producto-" + sufijo, "ext-" + sufijo, "测试商品", hsCode);
         String leido = jdbcTemplate.queryForObject("SELECT hs_code FROM product WHERE id = ?", String.class, id);
         // Sin descripción declarada: el producto se siembra sin traducciones, que es lo que
@@ -208,10 +208,8 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("productos distintos bajo la misma subpartida son una sola línea de declaración")
     void productosDistintosBajoLaMismaSubpartidaSonUnaLinea() {
-        List<Line> pedido = List.of(
-                productoConPartida(HS_TRAJES_MUJER, 1, 3_000),
-                productoConPartida(HS_TRAJES_MUJER, 1, 3_000),
-                productoConPartida(HS_TRAJES_MUJER, 1, 3_000));
+        List<Line> pedido = List.of(productoConPartida(HS_TRAJES_MUJER, 1, 3_000),
+                productoConPartida(HS_TRAJES_MUJER, 1, 3_000), productoConPartida(HS_TRAJES_MUJER, 1, 3_000));
 
         assertThat(derechoDe(DESTINO_UE, pedido)).isEqualTo(DERECHO_POR_LINEA);
     }
@@ -231,18 +229,14 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("cada subpartida distinta es una línea que paga su propio derecho")
     void cadaSubpartidaDistintaEsUnaLinea() {
-        List<Line> tresFamilias = List.of(
-                productoConPartida(HS_VAQUEROS, 1, 1_000),
-                productoConPartida(HS_CAMISETAS, 1, 1_000),
-                productoConPartida(HS_ZAPATOS, 1, 1_000));
+        List<Line> tresFamilias = List.of(productoConPartida(HS_VAQUEROS, 1, 1_000),
+                productoConPartida(HS_CAMISETAS, 1, 1_000), productoConPartida(HS_ZAPATOS, 1, 1_000));
 
         assertThat(derechoDe(DESTINO_UE, tresFamilias)).isEqualTo(3 * DERECHO_POR_LINEA);
 
         // El mismo código con más detalle del que cabe en el H7 sigue siendo una única subpartida.
-        List<Line> mismaSubpartidaConDetalle = List.of(
-                productoConPartida("6104199010", 1, 1_000),
-                productoConPartida("610419 90 20", 1, 1_000),
-                productoConPartida("6104.19.90.90", 1, 1_000));
+        List<Line> mismaSubpartidaConDetalle = List.of(productoConPartida("6104199010", 1, 1_000),
+                productoConPartida("610419 90 20", 1, 1_000), productoConPartida("6104.19.90.90", 1, 1_000));
 
         assertThat(derechoDe(DESTINO_UE, mismaSubpartidaConDetalle)).isEqualTo(DERECHO_POR_LINEA);
     }
@@ -257,12 +251,9 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("un envío con muchas familias paga una línea por familia, no por artículo")
     void unEnvioDeMuchasFamiliasPagaUnaLineaPorFamilia() {
-        List<Line> pedido = List.of(
-                productoConPartida(HS_VAQUEROS, 5, 1_000),
-                productoConPartida(HS_CAMISETAS, 3, 1_000),
-                productoConPartida(HS_ZAPATOS, 1, 1_000),
-                productoConPartida(HS_TRAJES_MUJER, 3, 1_000),
-                productoConPartida(HS_PERFUME, 1, 1_000));
+        List<Line> pedido = List.of(productoConPartida(HS_VAQUEROS, 5, 1_000),
+                productoConPartida(HS_CAMISETAS, 3, 1_000), productoConPartida(HS_ZAPATOS, 1, 1_000),
+                productoConPartida(HS_TRAJES_MUJER, 3, 1_000), productoConPartida(HS_PERFUME, 1, 1_000));
 
         assertThat(derechoDe(DESTINO_UE, pedido)).isEqualTo(5 * DERECHO_POR_LINEA);
     }
@@ -283,11 +274,8 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("un producto sin código HS cuenta como línea propia y no se agrupa con nadie")
     void unProductoSinCodigoHsCuentaComoLineaPropia() {
-        List<Line> pedido = List.of(
-                productoConPartida(null, 1, 1_000),
-                productoConPartida("", 1, 1_000),
-                productoConPartida("123", 1, 1_000),
-                productoConPartida(HS_VAQUEROS, 1, 1_000));
+        List<Line> pedido = List.of(productoConPartida(null, 1, 1_000), productoConPartida("", 1, 1_000),
+                productoConPartida("123", 1, 1_000), productoConPartida(HS_VAQUEROS, 1, 1_000));
 
         assertThat(derechoDe(DESTINO_UE, pedido)).isEqualTo(4 * DERECHO_POR_LINEA);
     }
@@ -332,20 +320,17 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("la franquicia es «no excede»: 150,00 EUR exactos siguen dentro del régimen de bajo valor")
     void laFranquiciaUsaComparacionEstricta() {
-        CustomsValuation justoDebajo = valorar(DESTINO_UE,
-                List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA - 1)));
+        CustomsValuation justoDebajo = valorar(DESTINO_UE, List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA - 1)));
         assertThat(justoDebajo.deMinimisExceeded()).isFalse();
         assertThat(justoDebajo.handlingFeeCents()).isEqualTo(DERECHO_POR_LINEA);
 
         // El borde exacto: 150,00 EUR NO exceden 150,00 EUR.
-        CustomsValuation enElBorde = valorar(DESTINO_UE,
-                List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA)));
+        CustomsValuation enElBorde = valorar(DESTINO_UE, List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA)));
         assertThat(enElBorde.deMinimisExceeded()).isFalse();
         assertThat(enElBorde.handlingFeeCents()).isEqualTo(DERECHO_POR_LINEA);
 
         // Un céntimo por encima: fuera del régimen, no se aplica el importe fijo de 3 EUR.
-        CustomsValuation justoEncima = valorar(DESTINO_UE,
-                List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA + 1)));
+        CustomsValuation justoEncima = valorar(DESTINO_UE, List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA + 1)));
         assertThat(justoEncima.deMinimisExceeded()).isTrue();
         assertThat(justoEncima.handlingFeeCents()).isZero();
     }
@@ -392,9 +377,7 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("alcohol, perfume y tabaco no están excluidos: cuentan como cualquier otra línea")
     void alcoholPerfumeYTabacoNoEstanExcluidos() {
-        List<Line> pedido = List.of(
-                productoConPartida(HS_PERFUME, 1, 2_000),
-                productoConPartida(HS_LICOR, 1, 2_000),
+        List<Line> pedido = List.of(productoConPartida(HS_PERFUME, 1, 2_000), productoConPartida(HS_LICOR, 1, 2_000),
                 productoConPartida(HS_TABACO, 1, 2_000));
 
         assertThat(derechoDe(DESTINO_UE, pedido)).isEqualTo(3 * DERECHO_POR_LINEA);
@@ -414,10 +397,8 @@ class CustomsRegulationIT extends BaseIntegration {
     @Test
     @DisplayName("un destino fuera de la UE no paga el derecho temporal aunque lleve varias líneas")
     void unDestinoFueraDeLaUeNoPagaElDerechoTemporal() {
-        List<Line> pedido = List.of(
-                productoConPartida(HS_VAQUEROS, 1, 1_000),
-                productoConPartida(HS_CAMISETAS, 1, 1_000),
-                productoConPartida(HS_ZAPATOS, 1, 1_000));
+        List<Line> pedido = List.of(productoConPartida(HS_VAQUEROS, 1, 1_000),
+                productoConPartida(HS_CAMISETAS, 1, 1_000), productoConPartida(HS_ZAPATOS, 1, 1_000));
 
         assertThat(derechoDe(DESTINO_NO_UE, pedido)).isZero();
         assertThat(derechoDe(DESTINO_UE, pedido)).isEqualTo(3 * DERECHO_POR_LINEA);
@@ -471,8 +452,7 @@ class CustomsRegulationIT extends BaseIntegration {
     @DisplayName("el tope del canal y la franquicia aduanera son umbrales distintos que no se confunden")
     void elTopeDelCanalYLaFranquiciaSonUmbralesDistintos() {
         limitarBultos(0, 15_500);
-        List<Line> pedido = List.of(
-                productoConPartida(HS_VAQUEROS, 1, 7_000),
+        List<Line> pedido = List.of(productoConPartida(HS_VAQUEROS, 1, 7_000),
                 productoConPartida(HS_CAMISETAS, 1, 7_000));
 
         List<DutyParcel> bultos = dutyLines.parcelsOf(pedido);
@@ -526,8 +506,7 @@ class CustomsRegulationIT extends BaseIntegration {
     void franquiciaMedidaPorBultoEnLugarDePorEnvio() {
         // El tope de valor del canal (155 USD) parte el pedido en dos bultos de 150,00 EUR.
         limitarBultos(0, 15_500);
-        List<Line> pedido = List.of(
-                productoConPartida(HS_VAQUEROS, 1, FRANQUICIA),
+        List<Line> pedido = List.of(productoConPartida(HS_VAQUEROS, 1, FRANQUICIA),
                 productoConPartida(HS_CAMISETAS, 1, FRANQUICIA));
 
         List<DutyParcel> bultos = dutyLines.parcelsOf(pedido);

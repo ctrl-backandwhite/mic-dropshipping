@@ -84,10 +84,11 @@ class Cov08SupplierSearchServiceTest {
 
     @Test
     void unaPaginaDelIndiceSeConvierteEnFilasDelListado() {
-        indexResponds(2, hit(ID_1, "Shenzhen Trading",
-                ",\"externalId\":\"E-1\",\"nameZh\":\"深圳\",\"country\":\"CN\",\"city\":\"Shenzhen\","
-                        + "\"rating\":4.5,\"yearsActive\":7,\"verified\":true,\"trustPass\":true,"
-                        + "\"productCount\":320"));
+        indexResponds(2,
+                hit(ID_1, "Shenzhen Trading",
+                        ",\"externalId\":\"E-1\",\"nameZh\":\"深圳\",\"country\":\"CN\",\"city\":\"Shenzhen\","
+                                + "\"rating\":4.5,\"yearsActive\":7,\"verified\":true,\"trustPass\":true,"
+                                + "\"productCount\":320"));
 
         IndexedPage page = service.pageFromIndex(null, null, null, 0, 20).orElseThrow();
 

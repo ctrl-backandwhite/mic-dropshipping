@@ -66,14 +66,14 @@ public class MeWalletController implements MeWalletApi {
         // Importe de cobro formateado por el backend en su moneda (EUR/USD): lo que se cargará realmente.
         dto.setChargeCurrency(p.getSettlementCurrency());
         if (p.getSettlementAmount() != null && p.getSettlementCurrency() != null) {
-            dto.setChargeFormatted(currencyRateService.formatDisplay(p.getSettlementAmount(), p.getSettlementCurrency()));
+            dto.setChargeFormatted(
+                    currencyRateService.formatDisplay(p.getSettlementAmount(), p.getSettlementCurrency()));
         }
         return ResponseEntity.ok(dto);
     }
 
     @Override
-    public ResponseEntity<RechargeOptions> rechargeOptions(
-            String currency) {
+    public ResponseEntity<RechargeOptions> rechargeOptions(String currency) {
         return ResponseEntity.ok(paymentUseCase.rechargeOptions(currency));
     }
 

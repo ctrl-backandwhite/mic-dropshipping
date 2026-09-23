@@ -70,8 +70,7 @@ public class MeController implements MeApi {
     public ResponseEntity<Map<String, Object>> exportMyData(Authentication authentication) {
         // Descarga como fichero: el derecho de portabilidad pide un formato que la persona pueda
         // llevarse a otro servicio, no una pantalla que mirar.
-        return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=\"mis-datos.json\"")
+        return ResponseEntity.ok().header("Content-Disposition", "attachment; filename=\"mis-datos.json\"")
                 .body(personalDataExportService.export(UUID.fromString(authentication.getName())));
     }
 

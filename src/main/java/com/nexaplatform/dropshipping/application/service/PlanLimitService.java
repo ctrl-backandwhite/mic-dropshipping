@@ -32,8 +32,9 @@ public class PlanLimitService {
         UUID activePlanId = subscriptionRepository.findByUserId(userId).stream()
                 .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE || s.getStatus() == SubscriptionStatus.TRIALING)
                 .map(CustomerSubscription::getPlanId).findFirst().orElse(null);
-        SubscriptionPlanEntity plan = (activePlanId != null ? planRepository.findById(activePlanId) : Optional
-                .<SubscriptionPlanEntity>empty()).or(() -> planRepository.findByCode("FREE")).orElse(null);
+        SubscriptionPlanEntity plan = (activePlanId != null
+                ? planRepository.findById(activePlanId)
+                : Optional.<SubscriptionPlanEntity>empty()).or(() -> planRepository.findByCode("FREE")).orElse(null);
         if (plan == null || plan.getFeatures() == null) {
             return -1;
         }

@@ -48,8 +48,8 @@ public class AdminPromotionController implements AdminPromotionApi {
 
     @Override
     public ResponseEntity<Map<String, Object>> announce(UUID id) {
-        PromotionEntity p = promotionAdminService.list().stream().filter(x -> x.getId().equals(id))
-                .findFirst().orElseThrow();
+        PromotionEntity p = promotionAdminService.list().stream().filter(x -> x.getId().equals(id)).findFirst()
+                .orElseThrow();
         Map<String, Object> out = new HashMap<>();
         out.put("notified", promotionAdminService.announce(p));
         return ResponseEntity.ok(out);
@@ -63,25 +63,20 @@ public class AdminPromotionController implements AdminPromotionApi {
 
     private AdminPromotionDtoOut toDto(PromotionEntity p) {
         List<PromotionTargetEntity> targets = promotionAdminService.targetsOf(p.getId());
-        return AdminPromotionDtoOut.builder()
-                .id(p.getId()).name(p.getName()).code(p.getCode())
+        return AdminPromotionDtoOut.builder().id(p.getId()).name(p.getName()).code(p.getCode())
                 .kind(p.getKind() != null ? p.getKind().name() : null)
-                .scope(p.getScope() != null ? p.getScope().name() : null)
-                .percentOff(p.getPercentOff()).amountOffCents(p.getAmountOffCents())
-                .startsAt(p.getStartsAt()).endsAt(p.getEndsAt())
+                .scope(p.getScope() != null ? p.getScope().name() : null).percentOff(p.getPercentOff())
+                .amountOffCents(p.getAmountOffCents()).startsAt(p.getStartsAt()).endsAt(p.getEndsAt())
                 .active(p.isActive())
                 // `active` es lo que marcó el admin; `live` es si rebaja AHORA. Se distinguen porque una
                 // promoción activa pero fuera de fechas no descuenta nada, y sin este dato la pantalla
                 // diría que sí.
-                .live(p.isLiveAt(Instant.now()))
-                .priority(p.getPriority()).maxUses(p.getMaxUses()).usedCount(p.getUsedCount())
-                .minOrderCents(p.getMinOrderCents())
-                .userId(p.getUserId()).maxUsesPerUser(p.getMaxUsesPerUser())
-                .categoryIds(targets.stream().map(PromotionTargetEntity::getCategoryId)
-                        .filter(Objects::nonNull).toList())
-                .productIds(targets.stream().map(PromotionTargetEntity::getProductId)
-                        .filter(Objects::nonNull).toList())
-                .createdAt(p.getCreatedAt())
-                .build();
+                .live(p.isLiveAt(Instant.now())).priority(p.getPriority()).maxUses(p.getMaxUses())
+                .usedCount(p.getUsedCount()).minOrderCents(p.getMinOrderCents()).userId(p.getUserId())
+                .maxUsesPerUser(p.getMaxUsesPerUser())
+                .categoryIds(
+                        targets.stream().map(PromotionTargetEntity::getCategoryId).filter(Objects::nonNull).toList())
+                .productIds(targets.stream().map(PromotionTargetEntity::getProductId).filter(Objects::nonNull).toList())
+                .createdAt(p.getCreatedAt()).build();
     }
 }

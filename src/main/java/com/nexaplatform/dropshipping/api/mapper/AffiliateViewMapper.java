@@ -23,8 +23,8 @@ public class AffiliateViewMapper {
                 "/?ref=" + c.getCode());
     }
 
-    public CommissionView toCommissionView(AffiliateCommissionEntity comm, Map<UUID, AffiliateConversionEntity> convById,
-            int returnPeriodDays) {
+    public CommissionView toCommissionView(AffiliateCommissionEntity comm,
+            Map<UUID, AffiliateConversionEntity> convById, int returnPeriodDays) {
         AffiliateConversionEntity conv = convById.get(comm.getConversionId());
         // Solo las PENDIENTES tienen fecha de aprobación futura: creación + periodo de devolución.
         Instant approvesAt = PENDING.equals(comm.getStatus()) && comm.getCreatedAt() != null
@@ -40,7 +40,8 @@ public class AffiliateViewMapper {
         // DROP-694: every conversion requires an attributed click, so clicks can never be fewer than
         // conversions. Legacy/seed data left the per-code click counter at 0 while commissions existed,
         // showing "0 clicks but paid commissions". Enforce the clicks >= conversions invariant on read.
-        int clicks = Math.max(codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum(), conversions.size());
+        int clicks = Math.max(codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum(),
+                conversions.size());
         long pending = sumByStatus(commissions, PENDING);
         long approved = sumByStatus(commissions, "APPROVED");
         long paid = sumByStatus(commissions, "PAID");

@@ -63,8 +63,8 @@ class Cov06AdminAffiliateControllerTest {
     /** El número de páginas se redondea HACIA ARRIBA: si no, la última página quedaría inalcanzable. */
     @Test
     void elTotalDePaginasRedondeaHaciaArriba() {
-        when(affiliateQuery.page(null, null, 0, 20)).thenReturn(new AdminAffiliateQueryService.AffiliatePage(
-                List.of(), 41));
+        when(affiliateQuery.page(null, null, 0, 20))
+                .thenReturn(new AdminAffiliateQueryService.AffiliatePage(List.of(), 41));
 
         ResponseEntity<PageResponse<AdminAffiliateRow>> resp = controller.list(null, null, 0, 20);
 
@@ -121,8 +121,7 @@ class Cov06AdminAffiliateControllerTest {
 
         List<PendingPayoutView> vistas = controller.pendingPayouts().getBody();
 
-        assertThat(vistas).extracting(PendingPayoutView::affiliateName)
-                .containsExactly("Ana", "bob@x.com", null);
+        assertThat(vistas).extracting(PendingPayoutView::affiliateName).containsExactly("Ana", "bob@x.com", null);
     }
 
     /** El importe se enseña formateado por el backend a partir de los céntimos (2500 → "25,00 €"). */
@@ -251,8 +250,8 @@ class Cov06AdminAffiliateControllerTest {
     }
 
     private static AffiliatePayoutEntity payout(UUID affiliateId) {
-        return AffiliatePayoutEntity.builder().affiliateId(affiliateId).amountCents(2500).currency("EUR")
-                .method("BANK").build();
+        return AffiliatePayoutEntity.builder().affiliateId(affiliateId).amountCents(2500).currency("EUR").method("BANK")
+                .build();
     }
 
     private static Authentication auth(UUID userId) {

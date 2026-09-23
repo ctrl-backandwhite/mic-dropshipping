@@ -48,13 +48,12 @@ import java.util.stream.Collectors;
 public class SupplierPurchaseService {
 
     /** Estados en los que el bulto aún no ha salido hacia el almacén. */
-    private static final Set<SupplierPurchaseStatus> NOT_ON_THE_MOVE =
-            EnumSet.of(SupplierPurchaseStatus.PENDING, SupplierPurchaseStatus.PURCHASED);
+    private static final Set<SupplierPurchaseStatus> NOT_ON_THE_MOVE = EnumSet.of(SupplierPurchaseStatus.PENDING,
+            SupplierPurchaseStatus.PURCHASED);
 
     /** Lo que el admin tiene por delante: comprar, esperar al proveedor, o registrar el empaquetado. */
-    private static final Set<SupplierPurchaseStatus> OPEN =
-            EnumSet.of(SupplierPurchaseStatus.PENDING, SupplierPurchaseStatus.PURCHASED,
-                    SupplierPurchaseStatus.IN_TRANSIT, SupplierPurchaseStatus.AT_WAREHOUSE);
+    private static final Set<SupplierPurchaseStatus> OPEN = EnumSet.of(SupplierPurchaseStatus.PENDING,
+            SupplierPurchaseStatus.PURCHASED, SupplierPurchaseStatus.IN_TRANSIT, SupplierPurchaseStatus.AT_WAREHOUSE);
 
     /**
      * Lo que se ve en el tablero: lo pendiente y además lo ya re-empaquetado.
@@ -65,10 +64,9 @@ public class SupplierPurchaseService {
      * La cola de exportación sigue usando {@code OPEN}, porque lo re-empaquetado no debe volver a
      * salir en el fichero.
      */
-    private static final Set<SupplierPurchaseStatus> BOARD =
-            EnumSet.of(SupplierPurchaseStatus.PENDING, SupplierPurchaseStatus.PURCHASED,
-                    SupplierPurchaseStatus.IN_TRANSIT, SupplierPurchaseStatus.AT_WAREHOUSE,
-                    SupplierPurchaseStatus.PACKED);
+    private static final Set<SupplierPurchaseStatus> BOARD = EnumSet.of(SupplierPurchaseStatus.PENDING,
+            SupplierPurchaseStatus.PURCHASED, SupplierPurchaseStatus.IN_TRANSIT, SupplierPurchaseStatus.AT_WAREHOUSE,
+            SupplierPurchaseStatus.PACKED);
 
     /**
      * El almacén destruye sin compensación un bulto que lleve 30 días sin instrucciones. Se avisa a los
@@ -99,22 +97,14 @@ public class SupplierPurchaseService {
         Map<UUID, List<OrderItem>> bySupplier = groupBySupplier(order.getItems());
         for (Map.Entry<UUID, List<OrderItem>> e : bySupplier.entrySet()) {
             SupplierPurchaseEntity purchase = purchaseRepository.save(SupplierPurchaseEntity.builder()
-                    .orderId(order.getId())
-                    .supplierId(e.getKey())
-                    .status(SupplierPurchaseStatus.PENDING)
-                    .warehouseCode(defaultWarehouseCode)
-                    .createdAt(Instant.now())
-                    .build());
+                    .orderId(order.getId()).supplierId(e.getKey()).status(SupplierPurchaseStatus.PENDING)
+                    .warehouseCode(defaultWarehouseCode).createdAt(Instant.now()).build());
             for (OrderItem item : e.getValue()) {
-                itemRepository.save(SupplierPurchaseItemEntity.builder()
-                        .purchaseId(purchase.getId())
-                        .orderItemId(item.getId())
-                        .quantity(item.getQuantity())
-                        .build());
+                itemRepository.save(SupplierPurchaseItemEntity.builder().purchaseId(purchase.getId())
+                        .orderItemId(item.getId()).quantity(item.getQuantity()).build());
             }
         }
-        log.info("Compras planificadas para el pedido {}: {} proveedor(es)",
-                order.getOrderNumber(), bySupplier.size());
+        log.info("Compras planificadas para el pedido {}: {} proveedor(es)", order.getOrderNumber(), bySupplier.size());
     }
 
     /**
@@ -150,10 +140,7 @@ public class SupplierPurchaseService {
         if (productId == null) {
             return null;
         }
-        return productRepository.findById(productId)
-                .map(ProductEntity::getSupplier)
-                .map(s -> s.getId())
-                .orElse(null);
+        return productRepository.findById(productId).map(ProductEntity::getSupplier).map(s -> s.getId()).orElse(null);
     }
 
     /** Lo que se pinta en el tablero: la cola de trabajo y, además, lo ya re-empaquetado. */
@@ -212,8 +199,8 @@ public class SupplierPurchaseService {
      * tiene que ocurrir dentro de la transacción, y aquí es donde está.
      */
     public record PurchaseView(SupplierPurchaseEntity purchase, String orderNumber, String orderTracking,
-                               int parcelsInOrder, String supplierName, List<OrderItem> lines,
-                               List<Integer> quantities, String orderCurrency) {
+            int parcelsInOrder, String supplierName, List<OrderItem> lines, List<Integer> quantities,
+            String orderCurrency) {
     }
 
     @Transactional(readOnly = true)
@@ -268,8 +255,8 @@ public class SupplierPurchaseService {
             }
             int parcels = purchaseRepository.findByOrderId(p.getOrderId()).size();
             out.add(new PurchaseView(p, order != null ? order.getOrderNumber() : null,
-                    order != null ? order.getTrackingNumber() : null, parcels, supplierName,
-                    lines, quantities, order != null ? order.getCurrency() : null));
+                    order != null ? order.getTrackingNumber() : null, parcels, supplierName, lines, quantities,
+                    order != null ? order.getCurrency() : null));
         }
         return out;
     }
@@ -286,8 +273,7 @@ public class SupplierPurchaseService {
 
     /** Comprado y pagado en 1688. El coste real es lo que convierte el margen en un dato y no una estimación. */
     @Transactional
-    public SupplierPurchaseEntity markPurchased(UUID id, String purchaseRef, Long costCnyCents,
-                                                Long shippingCnyCents) {
+    public SupplierPurchaseEntity markPurchased(UUID id, String purchaseRef, Long costCnyCents, Long shippingCnyCents) {
         SupplierPurchaseEntity p = require(id);
         p.setPurchaseRef(purchaseRef);
         p.setCostCnyCents(costCnyCents);
@@ -419,8 +405,8 @@ public class SupplierPurchaseService {
      * <p>Se deriva del propio enum en vez de enumerarlos a mano: un estado nuevo entra solo por su
      * avance y no se queda fuera del freno por despiste.
      */
-    private static final Set<SupplierPurchaseStatus> YA_COMPRADAS = Arrays
-            .stream(SupplierPurchaseStatus.values()).filter(SupplierPurchaseStatus::alreadyBought)
+    private static final Set<SupplierPurchaseStatus> YA_COMPRADAS = Arrays.stream(SupplierPurchaseStatus.values())
+            .filter(SupplierPurchaseStatus::alreadyBought)
             .collect(Collectors.toCollection(() -> EnumSet.noneOf(SupplierPurchaseStatus.class)));
 
     /**
@@ -439,8 +425,7 @@ public class SupplierPurchaseService {
     @Transactional(readOnly = true)
     public boolean allPurchased(UUID orderId) {
         return purchaseRepository.existsByOrderId(orderId)
-                && !purchaseRepository.existsByOrderIdAndStatusIn(orderId,
-                        EnumSet.of(SupplierPurchaseStatus.PENDING));
+                && !purchaseRepository.existsByOrderIdAndStatusIn(orderId, EnumSet.of(SupplierPurchaseStatus.PENDING));
     }
 
     /**
@@ -471,10 +456,8 @@ public class SupplierPurchaseService {
     @Transactional(readOnly = true)
     public List<SupplierPurchaseEntity> atRiskOfDestruction() {
         Instant limit = Instant.now().minus(DESTRUCTION_WARNING);
-        return purchaseRepository.findByStatusInOrderByCreatedAtAsc(
-                        EnumSet.of(SupplierPurchaseStatus.AT_WAREHOUSE)).stream()
-                .filter(p -> p.getReceivedAt() != null && p.getReceivedAt().isBefore(limit))
-                .toList();
+        return purchaseRepository.findByStatusInOrderByCreatedAtAsc(EnumSet.of(SupplierPurchaseStatus.AT_WAREHOUSE))
+                .stream().filter(p -> p.getReceivedAt() != null && p.getReceivedAt().isBefore(limit)).toList();
     }
 
     private SupplierPurchaseEntity save(SupplierPurchaseEntity p) {

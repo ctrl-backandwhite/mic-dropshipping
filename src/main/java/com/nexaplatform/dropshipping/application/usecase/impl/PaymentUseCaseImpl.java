@@ -162,8 +162,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 // Desde dónde se paga decide a qué dirección devuelve la pasarela al terminar. Se
                 // guarda con el pago porque su respuesta llega después, en otra petición, y para
                 // entonces ya no hay cabecera que mirar.
-                .clientTarget(PaymentClientHolder.get())
-                .idempotencyKey(idempotencyKey).build();
+                .clientTarget(PaymentClientHolder.get()).idempotencyKey(idempotencyKey).build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
@@ -278,7 +277,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     }
 
     /** Importes base de recarga (en USD) sobre los que se generan los presets de cada divisa. */
-    private static final int[] RECHARGE_PRESETS_USD = { 10, 25, 50, 100, 250, 500 };
+    private static final int[] RECHARGE_PRESETS_USD = {10, 25, 50, 100, 250, 500};
 
     /**
      * Importe canónico en USD (céntimos) de la recarga. Se calcula EN EL BACKEND a partir de lo que el
@@ -288,8 +287,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private long resolveRechargeUsdCents(Long amountUsdCents, String currencyDisplay, BigDecimal amountDisplay) {
         if (amountDisplay != null && amountDisplay.signum() > 0) {
             String ccy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
-            return currencyRateService.toUsd(amountDisplay, ccy).movePointRight(2)
-                    .setScale(0, RoundingMode.HALF_UP).longValueExact();
+            return currencyRateService.toUsd(amountDisplay, ccy).movePointRight(2).setScale(0, RoundingMode.HALF_UP)
+                    .longValueExact();
         }
         if (amountUsdCents != null && amountUsdCents > 0) {
             return amountUsdCents;
@@ -305,7 +304,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         boolean standard = "USD".equals(ccy) || "EUR".equals(ccy);
         List<RechargeOptions.Preset> presets = new ArrayList<>(RECHARGE_PRESETS_USD.length);
         for (int base : RECHARGE_PRESETS_USD) {
-            BigDecimal amount = standard ? BigDecimal.valueOf(base)
+            BigDecimal amount = standard
+                    ? BigDecimal.valueOf(base)
                     : niceRound(currencyRateService.usdTo(BigDecimal.valueOf(base), ccy));
             presets.add(new RechargeOptions.Preset(amount, currencyRateService.formatDisplay(amount, ccy)));
         }
@@ -374,8 +374,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         Order order = orderRepository.findById(p.getOrderId()).orElse(null);
         // ¿Es ESTA confirmación la que paga el pedido? Distinguirlo de "el pedido ya estaba pagado" es lo
         // que hace que un webhook repetido no vuelva a tocar la cesta.
-        boolean acabaDePagarse = order != null && (order.getStatus() == OrderStatus.PENDING
-                || order.getStatus() == OrderStatus.AWAITING_PAYMENT);
+        boolean acabaDePagarse = order != null
+                && (order.getStatus() == OrderStatus.PENDING || order.getStatus() == OrderStatus.AWAITING_PAYMENT);
         if (acabaDePagarse) {
             order.setStatus(OrderStatus.PAID);
             order = orderRepository.save(order);
@@ -412,18 +412,19 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         try {
             cartService.removePurchased(order);
         } catch (RuntimeException e) {
-            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(),
-                    ErrorMessages.humanize(e), e);
+            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(), ErrorMessages.humanize(e),
+                    e);
         }
     }
 
     /** Email de confirmación de pago + FACTURA al comprador. */
     private void sendPaymentConfirmedEmail(Payment p, Order order) {
-        String email = p.getUserEmail() != null ? p.getUserEmail()
+        String email = p.getUserEmail() != null
+                ? p.getUserEmail()
                 : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
         String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
-        orderEmailService.paymentConfirmed(order, email, locale,
-                p.getMethod() != null ? p.getMethod().name() : null, p.getSettlementCurrency());
+        orderEmailService.paymentConfirmed(order, email, locale, p.getMethod() != null ? p.getMethod().name() : null,
+                p.getSettlementCurrency());
     }
 
     /** Recarga de wallet: acreditar saldo. */
@@ -632,9 +633,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         Map<String, Object> session = sg.retrieveCheckoutSession(sessionId);
         String recovered = asPaymentIntent(session.get(PAYMENT_INTENT));
         if (recovered == null) {
-            throw new BusinessException(REFUND_NOT_POSSIBLE,
-                    "Stripe no devuelve el PaymentIntent de la sesión " + sessionId + ": "
-                            + session.getOrDefault(ERROR, session.getOrDefault(STATUS, "sin detalle")));
+            throw new BusinessException(REFUND_NOT_POSSIBLE, "Stripe no devuelve el PaymentIntent de la sesión "
+                    + sessionId + ": " + session.getOrDefault(ERROR, session.getOrDefault(STATUS, "sin detalle")));
         }
         Map<String, Object> healed = new HashMap<>(providerResponse);
         healed.put(PAYMENT_INTENT, recovered);
@@ -822,11 +822,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 // amountDisplay va emparejado con currencyDisplay: dejar aquí el importe en USD mientras
                 // la divisa dice EUR hacía que el pago declarase 10,87 € cuando a la pasarela iban 9,54 €.
                 // Lo cobrado siempre fue correcto; el dato publicado contradecía a la pasarela.
-                .amountDisplay(perLineSettlementAmount(order, displayCcy))
-                .currencyDisplay(displayCcy)
+                .amountDisplay(perLineSettlementAmount(order, displayCcy)).currencyDisplay(displayCcy)
                 .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
-                .clientTarget(PaymentClientHolder.get())
-                .orderId(orderId).purpose(ORDER_PAYMENT).build();
+                .clientTarget(PaymentClientHolder.get()).orderId(orderId).purpose(ORDER_PAYMENT).build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
@@ -943,8 +941,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
         String status = stripeService.paymentIntentStatus(p.getProviderRef());
         if ("succeeded".equals(status)) {
-            return doConfirmSucceeded(p.getId(), Map.of("stripe_payment_intent", p.getProviderRef(), "confirmed_3ds",
-                    true));
+            return doConfirmSucceeded(p.getId(),
+                    Map.of("stripe_payment_intent", p.getProviderRef(), "confirmed_3ds", true));
         }
         throw new BusinessException("El pago con tarjeta no se completó (estado " + status + ")");
     }

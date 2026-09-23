@@ -45,24 +45,18 @@ class CategoryRepositoryIT extends PersistenceITBase {
         childA = adapter.saveAndFlush(category("moviles", "PHONES", "cn-phones", 1, root));
 
         // Traducción para ejercitar findAllWithTranslations + search por nombre traducido.
-        CategoryTranslationEntity tr = CategoryTranslationEntity.builder()
-                .category(root)
-                .language("es")
-                .name("Electronica")
-                .build();
+        CategoryTranslationEntity tr = CategoryTranslationEntity.builder().category(root).language("es")
+                .name("Electronica").build();
         root.getTranslations().add(tr);
         adapter.saveAndFlush(root);
     }
 
-    private CategoryEntity category(String slug, String source, String externalId, int position, CategoryEntity parent) {
-        return CategoryEntity.builder()
-                .slug(slug)              // NOT NULL, unique
-                .source(source)
-                .externalId(externalId)
-                .nameZh("zh-" + slug)
-                .position(position)      // NOT NULL (int)
-                .active(true)            // NOT NULL (boolean)
-                .parent(parent)          // relación @ManyToOne parent_id
+    private CategoryEntity category(String slug, String source, String externalId, int position,
+            CategoryEntity parent) {
+        return CategoryEntity.builder().slug(slug) // NOT NULL, unique
+                .source(source).externalId(externalId).nameZh("zh-" + slug).position(position) // NOT NULL (int)
+                .active(true) // NOT NULL (boolean)
+                .parent(parent) // relación @ManyToOne parent_id
                 .build();
     }
 
@@ -102,9 +96,7 @@ class CategoryRepositoryIT extends PersistenceITBase {
         List<CategoryEntity> children = repository.findByParent_IdOrderByPositionAsc(root.getId());
 
         // childA (position 1) antes que childB (position 2) pese a insertarse después.
-        assertThat(children)
-                .extracting(CategoryEntity::getSlug)
-                .containsExactly("moviles", "audio");
+        assertThat(children).extracting(CategoryEntity::getSlug).containsExactly("moviles", "audio");
     }
 
     @Test
@@ -119,15 +111,11 @@ class CategoryRepositoryIT extends PersistenceITBase {
     void findAllWithTranslations_loadsTranslationsEagerly() {
         List<CategoryEntity> all = adapter.findAllWithTranslations();
 
-        assertThat(all).extracting(CategoryEntity::getSlug)
-                .contains("electronica", "audio", "moviles");
+        assertThat(all).extracting(CategoryEntity::getSlug).contains("electronica", "audio", "moviles");
 
-        CategoryEntity loadedRoot = all.stream()
-                .filter(c -> "electronica".equals(c.getSlug()))
-                .findFirst()
+        CategoryEntity loadedRoot = all.stream().filter(c -> "electronica".equals(c.getSlug())).findFirst()
                 .orElseThrow();
-        assertThat(loadedRoot.getTranslations())
-                .extracting(CategoryTranslationEntity::getName)
+        assertThat(loadedRoot.getTranslations()).extracting(CategoryTranslationEntity::getName)
                 .containsExactly("Electronica");
     }
 
@@ -147,17 +135,13 @@ class CategoryRepositoryIT extends PersistenceITBase {
     void search_byTranslatedName_matchesViaExistsSubquery() {
         Page<CategoryEntity> page = adapter.search("electronica", PageRequest.of(0, 10));
 
-        assertThat(page.getContent())
-                .extracting(CategoryEntity::getSlug)
-                .contains("electronica");
+        assertThat(page.getContent()).extracting(CategoryEntity::getSlug).contains("electronica");
     }
 
     @Test
     void search_byChineseName_matchesNameZh() {
         Page<CategoryEntity> page = adapter.search("zh-audio", PageRequest.of(0, 10));
 
-        assertThat(page.getContent())
-                .extracting(CategoryEntity::getSlug)
-                .containsExactly("audio");
+        assertThat(page.getContent()).extracting(CategoryEntity::getSlug).containsExactly("audio");
     }
 }

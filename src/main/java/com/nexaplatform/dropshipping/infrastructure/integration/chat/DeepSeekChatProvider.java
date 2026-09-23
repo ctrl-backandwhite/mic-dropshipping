@@ -73,20 +73,17 @@ public class DeepSeekChatProvider implements ChatProvider {
             throw new ChatProviderException("El asistente no tiene credenciales configuradas");
         }
         String body = buildBody(messages, tools);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/chat/completions"))
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .header("Content-Type", "application/json")
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(baseUrl + "/chat/completions"))
+                .timeout(Duration.ofSeconds(timeoutSeconds)).header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
         try {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 // El cuerpo se recorta: puede traer eco de la petición, y ahí viaja
                 // la conversación de una persona. En el log no pinta nada.
-                throw new ChatProviderException("El asistente respondió " + response.statusCode() + ": "
-                        + abbreviate(response.body()));
+                throw new ChatProviderException(
+                        "El asistente respondió " + response.statusCode() + ": " + abbreviate(response.body()));
             }
             return parseReply(response.body());
         } catch (IOException e) {
@@ -146,9 +143,7 @@ public class DeepSeekChatProvider implements ChatProvider {
             String text = message.path("content").isTextual() ? message.get("content").asText() : null;
             List<ChatToolCall> calls = new ArrayList<>();
             for (JsonNode call : message.path("tool_calls")) {
-                calls.add(new ChatToolCall(
-                        call.path("id").asText(),
-                        call.path("function").path("name").asText(),
+                calls.add(new ChatToolCall(call.path("id").asText(), call.path("function").path("name").asText(),
                         call.path("function").path("arguments").asText("{}")));
             }
             return new ChatReply(text == null || text.isBlank() ? null : text, calls);

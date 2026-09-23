@@ -10,10 +10,8 @@ import java.util.Locale;
  */
 public enum PaymentMethodLabel {
 
-    CARD("Tarjeta", "Card", "Cartão", "银行卡", "Carte", "Karte", "Carta", "Kaart"),
-    PAYPAL("PayPal"),
-    WALLET("Billetera", "Wallet", "Carteira", "钱包", "Portefeuille", "Geldbörse", "Portafoglio", "Portemonnee"),
-    USDT("USDT");
+    CARD("Tarjeta", "Card", "Cartão", "银行卡", "Carte", "Karte", "Carta", "Kaart"), PAYPAL("PayPal"), WALLET("Billetera",
+            "Wallet", "Carteira", "钱包", "Portefeuille", "Geldbörse", "Portafoglio", "Portemonnee"), USDT("USDT");
 
     /**
      * Los 8 idiomas soportados EN EL ORDEN en que se declaran los textos de cada constante. El primero

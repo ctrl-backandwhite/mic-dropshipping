@@ -118,10 +118,9 @@ public final class BulkProductStructure {
             // Sin SKU del proveedor se genera uno estable a partir del identificador externo: hace falta
             // para poder emparejar la variante en una reimportación posterior.
             String sku = has(v.getSku()) ? v.getSku() : externalId + "-" + (index + 1);
-            variants.add(new IngestVariant(sku, sku, title,
-                    v.getPrice() != null ? v.getPrice() : fallbackPrice,
-                    v.getStock() != null ? v.getStock() : 0,
-                    v.getImageUrl(), v.getOptionValues() != null ? v.getOptionValues() : Map.of()));
+            variants.add(new IngestVariant(sku, sku, title, v.getPrice() != null ? v.getPrice() : fallbackPrice,
+                    v.getStock() != null ? v.getStock() : 0, v.getImageUrl(),
+                    v.getOptionValues() != null ? v.getOptionValues() : Map.of()));
             index++;
         }
         return variants;
@@ -139,7 +138,7 @@ public final class BulkProductStructure {
         for (BulkTier t : r.getTieredPricing()) {
             tiers.add(new IngestPriceTier(t.getMinQty() != null ? t.getMinQty() : 1, t.getMaxQty(),
                     t.getUnitPrice() != null ? t.getUnitPrice() : fallbackPrice,
-                    t.getCurrency() != null ? t.getCurrency() : "CNY"));
+                    t.getCurrency() != null ? t.getCurrency() : "CNY", t.getSurchargeCny()));
         }
         return tiers;
     }

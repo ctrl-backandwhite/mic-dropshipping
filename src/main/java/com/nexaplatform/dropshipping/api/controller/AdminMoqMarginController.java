@@ -32,8 +32,7 @@ public class AdminMoqMarginController {
     private final MarginService marginService;
 
     /** Cuerpo de actualización del ajuste MOQ. */
-    public record MoqMarginDtoIn(
-            @NotNull Boolean enabled,
+    public record MoqMarginDtoIn(@NotNull Boolean enabled,
             @NotNull @DecimalMin("0") @DecimalMax("100") BigDecimal factorPercent) {
     }
 

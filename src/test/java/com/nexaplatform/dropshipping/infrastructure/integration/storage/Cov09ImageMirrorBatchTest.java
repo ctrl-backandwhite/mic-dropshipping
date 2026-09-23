@@ -94,8 +94,8 @@ class Cov09ImageMirrorBatchTest {
     }
 
     private static ProductImageEntity image(UUID id, String sourceUrl) {
-        ProductImageEntity img = ProductImageEntity.builder().sourceUrl(sourceUrl)
-                .mirrorStatus(MirrorStatus.PENDING).build();
+        ProductImageEntity img = ProductImageEntity.builder().sourceUrl(sourceUrl).mirrorStatus(MirrorStatus.PENDING)
+                .build();
         img.setId(id); // el id lo hereda de BaseEntity, no lo cubre el @Builder
         return img;
     }
@@ -126,8 +126,7 @@ class Cov09ImageMirrorBatchTest {
         // Reindexar sin haber espejado nada solo genera trabajo inútil en OpenSearch.
         setField("mirrorEnabled", true);
         List<UUID> productos = List.of(UUID.randomUUID());
-        when(imageRepository.findByProductIdInAndMirrorStatus(productos, MirrorStatus.PENDING))
-                .thenReturn(List.of());
+        when(imageRepository.findByProductIdInAndMirrorStatus(productos, MirrorStatus.PENDING)).thenReturn(List.of());
 
         service.mirrorProductsAsync(productos);
 
@@ -176,8 +175,7 @@ class Cov09ImageMirrorBatchTest {
         setField("mirrorEnabled", true);
         setField("mirrorBatch", 50);
         when(imageRepository.countByMirrorStatus(MirrorStatus.PENDING)).thenReturn(1L, 0L);
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
-                .thenReturn(List.of());
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING)).thenReturn(List.of());
 
         service.mirrorAllPendingAsync();
 
@@ -207,8 +205,7 @@ class Cov09ImageMirrorBatchTest {
         a.setId(varianteA);
         ProductVariantEntity b = ProductVariantEntity.builder().imageSourceUrl(ORIGEN_INALCANZABLE).build();
         b.setId(varianteB);
-        when(variantRepository.findNeedingImageMirror(eq("https://cdn.example.com%"), any()))
-                .thenReturn(List.of(a, b));
+        when(variantRepository.findNeedingImageMirror(eq("https://cdn.example.com%"), any())).thenReturn(List.of(a, b));
         UUID valorId = UUID.randomUUID();
         VariantValueEntity vv = VariantValueEntity.builder().imageSourceUrl(ORIGEN_INALCANZABLE).build();
         vv.setId(valorId);
@@ -295,8 +292,7 @@ class Cov09ImageMirrorBatchTest {
         when(storage.publicUrl()).thenReturn("https://cdn.example.com");
         when(storage.listKeys()).thenReturn(Set.of());
         when(imageRepository.requeueNotMirrored(any())).thenThrow(new IllegalStateException("BD caída"));
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
-                .thenReturn(List.of());
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING)).thenReturn(List.of());
         when(variantRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
         when(variantValueRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
 
@@ -322,10 +318,8 @@ class Cov09ImageMirrorBatchTest {
     void ningunMetodoAsincronoDevuelveUnValorNoSoportado() {
         for (java.lang.reflect.Method m : ImageMirrorService.class.getDeclaredMethods()) {
             if (m.isAnnotationPresent(org.springframework.scheduling.annotation.Async.class)) {
-                assertThat(m.getReturnType())
-                        .as("El método @Async %s debe devolver void o Future", m.getName())
-                        .satisfiesAnyOf(
-                                tipo -> assertThat(tipo).isEqualTo(void.class),
+                assertThat(m.getReturnType()).as("El método @Async %s debe devolver void o Future", m.getName())
+                        .satisfiesAnyOf(tipo -> assertThat(tipo).isEqualTo(void.class),
                                 tipo -> assertThat(java.util.concurrent.Future.class).isAssignableFrom(tipo));
             }
         }

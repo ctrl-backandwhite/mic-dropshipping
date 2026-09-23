@@ -40,6 +40,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShopConnectionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -107,6 +108,9 @@ class Cov06OrderUseCaseImplTest {
     NotificationsPublisher notificationsPublisher;
     @Mock
     PricingService pricingService;
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
     @Mock
     AffiliateProgramService affiliateProgramService;
     @Mock
@@ -137,11 +141,10 @@ class Cov06OrderUseCaseImplTest {
     com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
 
     @org.mockito.Spy
-    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService = new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(
+            null);
     @org.mockito.Mock
     com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
-
 
     @InjectMocks
     OrderUseCaseImpl useCase;
@@ -229,8 +232,8 @@ class Cov06OrderUseCaseImplTest {
         UUID userId = UUID.randomUUID();
         UUID pedidoId = UUID.randomUUID();
         ProductEntity producto = producto("12.50");
-        Order existente = Order.builder().id(pedidoId).orderNumber("NX-1").status(OrderStatus.PENDING)
-                .currency("USD").subtotalCents(1250).totalCents(1250).items(new ArrayList<>()).build();
+        Order existente = Order.builder().id(pedidoId).orderNumber("NX-1").status(OrderStatus.PENDING).currency("USD")
+                .subtotalCents(1250).totalCents(1250).items(new ArrayList<>()).build();
         CustomerOrderEntity entidad = new CustomerOrderEntity();
         entidad.setId(pedidoId);
         when(orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(eq(userId),
@@ -362,9 +365,8 @@ class Cov06OrderUseCaseImplTest {
         prepararCatalogo(producto, "10.00");
         when(variantRepository.findById(variante.getId())).thenReturn(Optional.of(variante));
 
-        Order pedido = useCase.createOrder(null, null,
-                new CreateOrderRequest("EXT", direccion("ES"), null,
-                        List.of(new OrderItemInput(producto.getId(), variante.getId(), 1)), null));
+        Order pedido = useCase.createOrder(null, null, new CreateOrderRequest("EXT", direccion("ES"), null,
+                List.of(new OrderItemInput(producto.getId(), variante.getId(), 1)), null));
 
         assertThat(pedido.getItems().get(0).getImageUrlSnapshot()).isEqualTo("https://cdn/variante.jpg");
     }
@@ -389,8 +391,8 @@ class Cov06OrderUseCaseImplTest {
     void elTituloSeCongelaEnElIdiomaDelComprador() {
         UUID userId = UUID.randomUUID();
         ProductEntity producto = producto("10.00");
-        producto.setTranslations(new ArrayList<>(List.of(traduccion(producto, "en", "Blue jacket"),
-                traduccion(producto, "fr", "Veste bleue"))));
+        producto.setTranslations(new ArrayList<>(
+                List.of(traduccion(producto, "en", "Blue jacket"), traduccion(producto, "fr", "Veste bleue"))));
         prepararCatalogo(producto, "10.00");
         when(userRepository.findById(userId)).thenReturn(Optional.of(usuario("fr@x.com", "fr")));
 
@@ -502,8 +504,8 @@ class Cov06OrderUseCaseImplTest {
     @Test
     void cancelarAnulaLaComisionDeAfiliado() {
         UUID id = UUID.randomUUID();
-        Order pendiente = Order.builder().id(id).status(OrderStatus.PENDING).userId(UUID.randomUUID())
-                .totalCents(1000).build();
+        Order pendiente = Order.builder().id(id).status(OrderStatus.PENDING).userId(UUID.randomUUID()).totalCents(1000)
+                .build();
         when(orderRepository.findById(id)).thenReturn(Optional.of(pendiente));
 
         useCase.cancelOrder(id);
@@ -598,8 +600,8 @@ class Cov06OrderUseCaseImplTest {
                 .lineTotalCents(1000).titleSnapshot("sin sku").build();
         OrderItem conSku = OrderItem.builder().productId(productId).unitPriceCents(1000).quantity(2)
                 .lineTotalCents(2000).skuSnapshot("SKU-A").titleSnapshot("con sku").build();
-        Order pedido = Order.builder().id(id).status(OrderStatus.PAID)
-                .items(new ArrayList<>(List.of(sinSku, conSku))).build();
+        Order pedido = Order.builder().id(id).status(OrderStatus.PAID).items(new ArrayList<>(List.of(sinSku, conSku)))
+                .build();
         when(orderRepository.findById(id)).thenReturn(Optional.of(pedido));
 
         Order detalle = useCase.getAdminOrderDetail(id, "es");
@@ -617,8 +619,8 @@ class Cov06OrderUseCaseImplTest {
         UUID productId = UUID.randomUUID();
         OrderItem barata = OrderItem.builder().productId(productId).unitPriceCents(1000).quantity(1).build();
         OrderItem cara = OrderItem.builder().productId(productId).unitPriceCents(1500).quantity(1).build();
-        Order pedido = Order.builder().id(id).status(OrderStatus.PAID)
-                .items(new ArrayList<>(List.of(barata, cara))).build();
+        Order pedido = Order.builder().id(id).status(OrderStatus.PAID).items(new ArrayList<>(List.of(barata, cara)))
+                .build();
         when(orderRepository.findById(id)).thenReturn(Optional.of(pedido));
 
         assertThat(useCase.getAdminOrderDetail(id, "es").getItems()).hasSize(2);
@@ -642,8 +644,8 @@ class Cov06OrderUseCaseImplTest {
 
         Order detalle = useCase.getMyOrderDetail(pedido.getUserId(), id, "ES");
 
-        assertThat(detalle.getItems()).extracting(OrderItem::getTitleSnapshot)
-                .containsExactly("Chaqueta", "Jacket", "Congelado", "蓝色外套");
+        assertThat(detalle.getItems()).extracting(OrderItem::getTitleSnapshot).containsExactly("Chaqueta", "Jacket",
+                "Congelado", "蓝色外套");
     }
 
     /** El detalle de un pedido AJENO se responde 404: no se filtra la existencia de pedidos de otros. */
@@ -734,15 +736,14 @@ class Cov06OrderUseCaseImplTest {
 
     private static ProductEntity producto(String precioCny) {
         ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE).slug("chaqueta").titleZh("蓝色外套").moq(1)
-                .basePrice(new BigDecimal(precioCny)).images(new ArrayList<>()).translations(new ArrayList<>())
-                .build();
+                .basePrice(new BigDecimal(precioCny)).images(new ArrayList<>()).translations(new ArrayList<>()).build();
         p.setId(UUID.randomUUID());
         return p;
     }
 
     private void prepararCatalogo(ProductEntity producto, String retailUsd) {
         when(productRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
-        when(pricingService.priceFor(any(), any())).thenReturn(precio(retailUsd));
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(precio(retailUsd));
     }
 
     private static ProductImageEntity imagen(String sourceUrl) {

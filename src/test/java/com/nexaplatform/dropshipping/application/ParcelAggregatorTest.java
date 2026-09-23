@@ -17,8 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ParcelAggregatorTest {
 
     private static ProductEntity product(Integer weight, Integer l, Integer w, Integer h, String battery) {
-        return ProductEntity.builder().weightGrams(weight).lengthMm(l).widthMm(w).heightMm(h)
-                .batteryType(battery).build();
+        return ProductEntity.builder().weightGrams(weight).lengthMm(l).widthMm(w).heightMm(h).batteryType(battery)
+                .build();
     }
 
     @Test
@@ -38,8 +38,8 @@ class ParcelAggregatorTest {
     @Test
     void apilaLasAlturasYConservaLargoYAnchoMayores() {
         ParcelAggregator agg = new ParcelAggregator();
-        agg.add(product(200, 320, 240, 50, "NONE"), null, 2);   // dos camisetas apiladas
-        agg.add(product(450, 280, 200, 110, "NONE"), null, 1);  // un bolso
+        agg.add(product(200, 320, 240, 50, "NONE"), null, 2); // dos camisetas apiladas
+        agg.add(product(450, 280, 200, 110, "NONE"), null, 1); // un bolso
 
         ParcelSpec parcel = agg.build();
 
@@ -53,7 +53,7 @@ class ParcelAggregatorTest {
     void unSoloArticuloConBateriaMarcaTodoElBulto() {
         ParcelAggregator agg = new ParcelAggregator();
         agg.add(product(200, 320, 240, 50, "NONE"), null, 1);
-        agg.add(product(120, 120, 100, 80, "BUILT_IN"), null, 1);   // reloj de cuarzo
+        agg.add(product(120, 120, 100, 80, "BUILT_IN"), null, 1); // reloj de cuarzo
 
         assertThat(agg.build().withBattery()).isTrue();
     }
@@ -82,8 +82,7 @@ class ParcelAggregatorTest {
         // El peso del catálogo está en las variantes: al cotizar antes de elegir color no debe caer al
         // valor por defecto de 500 g, que infravaloraría o inflaría el flete según el producto.
         ProductEntity conVariantes = product(null, 280, 200, 30, "NONE");
-        conVariantes.setVariants(java.util.List.of(
-                ProductVariantEntity.builder().weightGrams(98).build(),
+        conVariantes.setVariants(java.util.List.of(ProductVariantEntity.builder().weightGrams(98).build(),
                 ProductVariantEntity.builder().weightGrams(130).build()));
 
         ParcelAggregator agg = new ParcelAggregator();

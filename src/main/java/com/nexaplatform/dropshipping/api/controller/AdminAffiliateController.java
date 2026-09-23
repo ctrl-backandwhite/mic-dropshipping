@@ -121,12 +121,13 @@ public class AdminAffiliateController {
         UUID adminId = UUID.fromString(auth.getName());
         String reference = req != null ? req.reference() : null;
         AffiliatePayoutEntity p = service.approvePayout(payoutId, adminId, reference);
-        return ResponseEntity.ok(Map.of("status", p.getStatus(), "reference",
-                p.getPaidReference() != null ? p.getPaidReference() : ""));
+        return ResponseEntity.ok(
+                Map.of("status", p.getStatus(), "reference", p.getPaidReference() != null ? p.getPaidReference() : ""));
     }
 
     @PostMapping("/payouts/{payoutId}/reject")
-    public ResponseEntity<Void> rejectPayout(@PathVariable UUID payoutId, @RequestBody(required = false) Map<String, String> body) {
+    public ResponseEntity<Void> rejectPayout(@PathVariable UUID payoutId,
+            @RequestBody(required = false) Map<String, String> body) {
         service.rejectPayout(payoutId, body != null ? body.get("reason") : null);
         return ResponseEntity.noContent().build();
     }
@@ -146,8 +147,8 @@ public class AdminAffiliateController {
 
     @PutMapping("/config")
     public ResponseEntity<ProgramConfigView> updateConfig(@RequestBody ConfigUpdateRequest req) {
-        AffiliateProgramConfigEntity c = service.updateConfig(req.defaultPercent(), req.attributionWindowDays(), req.returnPeriodDays(),
-                req.minPayoutCents(), req.currency(), req.maxCommissionPeriodCents());
+        AffiliateProgramConfigEntity c = service.updateConfig(req.defaultPercent(), req.attributionWindowDays(),
+                req.returnPeriodDays(), req.minPayoutCents(), req.currency(), req.maxCommissionPeriodCents());
         return ResponseEntity.ok(mapper.toConfigView(c));
     }
 }

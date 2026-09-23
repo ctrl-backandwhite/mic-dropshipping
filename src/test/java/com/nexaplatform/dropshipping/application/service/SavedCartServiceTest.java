@@ -78,16 +78,15 @@ class SavedCartServiceTest {
 
     @Test
     void guardarUnaLineaYaExistenteSumaLaCantidadYRefrescaElSnapshot() {
-        SavedCartItemEntity existing = SavedCartItemEntity.builder()
-                .userId(userId).productId(productId).variantId(variantId).quantity(2).title("viejo").build();
-        when(repo.findByUserIdAndProductIdAndVariantId(userId, productId, variantId))
-                .thenReturn(Optional.of(existing));
+        SavedCartItemEntity existing = SavedCartItemEntity.builder().userId(userId).productId(productId)
+                .variantId(variantId).quantity(2).title("viejo").build();
+        when(repo.findByUserIdAndProductIdAndVariantId(userId, productId, variantId)).thenReturn(Optional.of(existing));
 
         service.upsert(userId, dto(productId, variantId, 3));
 
         verify(repo).save(existing);
         assertThat(existing.getQuantity()).isEqualTo(5);
-        assertThat(existing.getTitle()).isEqualTo("Camisa roja");   // snapshot al más reciente
+        assertThat(existing.getTitle()).isEqualTo("Camisa roja"); // snapshot al más reciente
     }
 
     @Test
@@ -117,10 +116,9 @@ class SavedCartServiceTest {
 
     @Test
     void listarMapeaLasEntidadesAsuDto() {
-        SavedCartItemEntity entity = SavedCartItemEntity.builder()
-                .userId(userId).productId(productId).variantId(variantId).quantity(4)
-                .slug("camisa-roja").title("Camisa roja").unitPriceSource(new BigDecimal("10.00"))
-                .sourceCurrency("EUR").build();
+        SavedCartItemEntity entity = SavedCartItemEntity.builder().userId(userId).productId(productId)
+                .variantId(variantId).quantity(4).slug("camisa-roja").title("Camisa roja")
+                .unitPriceSource(new BigDecimal("10.00")).sourceCurrency("EUR").build();
         when(repo.findByUserIdOrderByCreatedAtDesc(userId)).thenReturn(List.of(entity));
 
         List<SavedCartItemDto> out = service.list(userId);

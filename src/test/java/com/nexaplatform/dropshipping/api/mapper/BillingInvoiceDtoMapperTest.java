@@ -42,10 +42,8 @@ class BillingInvoiceDtoMapperTest {
     @BeforeEach
     void prepararDivisas() {
         CurrencyRateRepository repositorio = mock(CurrencyRateRepository.class);
-        when(repositorio.findAll()).thenReturn(List.of(
-                divisa("EUR", "Euro", "€", "es-ES", "0.92"),
-                divisa("USD", "US Dollar", "$", "en-US", "1.00"),
-                divisa("JPY", "Japanese Yen", "¥", "ja-JP", "156.40"),
+        when(repositorio.findAll()).thenReturn(List.of(divisa("EUR", "Euro", "€", "es-ES", "0.92"),
+                divisa("USD", "US Dollar", "$", "en-US", "1.00"), divisa("JPY", "Japanese Yen", "¥", "ja-JP", "156.40"),
                 divisa("KRW", "South Korean Won", "₩", "ko-KR", "1340.00")));
         mapper = new BillingInvoiceDtoMapper(new CurrencyRateService(repositorio));
     }

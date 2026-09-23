@@ -158,8 +158,7 @@ class WelcomeExamplesServiceTest {
         when(settingRepository.findById((short) 1)).thenReturn(Optional.of(ajuste));
         when(productRepository.findAllById(anyList())).thenReturn(List.of(retirado));
         ProductEntity vivo = producto("620443", "Woven");
-        when(productRepository.findWelcomeExampleCandidates(any(), any(Pageable.class)))
-                .thenReturn(List.of(vivo));
+        when(productRepository.findWelcomeExampleCandidates(any(), any(Pageable.class))).thenReturn(List.of(vivo));
 
         assertThat(service.examples()).containsExactly(vivo);
     }
@@ -179,8 +178,7 @@ class WelcomeExamplesServiceTest {
 
         service.fijar(List.of(), "admin@nx036.local");
 
-        ArgumentCaptor<WelcomeExampleSettingEntity> captor =
-                ArgumentCaptor.forClass(WelcomeExampleSettingEntity.class);
+        ArgumentCaptor<WelcomeExampleSettingEntity> captor = ArgumentCaptor.forClass(WelcomeExampleSettingEntity.class);
         verify(settingRepository).save(captor.capture());
         assertThat(captor.getValue().getProductId1()).isNull();
         assertThat(captor.getValue().getProductId2()).isNull();

@@ -84,9 +84,9 @@ public class CarrierChannelLimitService {
      * @param singleParcelOnly   un bulto por envío: cada bulto va con su propia guía
      * @param origen             de cuál de los tres escalones salió (ver {@link Origen})
      */
-    public record ChannelLimit(String channelCode, String countryCode, int maxWeightGrams,
-            int volumetricDivisor, int minBillableGrams, int maxLengthMm, int maxWidthMm, int maxHeightMm,
-            boolean singleParcelOnly, Origen origen) {
+    public record ChannelLimit(String channelCode, String countryCode, int maxWeightGrams, int volumetricDivisor,
+            int minBillableGrams, int maxLengthMm, int maxWidthMm, int maxHeightMm, boolean singleParcelOnly,
+            Origen origen) {
 
         /**
          * ¿Este canal factura por peso volumétrico? Un divisor 0 significa que NO, no que se use el
@@ -135,8 +135,8 @@ public class CarrierChannelLimitService {
     private static ChannelLimit from(CarrierChannelLimitEntity e, Origen origen) {
         return new ChannelLimit(e.getChannelCode(), e.getCountryCode(), Math.max(0, e.getMaxWeightGrams()),
                 Math.max(0, e.getVolumetricDivisor()), Math.max(0, e.getMinBillableGrams()),
-                Math.max(0, e.getMaxLengthMm()), Math.max(0, e.getMaxWidthMm()),
-                Math.max(0, e.getMaxHeightMm()), e.isSingleParcelOnly(), origen);
+                Math.max(0, e.getMaxLengthMm()), Math.max(0, e.getMaxWidthMm()), Math.max(0, e.getMaxHeightMm()),
+                e.isSingleParcelOnly(), origen);
     }
 
     /**
@@ -173,8 +173,7 @@ public class CarrierChannelLimitService {
     public CarrierChannelLimitEntity upsert(CarrierChannelLimitEntity input) {
         String canal = normalize(input.getChannelCode());
         String pais = normalize(input.getCountryCode());
-        CarrierChannelLimitEntity e = repository
-                .findByChannelCodeIgnoreCaseAndCountryCodeIgnoreCase(canal, pais)
+        CarrierChannelLimitEntity e = repository.findByChannelCodeIgnoreCaseAndCountryCodeIgnoreCase(canal, pais)
                 .orElseGet(CarrierChannelLimitEntity::new);
         e.setChannelCode(canal);
         e.setCountryCode(pais);
@@ -200,8 +199,7 @@ public class CarrierChannelLimitService {
     @Transactional
     public boolean delete(String channelCode, String countryCode) {
         Optional<CarrierChannelLimitEntity> found = repository
-                .findByChannelCodeIgnoreCaseAndCountryCodeIgnoreCase(normalize(channelCode),
-                        normalize(countryCode));
+                .findByChannelCodeIgnoreCaseAndCountryCodeIgnoreCase(normalize(channelCode), normalize(countryCode));
         found.ifPresent(repository::delete);
         return found.isPresent();
     }

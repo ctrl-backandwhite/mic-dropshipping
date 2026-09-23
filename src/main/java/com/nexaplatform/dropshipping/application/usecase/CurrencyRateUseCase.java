@@ -38,7 +38,8 @@ public interface CurrencyRateUseCase extends BaseUseCase<CurrencyRate, CurrencyR
     CurrencySyncResult sync();
 
     /** Estado de la sincronización: última ejecución, próxima programada (desde el cron) y el cron en uso. */
-    record SyncStatus(Instant lastSyncedAt, Instant nextSyncAt, String cron) {}
+    record SyncStatus(Instant lastSyncedAt, Instant nextSyncAt, String cron) {
+    }
 
     /** Devuelve el estado de sincronización para pintar "última actualización" y la cuenta atrás. */
     SyncStatus syncStatus();

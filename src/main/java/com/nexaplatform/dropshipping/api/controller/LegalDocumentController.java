@@ -35,17 +35,15 @@ public class LegalDocumentController {
         if (!service.tipoValido(docType)) {
             return ResponseEntity.notFound().build();
         }
-        return service.publicado(docType, lang)
-                .map(d -> ResponseEntity.ok()
-                        // Cinco minutos: un texto legal cambia muy de tarde en tarde, pero cuando cambia
-                        // conviene que llegue pronto — el usuario acaba de recibir un correo diciéndoselo.
-                        .cacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic())
-                        .body(cuerpo(d)))
+        return service.publicado(docType, lang).map(d -> ResponseEntity.ok()
+                // Cinco minutos: un texto legal cambia muy de tarde en tarde, pero cuando cambia
+                // conviene que llegue pronto — el usuario acaba de recibir un correo diciéndoselo.
+                .cacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic()).body(cuerpo(d)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     private Map<String, Object> cuerpo(LegalDocumentEntity d) {
-        return Map.of("docType", d.getDocType(), "lang", d.getLang(), "title", d.getTitle(),
-                "version", d.getVersion(), "body", d.getBody());
+        return Map.of("docType", d.getDocType(), "lang", d.getLang(), "title", d.getTitle(), "version", d.getVersion(),
+                "body", d.getBody());
     }
 }

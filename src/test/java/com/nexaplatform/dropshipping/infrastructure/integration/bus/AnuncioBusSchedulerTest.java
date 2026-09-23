@@ -69,8 +69,7 @@ class AnuncioBusSchedulerTest {
         when(proveedorDelBus.getIfAvailable()).thenReturn(bus);
         TransactionStatus estado = new SimpleTransactionStatus();
         when(gestorDeTransacciones.getTransaction(any())).thenReturn(estado);
-        scheduler = new AnuncioBusScheduler(productRepository, proveedorDelBus, catalogUseCase,
-                gestorDeTransacciones);
+        scheduler = new AnuncioBusScheduler(productRepository, proveedorDelBus, catalogUseCase, gestorDeTransacciones);
         set("habilitado", true);
         set("maxIntentos", 5);
         // El lote se ejecuta en el hilo de la prueba: así se comprueba el resultado sin esperas ni relojes.
@@ -216,8 +215,8 @@ class AnuncioBusSchedulerTest {
         ProductEntity p = pendiente(true);
         cuandoSeBusquenPendientes(p);
         when(catalogUseCase.exportProduct(p.getId())).thenThrow(new IllegalStateException("roto"));
-        doThrow(new IllegalStateException("base caída")).when(productRepository)
-                .anotarFalloDeAnuncio(any(), anyString());
+        doThrow(new IllegalStateException("base caída")).when(productRepository).anotarFalloDeAnuncio(any(),
+                anyString());
 
         assertThat(scheduler.anunciarLote()).isZero();
     }
@@ -227,8 +226,7 @@ class AnuncioBusSchedulerTest {
     void elMotivoSeRecortaParaQueQuepaEnElPanel() {
         ProductEntity p = pendiente(true);
         cuandoSeBusquenPendientes(p);
-        when(catalogUseCase.exportProduct(p.getId()))
-                .thenThrow(new IllegalStateException("x".repeat(2000)));
+        when(catalogUseCase.exportProduct(p.getId())).thenThrow(new IllegalStateException("x".repeat(2000)));
 
         scheduler.anunciarLote();
 

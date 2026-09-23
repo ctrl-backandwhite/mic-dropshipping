@@ -59,8 +59,10 @@ public class EmailQueueService {
      */
     private String resolveFrom(String template) {
         if (template != null) {
-            if (template.contains("invoice")) return fromBilling;
-            if (template.contains("contact-ack")) return fromSupport;
+            if (template.contains("invoice"))
+                return fromBilling;
+            if (template.contains("contact-ack"))
+                return fromSupport;
         }
         return fromAddress;
     }
@@ -108,8 +110,7 @@ public class EmailQueueService {
         vars.forEach(ctx::setVariable);
         String html = templateEngine.process(template, ctx);
         OutboundEmailEntity email = OutboundEmailEntity.builder().toAddress(to).replyTo(replyTo).subject(subject)
-                .bodyHtml(html).template(template).status("PENDING")
-                .inlineImages(writeInlineImages(inlineImages))
+                .bodyHtml(html).template(template).status("PENDING").inlineImages(writeInlineImages(inlineImages))
                 .attachmentBytes(attachment != null && attachment.length > 0 ? attachment : null)
                 .attachmentFilename(attachmentFilename).build();
         return repo.save(email);
@@ -150,10 +151,8 @@ public class EmailQueueService {
      * A partir del último valor se mantiene el tope. Pensado para superar un rate-limit horario del
      * proveedor: 2, 5, 10, 20, 40 y 60 min, luego cada hora.
      */
-    private static final Duration[] TRANSIENT_BACKOFF = {
-            Duration.ofMinutes(2), Duration.ofMinutes(5), Duration.ofMinutes(10),
-            Duration.ofMinutes(20), Duration.ofMinutes(40), Duration.ofMinutes(60)
-    };
+    private static final Duration[] TRANSIENT_BACKOFF = {Duration.ofMinutes(2), Duration.ofMinutes(5),
+            Duration.ofMinutes(10), Duration.ofMinutes(20), Duration.ofMinutes(40), Duration.ofMinutes(60)};
 
     /** Antigüedad máxima que un correo temporalmente fallido sigue reintentándose antes de rendirse. */
     private static final Duration GIVE_UP_TRANSIENT_AFTER = Duration.ofHours(24);
@@ -209,7 +208,8 @@ public class EmailQueueService {
                     attachStorageImage(helper, cid, storageImages.get(cid));
                 }
                 if (hasAttachment) {
-                    String filename = email.getAttachmentFilename() != null ? email.getAttachmentFilename()
+                    String filename = email.getAttachmentFilename() != null
+                            ? email.getAttachmentFilename()
                             : "factura.pdf";
                     helper.addAttachment(filename, new ByteArrayResource(email.getAttachmentBytes()),
                             "application/pdf");
@@ -246,15 +246,15 @@ public class EmailQueueService {
         Instant createdAt = email.getCreatedAt();
         if (createdAt != null && Duration.between(createdAt, now).compareTo(GIVE_UP_TRANSIENT_AFTER) > 0) {
             email.setStatus("FAILED");
-            log.error("Email {} descartado tras {} h reintentando ({} intentos): {}",
-                    email.getId(), GIVE_UP_TRANSIENT_AFTER.toHours(), attempts, e.getMessage());
+            log.error("Email {} descartado tras {} h reintentando ({} intentos): {}", email.getId(),
+                    GIVE_UP_TRANSIENT_AFTER.toHours(), attempts, e.getMessage());
             return;
         }
 
         Duration wait = TRANSIENT_BACKOFF[Math.min(attempts - 1, TRANSIENT_BACKOFF.length - 1)];
         email.setNextAttemptAt(now.plus(wait));
-        log.warn("Email {} aplazado {} min por fallo temporal (intento {}): {}", email.getId(),
-                wait.toMinutes(), attempts, e.getMessage());
+        log.warn("Email {} aplazado {} min por fallo temporal (intento {}): {}", email.getId(), wait.toMinutes(),
+                attempts, e.getMessage());
     }
 
     /** Recorta el mensaje de error a lo que cabe en la columna, preservando el principio (el código SMTP). */

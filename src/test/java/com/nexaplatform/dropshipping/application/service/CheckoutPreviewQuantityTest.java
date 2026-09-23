@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +15,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -52,8 +54,8 @@ class CheckoutPreviewQuantityTest {
     /** Sin promociones: esta prueba mide el tope de cantidad por línea, no las rebajas. */
     private final PromotionService promociones = mock(PromotionService.class);
 
-    private final com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService dutyLines =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
+    private final com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService dutyLines = new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(
+            null);
 
     /** La cuenta real, no un doble: es justo la aritmética de línea que estos casos miden. */
     private final OrderAmounts orderAmounts = new OrderAmounts(currency);
@@ -63,17 +65,21 @@ class CheckoutPreviewQuantityTest {
      */
     private final CustomsDeclarationGroupService declarationGroups = mock(CustomsDeclarationGroupService.class);
 
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    private final ProductPriceTierRepository tramos = mock(ProductPriceTierRepository.class);
 
     private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, subvenciones(), pricing,
-            currency, products, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
+            currency, products, tramos, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
 
     private final UUID productId = UUID.randomUUID();
 
     private void stubUnitPriceOf(String retailUsd) {
         ProductEntity product = mock(ProductEntity.class, RETURNS_DEEP_STUBS);
         lenient().when(products.findById(productId)).thenReturn(Optional.of(product));
-        lenient().when(pricing.priceFor(any(), any()).retailUsd()).thenReturn(new BigDecimal(retailUsd));
-        lenient().when(pricing.priceFor(any(), any()).displayAmount()).thenReturn(new BigDecimal(retailUsd));
+        lenient().when(pricing.priceFor(any(), any(), anyInt(), any()).retailUsd())
+                .thenReturn(new BigDecimal(retailUsd));
+        lenient().when(pricing.priceFor(any(), any(), anyInt(), any()).displayAmount())
+                .thenReturn(new BigDecimal(retailUsd));
         lenient().when(currency.usdToDisplay(any(BigDecimal.class))).thenReturn(new BigDecimal(retailUsd));
         lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenReturn(BigDecimal.ZERO);
@@ -104,21 +110,18 @@ class CheckoutPreviewQuantityTest {
     void unaCantidadCeroONegativaCuentaComoUnaUnidad() {
         stubUnitPriceOf("7.50");
 
-        assertThat(service.compute("ES", null,
-                List.of(new CheckoutPreviewService.Line(productId, null, 0)), null).subtotalUsdCents())
-                .isEqualTo(750);
-        assertThat(service.compute("ES", null,
-                List.of(new CheckoutPreviewService.Line(productId, null, -3)), null).subtotalUsdCents())
-                .isEqualTo(750);
+        assertThat(service.compute("ES", null, List.of(new CheckoutPreviewService.Line(productId, null, 0)), null)
+                .subtotalUsdCents()).isEqualTo(750);
+        assertThat(service.compute("ES", null, List.of(new CheckoutPreviewService.Line(productId, null, -3)), null)
+                .subtotalUsdCents()).isEqualTo(750);
     }
 
     @Test
     void unaCantidadNormalNoSeToca() {
         stubUnitPriceOf("2.50");
 
-        assertThat(service.compute("ES", null,
-                List.of(new CheckoutPreviewService.Line(productId, null, 4)), null).subtotalUsdCents())
-                .isEqualTo(1000);
+        assertThat(service.compute("ES", null, List.of(new CheckoutPreviewService.Line(productId, null, 4)), null)
+                .subtotalUsdCents()).isEqualTo(1000);
     }
 
     /**
@@ -129,7 +132,8 @@ class CheckoutPreviewQuantityTest {
     private void stubProductoEnEuros(String retailUsd) {
         ProductEntity product = mock(ProductEntity.class, RETURNS_DEEP_STUBS);
         lenient().when(products.findById(productId)).thenReturn(Optional.of(product));
-        lenient().when(pricing.priceFor(any(), any()).retailUsd()).thenReturn(new BigDecimal(retailUsd));
+        lenient().when(pricing.priceFor(any(), any(), anyInt(), any()).retailUsd())
+                .thenReturn(new BigDecimal(retailUsd));
         lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         lenient().when(currency.decimalsOf(anyString())).thenReturn(2);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString()))
@@ -137,7 +141,7 @@ class CheckoutPreviewQuantityTest {
         lenient().when(currency.usdToDisplay(any(BigDecimal.class)))
                 .thenAnswer(i -> i.<BigDecimal>getArgument(0).multiply(EUR).setScale(2, RoundingMode.HALF_UP));
         // La ficha enseña el unitario ya convertido y redondeado: es el precio que el cliente eligió.
-        lenient().when(pricing.priceFor(any(), any()).displayAmount())
+        lenient().when(pricing.priceFor(any(), any(), anyInt(), any()).displayAmount())
                 .thenReturn(new BigDecimal(retailUsd).multiply(EUR).setScale(2, RoundingMode.HALF_UP));
     }
 
@@ -198,10 +202,11 @@ class CheckoutPreviewQuantityTest {
      * escondería justo el descuento que hoy forma parte del desglose.
      */
     private static com.nexaplatform.dropshipping.application.service.ProductSubsidyService subvenciones() {
-        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
-        org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
+        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa = org.mockito.Mockito
+                .mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
+        org.mockito.Mockito.lenient()
+                .when(divisa.toUsd(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new java.math.BigDecimal("5.85"));
         return new com.nexaplatform.dropshipping.application.service.ProductSubsidyService(divisa);
     }
 }

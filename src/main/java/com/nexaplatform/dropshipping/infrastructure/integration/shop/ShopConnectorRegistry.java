@@ -59,9 +59,7 @@ public class ShopConnectorRegistry {
 
     /** The full platform catalog with honest availability flags (DROP-701). */
     public List<ShopPlatform> catalog() {
-        return CATALOG.entrySet().stream()
-                .map(e -> ShopPlatform.builder().code(e.getKey()).label(e.getValue())
-                        .available(isAvailable(e.getKey())).build())
-                .toList();
+        return CATALOG.entrySet().stream().map(e -> ShopPlatform.builder().code(e.getKey()).label(e.getValue())
+                .available(isAvailable(e.getKey())).build()).toList();
     }
 }

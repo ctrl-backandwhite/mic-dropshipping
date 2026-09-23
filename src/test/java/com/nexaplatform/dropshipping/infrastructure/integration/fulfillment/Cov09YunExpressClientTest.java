@@ -165,8 +165,7 @@ class Cov09YunExpressClientTest {
         // Seguir adelante con un token vacío convierte un problema de credenciales en un 401 indescifrable.
         guionToken.add(new Respuesta(200, "{\"success\":false,\"msg\":\"credenciales inválidas\"}"));
 
-        assertThatThrownBy(() -> client.get(RUTA_NEGOCIO, Map.of()))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> client.get(RUTA_NEGOCIO, Map.of())).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("no trae accessToken");
     }
 
@@ -191,8 +190,8 @@ class Cov09YunExpressClientTest {
         assertThat(p.cabeceras()).containsEntry("token", "tok-1");
         String date = p.cabeceras().get("date");
         assertThat(Long.parseLong(date)).isPositive();
-        assertThat(p.cabeceras()).containsEntry("sign", YunExpressClient.sign(
-                YunExpressClient.signatureContent("GET", RUTA_NEGOCIO, null, date), SECRETO));
+        assertThat(p.cabeceras()).containsEntry("sign",
+                YunExpressClient.sign(YunExpressClient.signatureContent("GET", RUTA_NEGOCIO, null, date), SECRETO));
     }
 
     @Test
@@ -202,9 +201,10 @@ class Cov09YunExpressClientTest {
         Peticion p = ultimaDeNegocio();
         assertThat(p.metodo()).isEqualTo("POST");
         assertThat(p.cuerpo()).isEqualTo("{\"weight\":1200}");
-        assertThat(p.cabeceras()).containsEntry("sign", YunExpressClient.sign(
-                YunExpressClient.signatureContent("POST", RUTA_NEGOCIO, p.cuerpo(), p.cabeceras().get("date")),
-                SECRETO));
+        assertThat(p.cabeceras()).containsEntry("sign",
+                YunExpressClient.sign(
+                        YunExpressClient.signatureContent("POST", RUTA_NEGOCIO, p.cuerpo(), p.cabeceras().get("date")),
+                        SECRETO));
     }
 
     // ---------------------------------------------------------------- errores y reintento
@@ -226,8 +226,7 @@ class Cov09YunExpressClientTest {
         guion.add(new Respuesta(401, "{\"msg\":\"token expired\"}"));
 
         assertThatThrownBy(() -> client.get(RUTA_NEGOCIO, Map.of()))
-                .isInstanceOf(YunExpressClient.YunExpressAuthException.class)
-                .hasMessageContaining("401");
+                .isInstanceOf(YunExpressClient.YunExpressAuthException.class).hasMessageContaining("401");
     }
 
     @Test
@@ -245,8 +244,7 @@ class Cov09YunExpressClientTest {
     void unaCaidaDelGatewayConCuerpoNoInterpretableEsUnError() {
         guion.add(new Respuesta(500, "<html>Bad Gateway</html>"));
 
-        assertThatThrownBy(() -> client.get(RUTA_NEGOCIO, Map.of()))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> client.get(RUTA_NEGOCIO, Map.of())).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("YunExpress HTTP 500");
     }
 
@@ -254,8 +252,7 @@ class Cov09YunExpressClientTest {
     void unaRespuestaCorrectaQueNoEsJsonEsUnError() {
         guion.add(new Respuesta(200, "no soy json"));
 
-        assertThatThrownBy(() -> client.post(RUTA_NEGOCIO, "{}"))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> client.post(RUTA_NEGOCIO, "{}")).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("no es JSON válido");
     }
 }

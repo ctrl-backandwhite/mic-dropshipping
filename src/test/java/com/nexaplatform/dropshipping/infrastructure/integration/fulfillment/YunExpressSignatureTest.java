@@ -55,8 +55,9 @@ class YunExpressSignatureTest {
         // YunExpress responde 400 + {"success":false,...} a situaciones NORMALES —p.ej. una guía recién
         // creada que aún no se ha propagado al servicio de trazabilidad—. Tratarlas como caída de red
         // tumbaría el sondeo de seguimiento, así que el cuerpo se devuelve y lo interpreta cada operación.
-        assertThat(YunExpressClient.isBusinessError(
-                "{\"success\":false,\"code\":\"02041002\",\"msg\":\"The order does not exist\"}")).isTrue();
+        assertThat(YunExpressClient
+                .isBusinessError("{\"success\":false,\"code\":\"02041002\",\"msg\":\"The order does not exist\"}"))
+                .isTrue();
         assertThat(YunExpressClient.isBusinessError("{\"success\":true,\"result\":{}}")).isFalse();
         assertThat(YunExpressClient.isBusinessError("<html>502 Bad Gateway</html>")).isFalse();
         assertThat(YunExpressClient.isBusinessError("{\"code\":\"0200404001\"}")).isFalse();

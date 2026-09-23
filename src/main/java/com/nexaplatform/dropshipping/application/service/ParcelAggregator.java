@@ -51,8 +51,7 @@ public final class ParcelAggregator {
      * peso por defecto en vez de ignorarla: dejarla fuera cotizaría el envío casi gratis.
      */
     public void addUnknown(int quantity) {
-        weightGrams = Math.addExact(weightGrams,
-                Math.multiplyExact(FALLBACK_WEIGHT_GRAMS, Math.max(1, quantity)));
+        weightGrams = Math.addExact(weightGrams, Math.multiplyExact(FALLBACK_WEIGHT_GRAMS, Math.max(1, quantity)));
     }
 
     /** El bulto agregado, listo para {@code FulfillmentProvider.quote}. */
@@ -66,7 +65,8 @@ public final class ParcelAggregator {
      * equivalentes del producto y, si nada de eso hay, la variante más pesada del catálogo.
      */
     public static int unitWeightGrams(ProductEntity product, ProductVariantEntity variant) {
-        int fromVariant = variant == null ? 0
+        int fromVariant = variant == null
+                ? 0
                 : firstPositive(variant.getPackageWeightGrams(), variant.getWeightGrams());
         if (fromVariant > 0) {
             return fromVariant;

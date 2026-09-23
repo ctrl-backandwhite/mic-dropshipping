@@ -8,14 +8,16 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum WalletTxMessage {
 
-    RECHARGE(new Translations("Recarga con {method}", "Recharge via {method}", "Recarga com {method}",
-            "通过{method}充值", "Recharge par {method}", "Aufladung per {method}", "Ricarica con {method}",
-            "Opwaardering via {method}")),
-    REFUND(new Translations("Reembolso del pedido {order}", "Refund for order {order}", "Reembolso do pedido {order}",
-            "订单 {order} 的退款", "Remboursement de la commande {order}", "Rückerstattung für Bestellung {order}",
-            "Rimborso dell'ordine {order}", "Terugbetaling voor bestelling {order}")),
-    ORDER_PAYMENT(new Translations("Pedido {order}", "Order {order}", "Pedido {order}", "订单 {order}",
-            "Commande {order}", "Bestellung {order}", "Ordine {order}", "Bestelling {order}"));
+    RECHARGE(new Translations("Recarga con {method}", "Recharge via {method}", "Recarga com {method}", "通过{method}充值",
+            "Recharge par {method}", "Aufladung per {method}", "Ricarica con {method}",
+            "Opwaardering via {method}")), REFUND(
+                    new Translations("Reembolso del pedido {order}", "Refund for order {order}",
+                            "Reembolso do pedido {order}", "订单 {order} 的退款", "Remboursement de la commande {order}",
+                            "Rückerstattung für Bestellung {order}", "Rimborso dell'ordine {order}",
+                            "Terugbetaling voor bestelling {order}")), ORDER_PAYMENT(
+                                    new Translations("Pedido {order}", "Order {order}", "Pedido {order}", "订单 {order}",
+                                            "Commande {order}", "Bestellung {order}", "Ordine {order}",
+                                            "Bestelling {order}"));
 
     private final Translations translations;
 
@@ -27,8 +29,7 @@ public enum WalletTxMessage {
      * Las ocho traducciones de un movimiento, juntas en un solo valor: así el constructor del enum recibe un
      * parámetro en vez de ocho sueltos, donde cualquier idioma desplazado pasaba inadvertido.
      */
-    public record Translations(String es, String en, String pt, String zh, String fr, String de, String it,
-            String nl) {
+    public record Translations(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
 
         /** Plantilla traducida para el idioma (2 letras); si no se reconoce, devuelve el español. */
         public String of(String lang) {

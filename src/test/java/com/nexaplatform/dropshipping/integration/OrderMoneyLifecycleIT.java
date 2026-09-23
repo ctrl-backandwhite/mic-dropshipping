@@ -51,14 +51,11 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         Map<String, Object> creado = checkout(compradorId, productoId, 2, "WALLET", null);
         UUID pedidoId = UUID.fromString(String.valueOf(creado.get("id")));
 
-        assertThat(esperado).as("el importe de referencia se calcula a mano, no se lee del sistema")
-                .isEqualTo(6655);
+        assertThat(esperado).as("el importe de referencia se calcula a mano, no se lee del sistema").isEqualTo(6655);
         assertThat(totalDe(pedidoId)).as("total guardado en el pedido").isEqualTo(esperado);
         assertThat(new BigDecimal(String.valueOf(creado.get("total"))))
-                .as("total devuelto por la API, en unidades de divisa")
-                .isEqualByComparingTo(new BigDecimal("66.55"));
-        assertThat(saldoDe(compradorId)).as("saldo tras el cobro")
-                .isEqualTo(SALDO_INICIAL_CENTS - esperado);
+                .as("total devuelto por la API, en unidades de divisa").isEqualByComparingTo(new BigDecimal("66.55"));
+        assertThat(saldoDe(compradorId)).as("saldo tras el cobro").isEqualTo(SALDO_INICIAL_CENTS - esperado);
         assertThat(sumaMovimientos(compradorId)).as("el libro tiene que cuadrar con el saldo movido")
                 .isEqualTo(-(long) esperado);
     }
@@ -103,8 +100,7 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         cuerpoMalicioso.put("totalCents", 999_999);
         cuerpoMalicioso.put("refundAmountCents", 999_999);
 
-        assertThat(transicionAdminConCuerpo(pedidoId, "refund", jwt.userToken(ADMIN), cuerpoMalicioso))
-                .isEqualTo(200);
+        assertThat(transicionAdminConCuerpo(pedidoId, "refund", jwt.userToken(ADMIN), cuerpoMalicioso)).isEqualTo(200);
 
         assertThat(saldoDe(compradorId) - saldoTrasCobro)
                 .as("el abono es el total real del pedido, no el importe inyectado").isEqualTo(esperado);
@@ -127,10 +123,9 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         assertThat(transicionAdmin(pedidoId, "refund", admin)).isEqualTo(200);
         assertThat(transicionAdmin(pedidoId, "refund", admin)).isEqualTo(200);
 
-        assertThat(saldoDe(compradorId)).as("el saldo no se mueve en los reintentos")
-                .isEqualTo(saldoTrasElPrimero).isEqualTo(SALDO_INICIAL_CENTS);
-        assertThat(abonosCon(pedidoId, CLAVE_REEMBOLSO)).as("un solo apunte de reembolso en el libro")
-                .isEqualTo(1);
+        assertThat(saldoDe(compradorId)).as("el saldo no se mueve en los reintentos").isEqualTo(saldoTrasElPrimero)
+                .isEqualTo(SALDO_INICIAL_CENTS);
+        assertThat(abonosCon(pedidoId, CLAVE_REEMBOLSO)).as("un solo apunte de reembolso en el libro").isEqualTo(1);
         assertThat(sumaMovimientos(compradorId)).as("el libro sigue cuadrado").isZero();
     }
 
@@ -145,8 +140,8 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         assertThat(transicionAdmin(pedidoId, "cancel", admin)).isEqualTo(200);
         long saldoTrasCancelar = saldoDe(compradorId);
 
-        assertThat(transicionAdmin(pedidoId, "refund", admin))
-                .as("reembolsar lo ya cancelado sería pagar dos veces").isEqualTo(422);
+        assertThat(transicionAdmin(pedidoId, "refund", admin)).as("reembolsar lo ya cancelado sería pagar dos veces")
+                .isEqualTo(422);
 
         assertThat(saldoDe(compradorId)).isEqualTo(saldoTrasCancelar).isEqualTo(SALDO_INICIAL_CENTS);
         assertThat(abonosCon(pedidoId, CLAVE_REEMBOLSO)).as("no hay apunte de reembolso").isZero();
@@ -167,8 +162,7 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         assertThat(estadoDe(pedidoId)).isEqualTo("CANCELLED");
         assertThat(saldoDe(compradorId)).as("el cliente ya cobró su reembolso: no cobra dos veces")
                 .isEqualTo(SALDO_INICIAL_CENTS);
-        assertThat(abonosCon(pedidoId, CLAVE_CANCELACION)).as("la cancelación no genera abono propio")
-                .isZero();
+        assertThat(abonosCon(pedidoId, CLAVE_CANCELACION)).as("la cancelación no genera abono propio").isZero();
     }
 
     /* ==================== Cancelaciones ==================== */
@@ -233,8 +227,7 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         UUID compradorId = crearCompradorConSaldo();
         int total = totalEsperadoCents(2);
         UUID pedidoId = pedidoSinPagar(compradorId, productoId, 2);
-        assertThat(saldoDe(compradorId)).as("el pedido con tarjeta no cobró nada")
-                .isEqualTo(SALDO_INICIAL_CENTS);
+        assertThat(saldoDe(compradorId)).as("el pedido con tarjeta no cobró nada").isEqualTo(SALDO_INICIAL_CENTS);
 
         assertThat(transicionAdmin(pedidoId, "refund", jwt.userToken(ADMIN))).isEqualTo(200);
 
@@ -243,8 +236,7 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         // acredita el total al monedero del cliente. La cancelación, en cambio, sí distingue (ver el test
         // de arriba). Esto se deja EN VERDE porque documenta lo que hace hoy el sistema, pero es dinero
         // creado de la nada y debería exigir que el pedido estuviera pagado, igual que hace cancelOrder.
-        assertThat(saldoDe(compradorId))
-                .as("comportamiento ACTUAL: el monedero crece sin que hubiera habido cobro")
+        assertThat(saldoDe(compradorId)).as("comportamiento ACTUAL: el monedero crece sin que hubiera habido cobro")
                 .isEqualTo(SALDO_INICIAL_CENTS + total);
         assertThat(sumaMovimientos(compradorId)).isEqualTo(total);
     }
@@ -355,8 +347,7 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
 
         assertThat(transicionAdmin(pedidoId, "deliver", operador)).isEqualTo(200);
 
-        assertThat(comisionesDelOperador(operadorId)).as("solo al ENTREGAR se registra la operación")
-                .isEqualTo(1);
+        assertThat(comisionesDelOperador(operadorId)).as("solo al ENTREGAR se registra la operación").isEqualTo(1);
         Map<String, Object> accion = jdbcTemplate.queryForMap("SELECT commission_cny_cents, item_count,"
                 + " action, order_source, commission_pct, operator_email FROM operator_order_action"
                 + " WHERE order_id = ?", pedidoId);
@@ -409,8 +400,7 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
 
         avanzarHasta(pedidoId, "DELIVERED", entrega);
 
-        assertThat(((Number) gananciasDelOperador(entrega).get("totalCommissionCnyCents")).longValue())
-                .isEqualTo(442L);
+        assertThat(((Number) gananciasDelOperador(entrega).get("totalCommissionCnyCents")).longValue()).isEqualTo(442L);
         assertThat(((Number) gananciasDelOperador(miron).get("totalCommissionCnyCents")).longValue())
                 .as("el operador que no entregó no gana nada").isZero();
         assertThat(comisionesDelOperador(mironId)).isZero();
@@ -429,8 +419,8 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
         assertThat(transicionAdmin(pedidoId, "refund", jwt.userToken(ADMIN))).isEqualTo(200);
 
         assertThat(comisionesDelOperador(operadorId)).as("sin entrega no hay comisión").isZero();
-        assertThat(transicionAdmin(pedidoId, "deliver", operador))
-                .as("y ya no se puede entregar un pedido reembolsado").isEqualTo(422);
+        assertThat(transicionAdmin(pedidoId, "deliver", operador)).as("y ya no se puede entregar un pedido reembolsado")
+                .isEqualTo(422);
         assertThat(comisionesDelOperador(operadorId)).isZero();
     }
 
@@ -467,8 +457,9 @@ class OrderMoneyLifecycleIT extends OrderLifecycleSupport {
 
     /** Nº de operaciones registradas (y por tanto comisiones) del operador dado. */
     private int comisionesDelOperador(UUID operadorId) {
-        Integer n = jdbcTemplate.queryForObject("SELECT count(*) FROM operator_order_action"
-                + " WHERE operator_subject = ?", Integer.class, operadorId.toString());
+        Integer n = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM operator_order_action" + " WHERE operator_subject = ?", Integer.class,
+                operadorId.toString());
         return n == null ? 0 : n;
     }
 }

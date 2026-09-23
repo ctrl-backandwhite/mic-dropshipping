@@ -97,12 +97,9 @@ class OrderAmountsIsTheSingleSourceTest {
     }
 
     private static Order pedido() {
-        return Order.builder()
-                .currency("USD")
-                .subtotalCents(SUBTOTAL).discountCents(DESCUENTO).shippingCents(ENVIO).taxCents(IMPUESTOS)
-                .totalCents(TOTAL)
-                .items(List.of(OrderItem.builder().unitPriceCents(1698).quantity(4).build()))
-                .build();
+        return Order.builder().currency("USD").subtotalCents(SUBTOTAL).discountCents(DESCUENTO).shippingCents(ENVIO)
+                .taxCents(IMPUESTOS).totalCents(TOTAL)
+                .items(List.of(OrderItem.builder().unitPriceCents(1698).quantity(4).build())).build();
     }
 
     /** Pedido de sólo producto (sin envío, impuesto ni descuento) con las líneas indicadas. */
@@ -189,8 +186,7 @@ class OrderAmountsIsTheSingleSourceTest {
         OrderAmounts.Breakdown b = amounts.of(pedido, "EUR");
 
         assertThat(b.subtotal()).isEqualByComparingTo("64.69");
-        assertThat(amounts.lineSubtotal(15, 100, "EUR")
-                .add(amounts.lineSubtotal(199, 3, "EUR"))
+        assertThat(amounts.lineSubtotal(15, 100, "EUR").add(amounts.lineSubtotal(199, 3, "EUR"))
                 .add(amounts.lineSubtotal(705, 7, "EUR")))
                 .as("el subtotal es EXACTAMENTE la suma de los importes de línea que se enseñan")
                 .isEqualByComparingTo(b.subtotal());
@@ -212,8 +208,7 @@ class OrderAmountsIsTheSingleSourceTest {
     void elDesgloseSiempreSumaElTotal() {
         OrderAmounts.Breakdown b = amounts.of(pedido(), "EUR");
 
-        assertThat(b.subtotal().subtract(b.discount()).add(b.shipping()).add(b.tax()))
-                .isEqualByComparingTo(b.total());
+        assertThat(b.subtotal().subtract(b.discount()).add(b.shipping()).add(b.tax())).isEqualByComparingTo(b.total());
     }
 
     @ParameterizedTest
@@ -221,8 +216,7 @@ class OrderAmountsIsTheSingleSourceTest {
     void elDesgloseCuadraEnCualquierMoneda(String moneda) {
         OrderAmounts.Breakdown b = amounts.of(pedido(), moneda);
 
-        assertThat(b.subtotal().subtract(b.discount()).add(b.shipping()).add(b.tax()))
-                .isEqualByComparingTo(b.total());
+        assertThat(b.subtotal().subtract(b.discount()).add(b.shipping()).add(b.tax())).isEqualByComparingTo(b.total());
         assertThat(b.currency()).isEqualTo(moneda);
     }
 
@@ -271,11 +265,9 @@ class OrderAmountsIsTheSingleSourceTest {
     @Test
     @DisplayName("el arancel sale del envío sin mover el total")
     void elArancelSeSeparaDelEnvioSinMoverElTotal() {
-        Order pedido = Order.builder().currency("USD")
-                .subtotalCents(878).discountCents(0).shippingCents(974).customsDutyCents(349).taxCents(316)
-                .totalCents(2168)
-                .items(List.of(OrderItem.builder().unitPriceCents(878).quantity(1).build()))
-                .build();
+        Order pedido = Order.builder().currency("USD").subtotalCents(878).discountCents(0).shippingCents(974)
+                .customsDutyCents(349).taxCents(316).totalCents(2168)
+                .items(List.of(OrderItem.builder().unitPriceCents(878).quantity(1).build())).build();
 
         OrderAmounts.Breakdown d = amounts.of(pedido, "USD");
 

@@ -20,8 +20,8 @@ import java.util.UUID;
  * vive en el navegador; esto es solo la lista apartada, ligada al usuario.
  */
 @Entity
-@Table(name = "saved_cart_item",
-        uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "product_id", "variant_id" }))
+@Table(name = "saved_cart_item", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "product_id",
+        "variant_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

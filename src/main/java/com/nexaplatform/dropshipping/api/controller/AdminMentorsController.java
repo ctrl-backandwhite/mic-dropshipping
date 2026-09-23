@@ -94,7 +94,8 @@ public class AdminMentorsController {
         }
         if (b.containsKey(TIMEZONE)) {
             e.setTimezone(b.get(TIMEZONE) != null && !b.get(TIMEZONE).toString().isBlank()
-                    ? b.get(TIMEZONE).toString() : null);
+                    ? b.get(TIMEZONE).toString()
+                    : null);
         }
         if (b.get("hourlyRateUsd") instanceof Number n) {
             e.setHourlyRateUsdCents((int) Math.round(n.doubleValue() * 100));

@@ -199,8 +199,8 @@ class CartEmptiedWhenOrderPaidTest {
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
         when(gateway.supports(PaymentMethod.CARD)).thenReturn(true);
         when(gateway.providerName()).thenReturn("stripe");
-        when(gateway.initiate(any(PaymentEntity.class))).thenReturn(new PaymentGateway.InitiateResult(
-                "cs_test_1", "secret", null, null, null, null, Map.of()));
+        when(gateway.initiate(any(PaymentEntity.class)))
+                .thenReturn(new PaymentGateway.InitiateResult("cs_test_1", "secret", null, null, null, null, Map.of()));
         when(paymentJpaRepositoryAdapter.findById(any())).thenReturn(Optional.of(new PaymentEntity()));
 
         subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "idem-1");
@@ -242,7 +242,7 @@ class CartEmptiedWhenOrderPaidTest {
         order(OrderStatus.PENDING);
 
         subject.confirmSucceeded(paymentId, Map.of());
-        subject.confirmSucceeded(paymentId, Map.of());   // webhook duplicado / reproceso
+        subject.confirmSucceeded(paymentId, Map.of()); // webhook duplicado / reproceso
 
         // Una sola limpieza: si se repitiera, borraría lo que la persona haya vuelto a añadir después.
         verify(cartService, times(1)).removePurchased(any());
@@ -285,9 +285,8 @@ class CartEmptiedWhenOrderPaidTest {
         Wallet wallet = new Wallet();
         wallet.setId(UUID.randomUUID());
         when(walletUseCase.getOrCreate(userId)).thenReturn(wallet);
-        doThrow(new BusinessException("Saldo insuficiente"))
-                .when(walletUseCase).charge(any(), org.mockito.ArgumentMatchers.anyLong(), any(), anyString(),
-                        anyString());
+        doThrow(new BusinessException("Saldo insuficiente")).when(walletUseCase).charge(any(),
+                org.mockito.ArgumentMatchers.anyLong(), any(), anyString(), anyString());
 
         try {
             subject.chargeWalletForOrder(orderId, userId, "idem-1");
@@ -311,8 +310,7 @@ class CartEmptiedWhenOrderPaidTest {
     void unFalloAlVaciarLaCestaNoImpideQueElPedidoQuedePagado() {
         Payment p = orderPayment(PaymentStatus.PENDING);
         Order o = order(OrderStatus.PENDING);
-        doThrow(new IllegalStateException("la base de datos no responde"))
-                .when(cartService).removePurchased(any());
+        doThrow(new IllegalStateException("la base de datos no responde")).when(cartService).removePurchased(any());
 
         Payment confirmado = subject.confirmSucceeded(paymentId, Map.of());
 
@@ -331,8 +329,7 @@ class CartEmptiedWhenOrderPaidTest {
         Wallet wallet = new Wallet();
         wallet.setId(UUID.randomUUID());
         when(walletUseCase.getOrCreate(userId)).thenReturn(wallet);
-        doThrow(new IllegalStateException("la base de datos no responde"))
-                .when(cartService).removePurchased(any());
+        doThrow(new IllegalStateException("la base de datos no responde")).when(cartService).removePurchased(any());
 
         Payment p = subject.chargeWalletForOrder(orderId, userId, "idem-1");
 

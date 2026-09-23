@@ -63,8 +63,7 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
         assertThat(fila.get("forwarded_at")).as("fecha de reenvío al proveedor").isNotNull();
         assertThat(fila.get("shipped_at")).as("fecha de salida").isNotNull();
         assertThat(fila.get("delivered_at")).as("fecha de entrega").isNotNull();
-        assertThat(fila.get("cancelled_at")).as("un pedido entregado no puede tener fecha de cancelación")
-                .isNull();
+        assertThat(fila.get("cancelled_at")).as("un pedido entregado no puede tener fecha de cancelación").isNull();
     }
 
     @Test
@@ -75,8 +74,7 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
 
         UUID pedidoId = pedidoSinPagar(compradorId, productoId, 1);
         assertThat(estadoDe(pedidoId)).as("con tarjeta el pedido queda pendiente de pago").isEqualTo("PENDING");
-        assertThat(saldoDe(compradorId)).as("un pago externo NO toca el monedero")
-                .isEqualTo(SALDO_INICIAL_CENTS);
+        assertThat(saldoDe(compradorId)).as("un pago externo NO toca el monedero").isEqualTo(SALDO_INICIAL_CENTS);
 
         assertThat(transicionAdmin(pedidoId, "forward", jwt.userToken(ADMIN))).isEqualTo(200);
         assertThat(estadoDe(pedidoId)).isEqualTo("FORWARDED");
@@ -99,8 +97,7 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
     /* ==================== Transiciones inválidas ==================== */
 
     @ParameterizedTest(name = "marcar en camino desde {0} se rechaza")
-    @ValueSource(strings = {"PENDING", "AWAITING_PAYMENT", "PAID", "SHIPPED", "DELIVERED", "CANCELLED",
-            "REFUNDED"})
+    @ValueSource(strings = {"PENDING", "AWAITING_PAYMENT", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"})
     @DisplayName("«en camino» SOLO se admite desde FORWARDED: cualquier otro estado se rechaza con 422")
     void enviarSoloDesdeReenviado(String estadoOrigen) {
         UUID pedidoId = pedidoEnEstado(estadoOrigen);
@@ -111,8 +108,7 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
     }
 
     @ParameterizedTest(name = "entregar desde {0} se rechaza")
-    @ValueSource(strings = {"PENDING", "AWAITING_PAYMENT", "PAID", "FORWARDED", "DELIVERED", "CANCELLED",
-            "REFUNDED"})
+    @ValueSource(strings = {"PENDING", "AWAITING_PAYMENT", "PAID", "FORWARDED", "DELIVERED", "CANCELLED", "REFUNDED"})
     @DisplayName("«entregado» SOLO se admite desde SHIPPED: cualquier otro estado se rechaza con 422")
     void entregarSoloDesdeEnCamino(String estadoOrigen) {
         UUID pedidoId = pedidoEnEstado(estadoOrigen);
@@ -132,8 +128,8 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
         // confirmación de una operación que no había ocurrido — y sobre un pedido CANCELADO o REEMBOLSADO
         // eso es justo lo contrario de lo que debe contestar. Ahora rechaza, igual que ship/deliver/refund,
         // que siempre lanzaron 422 en estados imposibles; no había motivo para que este fuera la excepción.
-        assertThat(transicionAdmin(pedidoId, "forward", jwt.userToken(ADMIN)))
-                .as("reenviar desde %s", estadoOrigen).isEqualTo(422);
+        assertThat(transicionAdmin(pedidoId, "forward", jwt.userToken(ADMIN))).as("reenviar desde %s", estadoOrigen)
+                .isEqualTo(422);
         assertThat(estadoDe(pedidoId)).as("el estado no puede haberse movido").isEqualTo(estadoOrigen);
     }
 
@@ -233,8 +229,8 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
         UUID pedidoId = pedidoPagado(compradorId, productoId, 1);
         forzarEstado(pedidoId, estadoOrigen);
 
-        assertThat(cancelarComoCliente(compradorId, pedidoId, true))
-                .as("cancelar como cliente en %s", estadoOrigen).isEqualTo(422);
+        assertThat(cancelarComoCliente(compradorId, pedidoId, true)).as("cancelar como cliente en %s", estadoOrigen)
+                .isEqualTo(422);
         assertThat(estadoDe(pedidoId)).isEqualTo(estadoOrigen);
     }
 
@@ -249,9 +245,8 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
         assertThat(cancelarComoCliente(intrusoId, pedidoId, true))
                 .as("un 403 confirmaría que el pedido existe; tiene que ser 404").isEqualTo(404);
 
-        client.get().uri("/api/me/orders/" + pedidoId)
-                .header("Authorization", bearer(tokenDe(intrusoId, USER))).exchange()
-                .expectStatus().isNotFound();
+        client.get().uri("/api/me/orders/" + pedidoId).header("Authorization", bearer(tokenDe(intrusoId, USER)))
+                .exchange().expectStatus().isNotFound();
 
         assertThat(estadoDe(pedidoId)).as("el pedido de la víctima queda intacto").isEqualTo("PAID");
     }
@@ -274,10 +269,7 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
     }
 
     @ParameterizedTest(name = "OPERATOR → POST {0} = 403")
-    @CsvSource({
-            "cancel, cancelar el pedido",
-            "refund, reembolsar el pedido"
-    })
+    @CsvSource({"cancel, cancelar el pedido", "refund, reembolsar el pedido"})
     @DisplayName("el OPERATOR NO puede cancelar ni reembolsar: son operaciones con impacto financiero, solo de ADMIN")
     void operadorNoTocaElDinero(String accion, String descripcion) {
         UUID pedidoId = pedidoEnEstado("PAID");
@@ -313,8 +305,8 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
         assertThat(postVacio("/api/admin/orders/import", operador)).as("importar pedidos").isEqualTo(403);
         assertThat(postVacio("/api/admin/orders/demo", operador)).as("crear pedido de demo").isEqualTo(403);
 
-        client.get().uri("/api/admin/wallets").header("Authorization", bearer(operador)).exchange()
-                .expectStatus().isForbidden();
+        client.get().uri("/api/admin/wallets").header("Authorization", bearer(operador)).exchange().expectStatus()
+                .isForbidden();
     }
 
     @Test
@@ -336,8 +328,7 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
         UUID pedidoId = pedidoEnEstado("PAID");
 
         for (String accion : List.of("forward", "ship", "deliver", "cancel", "refund")) {
-            client.post().uri(ADMIN_ORDERS + pedidoId + "/" + accion).exchange()
-                    .expectStatus().isUnauthorized();
+            client.post().uri(ADMIN_ORDERS + pedidoId + "/" + accion).exchange().expectStatus().isUnauthorized();
         }
         assertThat(estadoDe(pedidoId)).isEqualTo("PAID");
     }
@@ -356,8 +347,8 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
     @DisplayName("un identificador que no es UUID se responde 400, nunca un 500")
     void identificadorInvalidoDa400(String accion) {
         int codigo = client.post().uri("/api/admin/orders/no-soy-un-uuid/" + accion)
-                .header("Authorization", bearer(jwt.userToken(ADMIN))).exchange()
-                .returnResult(Void.class).getStatus().value();
+                .header("Authorization", bearer(jwt.userToken(ADMIN))).exchange().returnResult(Void.class).getStatus()
+                .value();
         assertThat(codigo).isEqualTo(400);
     }
 
@@ -366,12 +357,10 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
     void detalleInexistenteDa404() {
         UUID compradorId = crearCompradorConSaldo();
 
-        client.get().uri(ADMIN_ORDERS + UUID.randomUUID())
-                .header("Authorization", bearer(jwt.userToken(ADMIN))).exchange()
-                .expectStatus().isNotFound();
+        client.get().uri(ADMIN_ORDERS + UUID.randomUUID()).header("Authorization", bearer(jwt.userToken(ADMIN)))
+                .exchange().expectStatus().isNotFound();
         client.get().uri("/api/me/orders/" + UUID.randomUUID())
-                .header("Authorization", bearer(tokenDe(compradorId, USER))).exchange()
-                .expectStatus().isNotFound();
+                .header("Authorization", bearer(tokenDe(compradorId, USER))).exchange().expectStatus().isNotFound();
     }
 
     /* ==================== Utilidades del bloque ==================== */
@@ -399,19 +388,16 @@ class OrderLifecycleIT extends OrderLifecycleSupport {
     }
 
     private UUID compradorDelPedido(UUID pedidoId) {
-        return jdbcTemplate.queryForObject("SELECT user_id FROM customer_order WHERE id = ?", UUID.class,
-                pedidoId);
+        return jdbcTemplate.queryForObject("SELECT user_id FROM customer_order WHERE id = ?", UUID.class, pedidoId);
     }
 
     private int postLote(String uri, String token, List<String> ids) {
-        return client.post().uri(uri).header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(ids)
-                .exchange().returnResult(Void.class).getStatus().value();
+        return client.post().uri(uri).header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(ids).exchange().returnResult(Void.class).getStatus().value();
     }
 
     private int postVacio(String uri, String token) {
-        return client.post().uri(uri).header("Authorization", bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(Map.of())
-                .exchange().returnResult(Void.class).getStatus().value();
+        return client.post().uri(uri).header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of()).exchange().returnResult(Void.class).getStatus().value();
     }
 }

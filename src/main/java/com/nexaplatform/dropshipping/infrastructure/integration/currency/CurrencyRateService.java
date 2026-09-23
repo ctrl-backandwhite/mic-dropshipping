@@ -93,8 +93,7 @@ public class CurrencyRateService {
         if ("USD".equalsIgnoreCase(targetCode)) {
             return amountUsd.setScale(decimales, RoundingMode.HALF_UP);
         }
-        return find(targetCode)
-                .map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(decimales, RoundingMode.HALF_UP))
+        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(decimales, RoundingMode.HALF_UP))
                 .orElse(amountUsd.setScale(decimales, RoundingMode.HALF_UP));
     }
 
@@ -132,9 +131,8 @@ public class CurrencyRateService {
         // es que no había tasa de CNY — y ni el cliente ni el panel podían saber por qué. Como error de
         // estado sale con 500 y queda registrado con log.error, que es donde tiene que verse.
         return find(sourceCode).map(r -> amount.divide(r.getRateVsUsd(), 4, RoundingMode.HALF_UP))
-                .orElseThrow(() -> new IllegalStateException(
-                        "Falta la tasa de cambio de la divisa de origen '" + sourceCode
-                                + "': revisa la tabla currency_rate"));
+                .orElseThrow(() -> new IllegalStateException("Falta la tasa de cambio de la divisa de origen '"
+                        + sourceCode + "': revisa la tabla currency_rate"));
     }
 
     public String symbolOf(String code) {
@@ -233,7 +231,7 @@ public class CurrencyRateService {
         Instant now = Instant.now();
         int updated = 0;
         int created = 0;
-        for (Entry<String,BigDecimal> entry : ratesFromProvider.entrySet()) {
+        for (Entry<String, BigDecimal> entry : ratesFromProvider.entrySet()) {
             // Locale.ROOT: con la configuración regional turca "tr", toUpperCase() convierte la i en İ y
             // "try" saldría como "TRY" con punto, creando una moneda distinta de la que ya existe.
             String code = entry.getKey() == null ? null : entry.getKey().toUpperCase(Locale.ROOT);

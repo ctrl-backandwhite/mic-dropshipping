@@ -101,10 +101,10 @@ class Cov01MeBillingControllerTest {
         // Tras la Fase 1, el listado unificado lo sirve SavedPaymentMethodsService (tarjetas Stripe + PayPal).
         authenticatedAs(USER_ID);
         when(savedMethods.list(USER_ID)).thenReturn(List.of(
-                PaymentMethodDtoOut.builder().id("pm_1").type("CARD").brand("visa").last4("4242")
-                        .expMonth(12L).expYear(2030L).isDefault(true).build(),
-                PaymentMethodDtoOut.builder().id("pm_2").type("CARD").brand("mastercard").last4("5555")
-                        .expMonth(1L).expYear(2031L).isDefault(false).build()));
+                PaymentMethodDtoOut.builder().id("pm_1").type("CARD").brand("visa").last4("4242").expMonth(12L)
+                        .expYear(2030L).isDefault(true).build(),
+                PaymentMethodDtoOut.builder().id("pm_2").type("CARD").brand("mastercard").last4("5555").expMonth(1L)
+                        .expYear(2031L).isDefault(false).build()));
 
         ResponseEntity<List<PaymentMethodDtoOut>> resp = controller.listPaymentMethods(auth);
 
@@ -140,8 +140,8 @@ class Cov01MeBillingControllerTest {
         when(useCase.subscribeWithSavedCard(USER_ID, "PRO", "MONTHLY"))
                 .thenReturn(new CustomerSubscriptionUseCase.SubscribeOutcome("sub_123", "incomplete"));
 
-        ResponseEntity<SubscribeStatusDtoOut> resp = controller.subscribe(auth, SubscribeDtoIn.builder()
-                .planCode("PRO").period("MONTHLY").build());
+        ResponseEntity<SubscribeStatusDtoOut> resp = controller.subscribe(auth,
+                SubscribeDtoIn.builder().planCode("PRO").period("MONTHLY").build());
 
         assertThat(resp.getBody()).isNotNull();
         assertThat(resp.getBody().getSubscriptionId()).isEqualTo("sub_123");
@@ -166,9 +166,9 @@ class Cov01MeBillingControllerTest {
         UUID planId = UUID.randomUUID();
         Instant end = Instant.parse("2026-12-31T00:00:00Z");
         Instant cancelAt = Instant.parse("2026-11-30T00:00:00Z");
-        when(useCase.currentSubscription(USER_ID)).thenReturn(CustomerSubscription.builder().planId(planId)
-                .status(SubscriptionStatus.ACTIVE).billingPeriod("YEARLY").currentPeriodEnd(end).cancelAt(cancelAt)
-                .build());
+        when(useCase.currentSubscription(USER_ID))
+                .thenReturn(CustomerSubscription.builder().planId(planId).status(SubscriptionStatus.ACTIVE)
+                        .billingPeriod("YEARLY").currentPeriodEnd(end).cancelAt(cancelAt).build());
 
         ResponseEntity<MySubscriptionDtoOut> resp = controller.currentSubscription(auth);
 
@@ -229,8 +229,8 @@ class Cov01MeBillingControllerTest {
         // importe se formatea aquí y, en las divisas sin céntimos, enseñaba la factura cien veces más
         // barata. La respuesta tiene que traer la cadena hecha para que el perfil se limite a pintarla.
         authenticatedAs(USER_ID);
-        when(useCase.listInvoices(USER_ID)).thenReturn(List.of(new CustomerSubscriptionUseCase.InvoiceView("F-001",
-                2900L, "eur", "paid", 1750000000L, null, null)));
+        when(useCase.listInvoices(USER_ID)).thenReturn(List.of(
+                new CustomerSubscriptionUseCase.InvoiceView("F-001", 2900L, "eur", "paid", 1750000000L, null, null)));
 
         ResponseEntity<List<BillingInvoiceDtoOut>> resp = controller.invoices(auth);
 

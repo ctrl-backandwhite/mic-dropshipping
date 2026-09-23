@@ -115,7 +115,8 @@ public class AdminProductGroupController {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> addMembers(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> addMembers(@PathVariable UUID id,
+            @RequestBody Map<String, Object> body) {
         if (groupRepository.findById(id).isEmpty()) {
             throw new NotFoundException("Product group");
         }
@@ -167,7 +168,8 @@ public class AdminProductGroupController {
         }
         if (b.containsKey(DESCRIPTION)) {
             e.setDescription(b.get(DESCRIPTION) != null && !b.get(DESCRIPTION).toString().isBlank()
-                    ? b.get(DESCRIPTION).toString() : null);
+                    ? b.get(DESCRIPTION).toString()
+                    : null);
         }
         if (b.get(ACTIVE) != null) {
             e.setActive(Boolean.parseBoolean(b.get(ACTIVE).toString()));

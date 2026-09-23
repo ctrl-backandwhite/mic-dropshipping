@@ -70,8 +70,8 @@ class GoogleOAuth2SuccessHandlerTest {
     }
 
     private OAuth2AuthenticationToken authToken(Map<String, Object> attributes) {
-        OAuth2User principal = new DefaultOAuth2User(
-                AuthorityUtils.createAuthorityList("ROLE_USER"), attributes, "email");
+        OAuth2User principal = new DefaultOAuth2User(AuthorityUtils.createAuthorityList("ROLE_USER"), attributes,
+                "email");
         return new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "google");
     }
 
@@ -101,8 +101,7 @@ class GoogleOAuth2SuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("jane@gmail.com")));
 
-        assertThat(response.getRedirectedUrl())
-                .isEqualTo(FRONT + "/auth/callback#token=ACCESS-T&refresh=REFRESH-T");
+        assertThat(response.getRedirectedUrl()).isEqualTo(FRONT + "/auth/callback#token=ACCESS-T&refresh=REFRESH-T");
     }
 
     /**
@@ -158,8 +157,7 @@ class GoogleOAuth2SuccessHandlerTest {
 
         assertThat(response.getRedirectedUrl()).isEqualTo(FRONT + "/login?link=required");
         assertThat(request.getSession(false)).isNotNull();
-        assertThat(request.getSession(false)
-                .getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL))
+        assertThat(request.getSession(false).getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL))
                 .isEqualTo("owner@gmail.com");
         verify(userTokenService, never()).issue(any(), anyString(), anyString(), any());
     }
@@ -196,8 +194,8 @@ class GoogleOAuth2SuccessHandlerTest {
         if (!attributes.containsKey("sub")) {
             attributes.put("sub", "google-sub-123");
         }
-        OAuth2User principal = new DefaultOAuth2User(
-                AuthorityUtils.createAuthorityList("ROLE_USER"), attributes, "sub");
+        OAuth2User principal = new DefaultOAuth2User(AuthorityUtils.createAuthorityList("ROLE_USER"), attributes,
+                "sub");
         return new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "google");
     }
 

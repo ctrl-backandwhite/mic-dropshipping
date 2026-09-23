@@ -39,11 +39,10 @@ class UnserviceableZoneServiceTest {
     void setUp() {
         repository = mock(UnserviceableZoneRepository.class);
         service = new UnserviceableZoneService(repository);
-        List<UnserviceableZoneEntity> espana = List.of(
-                rango("ES", "07000", "07999"),   // Baleares
-                rango("ES", "35000", "35999"),   // Las Palmas
-                rango("ES", "38000", "38999"),   // Santa Cruz de Tenerife
-                rango("ES", "51000", "52999"));  // Ceuta y Melilla
+        List<UnserviceableZoneEntity> espana = List.of(rango("ES", "07000", "07999"), // Baleares
+                rango("ES", "35000", "35999"), // Las Palmas
+                rango("ES", "38000", "38999"), // Santa Cruz de Tenerife
+                rango("ES", "51000", "52999")); // Ceuta y Melilla
         // El repositorio real ignora mayúsculas (findBy...IgnoreCase); el mock no, así que se stubean
         // las dos grafías para poder probar que el servicio no ensucia el código de país.
         when(repository.findByCountryCodeIgnoreCase("ES")).thenReturn(espana);
@@ -53,19 +52,19 @@ class UnserviceableZoneServiceTest {
     @Test
     @DisplayName("las islas y las ciudades autónomas no son destino válido")
     void bloqueaLosTerritoriosExcluidos() {
-        assertThat(service.isUnserviceable("ES", "07001")).isTrue();   // Palma
-        assertThat(service.isUnserviceable("ES", "35001")).isTrue();   // Las Palmas
-        assertThat(service.isUnserviceable("ES", "38001")).isTrue();   // Santa Cruz
-        assertThat(service.isUnserviceable("ES", "51001")).isTrue();   // Ceuta
-        assertThat(service.isUnserviceable("ES", "52001")).isTrue();   // Melilla
+        assertThat(service.isUnserviceable("ES", "07001")).isTrue(); // Palma
+        assertThat(service.isUnserviceable("ES", "35001")).isTrue(); // Las Palmas
+        assertThat(service.isUnserviceable("ES", "38001")).isTrue(); // Santa Cruz
+        assertThat(service.isUnserviceable("ES", "51001")).isTrue(); // Ceuta
+        assertThat(service.isUnserviceable("ES", "52001")).isTrue(); // Melilla
     }
 
     @Test
     @DisplayName("la península se sirve con normalidad")
     void noBloqueaElRestoDelPais() {
-        assertThat(service.isUnserviceable("ES", "28013")).isFalse();  // Madrid
-        assertThat(service.isUnserviceable("ES", "08001")).isFalse();  // Barcelona
-        assertThat(service.isUnserviceable("ES", "50004")).isFalse();  // Zaragoza
+        assertThat(service.isUnserviceable("ES", "28013")).isFalse(); // Madrid
+        assertThat(service.isUnserviceable("ES", "08001")).isFalse(); // Barcelona
+        assertThat(service.isUnserviceable("ES", "50004")).isFalse(); // Zaragoza
     }
 
     @Test

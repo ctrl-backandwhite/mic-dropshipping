@@ -12,6 +12,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequ
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminPriceTierSurchargeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSubsidyBulkDtoIn;
@@ -64,9 +65,9 @@ public interface AdminCatalogApi {
     @GetMapping("/products")
     PageResponse<ProductSummaryView> list(@RequestParam(required = false) String status,
             @RequestParam(required = false) UUID categoryId, @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "30") int size,
+            @RequestParam(defaultValue = "es") String lang, @RequestParam(required = false) String sort,
+            @RequestParam(required = false) Boolean verified,
             // Filtros de la tabla del panel. El COSTE va en CNY, que es como está guardado y lo que muestra
             // la columna «Precio» (el navegador la convierte para enseñarla, y deshace esa conversión antes
             // de mandar el filtro). Ventas y tendencia son mínimos, no rangos.
@@ -94,8 +95,7 @@ public interface AdminCatalogApi {
 
     @Operation(summary = "Quick-edit a product")
     @PutMapping("/products/{id}")
-    ProductDetailView quickEdit(@PathVariable UUID id,
-            @Valid @RequestBody AdminProductQuickEditDtoIn req,
+    ProductDetailView quickEdit(@PathVariable UUID id, @Valid @RequestBody AdminProductQuickEditDtoIn req,
             @RequestParam(defaultValue = "es") String lang);
 
     /**
@@ -117,8 +117,7 @@ public interface AdminCatalogApi {
     @Operation(summary = "Update the supplier listing URL (1688/Alibaba) of a product. "
             + "Rejects any other domain or scheme with 422 PRODUCT_SOURCE_URL_INVALID.")
     @PutMapping("/products/{id}/source-url")
-    ProductDetailView updateSourceUrl(@PathVariable UUID id,
-            @Valid @RequestBody AdminProductSourceUrlDtoIn req,
+    ProductDetailView updateSourceUrl(@PathVariable UUID id, @Valid @RequestBody AdminProductSourceUrlDtoIn req,
             @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Duplicate a product")
@@ -136,8 +135,7 @@ public interface AdminCatalogApi {
             + "compressed. Only images saved before the compressor existed are picked, heaviest first. "
             + "Returns how many were requeued and how many remain, so it can be run batch by batch.")
     @PostMapping("/imagenes/comprimir-historico")
-    ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(
-            @RequestParam(defaultValue = "200") int limite);
+    ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(@RequestParam(defaultValue = "200") int limite);
 
     @Operation(summary = "How much of the image backlog is left to compress ({pendientes, enCola}), so the "
             + "panel can chain batches without piling them up")
@@ -171,8 +169,7 @@ public interface AdminCatalogApi {
 
     @Operation(summary = "Add an image (by URL) to a product's gallery")
     @PostMapping("/products/{productId}/images")
-    ResponseEntity<ProductImageView> addProductImage(
-            @PathVariable UUID productId,
+    ResponseEntity<ProductImageView> addProductImage(@PathVariable UUID productId,
             @Valid @RequestBody AddProductImageDtoIn req);
 
     @Operation(summary = "Delete a product image")
@@ -185,8 +182,7 @@ public interface AdminCatalogApi {
 
     @Operation(summary = "Reorder a product's gallery images (first becomes the main image)")
     @PutMapping("/products/{productId}/images/order")
-    ResponseEntity<Void> reorderProductImages(
-            @PathVariable UUID productId,
+    ResponseEntity<Void> reorderProductImages(@PathVariable UUID productId,
             @Valid @RequestBody ReorderProductImagesDtoIn req);
 
     /* ============================ Bulk import ============================ */
@@ -203,6 +199,16 @@ public interface AdminCatalogApi {
     @DeleteMapping("/products/{id}/price-tiers/{minQty}")
     ResponseEntity<Void> deletePriceTier(@PathVariable UUID id, @PathVariable int minQty);
 
+    /**
+     * El recargo fijo de UN tramo (23-sep-2026). Devuelve la ficha YA recalculada, igual que el retoque
+     * rapido: el precio del tramo cambia con el recargo, y sin la ficha de vuelta el panel tendria que
+     * volver a pedirla entera para enterarse de un numero.
+     */
+    @Operation(summary = "Set the fixed surcharge of one price tier (empty = inherit the product's)")
+    @PutMapping("/products/{id}/price-tiers/{minQty}/surcharge")
+    ProductDetailView updatePriceTierSurcharge(@PathVariable UUID id, @PathVariable int minQty,
+            @Valid @RequestBody AdminPriceTierSurchargeDtoIn req, @RequestParam(defaultValue = "es") String lang);
+
     @Operation(summary = "Bulk-delete products by id (per-id error reporting; each refused if it has orders)")
     @PostMapping("/products/bulk-delete")
     ResponseEntity<Map<String, Object>> bulkDeleteProducts(@RequestBody List<UUID> ids);
@@ -216,35 +222,25 @@ public interface AdminCatalogApi {
             + "verified filter (true = only certified, false = only pending). All filters combine.")
     @GetMapping("/products/export")
     ResponseEntity<List<BulkProductDtoIn>> exportProducts(@RequestParam(defaultValue = "1") int from,
-            @RequestParam(defaultValue = "1000") int to,
-            @RequestParam(required = false) String createdFrom,
-            @RequestParam(required = false) String createdTo,
-            @RequestParam(required = false) Boolean verified,
+            @RequestParam(defaultValue = "1000") int to, @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo, @RequestParam(required = false) Boolean verified,
             // Los MISMOS filtros que la lista del panel: sin ellos, filtrar la lista a treinta productos
             // y abrir «Exportar» ofrecía los nueve mil, porque eran dos ideas distintas de «el catálogo».
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) BigDecimal minCost,
-            @RequestParam(required = false) BigDecimal maxCost,
-            @RequestParam(required = false) Integer minSales,
+            @RequestParam(required = false) String status, @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) String q, @RequestParam(required = false) BigDecimal minCost,
+            @RequestParam(required = false) BigDecimal maxCost, @RequestParam(required = false) Integer minSales,
             @RequestParam(required = false) BigDecimal minTrend);
 
     @Operation(summary = "Total product count (to compute export segments); optional createdFrom/createdTo and "
             + "verified filters, combined the same way the export applies them")
     @GetMapping("/products/export/count")
-    ResponseEntity<Map<String, Long>> exportCount(
-            @RequestParam(required = false) String createdFrom,
-            @RequestParam(required = false) String createdTo,
-            @RequestParam(required = false) Boolean verified,
+    ResponseEntity<Map<String, Long>> exportCount(@RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo, @RequestParam(required = false) Boolean verified,
             // Los MISMOS filtros que la lista del panel: sin ellos, filtrar la lista a treinta productos
             // y abrir «Exportar» ofrecía los nueve mil, porque eran dos ideas distintas de «el catálogo».
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) BigDecimal minCost,
-            @RequestParam(required = false) BigDecimal maxCost,
-            @RequestParam(required = false) Integer minSales,
+            @RequestParam(required = false) String status, @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) String q, @RequestParam(required = false) BigDecimal minCost,
+            @RequestParam(required = false) BigDecimal maxCost, @RequestParam(required = false) Integer minSales,
             @RequestParam(required = false) BigDecimal minTrend);
 
     @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
@@ -255,17 +251,13 @@ public interface AdminCatalogApi {
             + "Scales to millions: the server keyset-paginates and flushes each batch instead of buffering everything.")
     @GetMapping(value = "/products/export/ndjson", produces = "application/x-ndjson")
     ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch,
-            @RequestParam(required = false) String createdFrom,
-            @RequestParam(required = false) String createdTo,
+            @RequestParam(required = false) String createdFrom, @RequestParam(required = false) String createdTo,
             @RequestParam(required = false) Boolean verified,
             // Los mismos filtros que los otros dos caminos: el volcado completo y los tramos tienen que
             // acotar igual, o el total que se ofrece no cuadra con lo que se descarga.
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) BigDecimal minCost,
-            @RequestParam(required = false) BigDecimal maxCost,
-            @RequestParam(required = false) Integer minSales,
+            @RequestParam(required = false) String status, @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) String q, @RequestParam(required = false) BigDecimal minCost,
+            @RequestParam(required = false) BigDecimal maxCost, @RequestParam(required = false) Integer minSales,
             @RequestParam(required = false) BigDecimal minTrend);
 
     @Operation(summary = "Import products from an NDJSON body (one product per line), processed in batches with "

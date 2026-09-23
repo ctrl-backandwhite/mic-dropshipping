@@ -69,8 +69,7 @@ public class OrderEmailService {
             // localhost en local —inalcanzable para el proxy de Gmail— y Outlook/Apple Mail bloquean las
             // imágenes remotas por defecto. Se saca del modelo para no pasarla a la plantilla.
             @SuppressWarnings("unchecked")
-            Map<String, String> inlineImages = (Map<String, String>) vars
-                    .remove(InvoiceService.INLINE_IMAGES_KEY);
+            Map<String, String> inlineImages = (Map<String, String>) vars.remove(InvoiceService.INLINE_IMAGES_KEY);
             emailQueue.enqueue(email, null, String.valueOf(vars.get("subject")), "emails/invoice", vars,
                     inlineImages != null ? inlineImages : Map.of());
         } catch (RuntimeException e) {
@@ -88,9 +87,10 @@ public class OrderEmailService {
             return;
         }
         String lang = InvoiceLabel.lang(locale);
-        notify(email, o, new Notice(OrderEmailLabel.PLACED_TITLE.of(lang),
-                OrderEmailLabel.PLACED_BODY.of(lang, o.getOrderNumber()),
-                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "clipboard-check", lang));
+        notify(email, o,
+                new Notice(OrderEmailLabel.PLACED_TITLE.of(lang),
+                        OrderEmailLabel.PLACED_BODY.of(lang, o.getOrderNumber()),
+                        OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "clipboard-check", lang));
     }
 
     public void shipped(Order o, String email, String locale) {
@@ -116,9 +116,10 @@ public class OrderEmailService {
             return;
         }
         String lang = InvoiceLabel.lang(locale);
-        notify(email, o, new Notice(OrderEmailLabel.DELIVERED_TITLE.of(lang),
-                OrderEmailLabel.DELIVERED_BODY.of(lang, o.getOrderNumber()),
-                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "box-open", lang));
+        notify(email, o,
+                new Notice(OrderEmailLabel.DELIVERED_TITLE.of(lang),
+                        OrderEmailLabel.DELIVERED_BODY.of(lang, o.getOrderNumber()),
+                        OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "box-open", lang));
     }
 
     /** Reembolso procesado. Retrocompat: reembolso al método original, moneda del pedido. */
@@ -144,25 +145,25 @@ public class OrderEmailService {
         String cur = Texts.firstNonBlankOr("USD", settlementCcy, o.getCurrency());
 
         List<String[]> details = new ArrayList<>();
-        details.add(new String[] { OrderEmailLabel.REFUND_L_ORDER.of(lang), o.getOrderNumber() });
+        details.add(new String[]{OrderEmailLabel.REFUND_L_ORDER.of(lang), o.getOrderNumber()});
         String date = refundDate(o);
         if (!blank(date)) {
-            details.add(new String[] { OrderEmailLabel.REFUND_L_DATE.of(lang), date });
+            details.add(new String[]{OrderEmailLabel.REFUND_L_DATE.of(lang), date});
         }
         String amount = refundAmount(o, locale, cur);
         if (!blank(amount)) {
-            details.add(new String[] { OrderEmailLabel.REFUND_L_AMOUNT.of(lang), amount });
+            details.add(new String[]{OrderEmailLabel.REFUND_L_AMOUNT.of(lang), amount});
         }
         if (o.getItems() != null && !o.getItems().isEmpty()) {
-            details.add(new String[] { OrderEmailLabel.REFUND_L_ITEMS.of(lang),
-                    String.valueOf(o.getItems().size()) });
+            details.add(new String[]{OrderEmailLabel.REFUND_L_ITEMS.of(lang), String.valueOf(o.getItems().size())});
         }
-        details.add(new String[] { OrderEmailLabel.REFUND_L_DEST.of(lang),
-                refundDestination(lang, toWallet, paymentMethod) });
+        details.add(
+                new String[]{OrderEmailLabel.REFUND_L_DEST.of(lang), refundDestination(lang, toWallet, paymentMethod)});
 
-        notify(email, o, new Notice(OrderEmailLabel.REFUNDED_TITLE.of(lang),
-                OrderEmailLabel.REFUNDED_BODY.of(lang, o.getOrderNumber()),
-                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "money-bill-transfer", lang, details));
+        notify(email, o,
+                new Notice(OrderEmailLabel.REFUNDED_TITLE.of(lang),
+                        OrderEmailLabel.REFUNDED_BODY.of(lang, o.getOrderNumber()),
+                        OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "money-bill-transfer", lang, details));
     }
 
     /** Texto del destino del reembolso: billetera (inmediato) o el método original (tarjeta/PayPal). */
@@ -255,8 +256,8 @@ public class OrderEmailService {
             // pedido entró por una tienda conectada, quien lo recibe es un socio de integración y para
             // él sí manda la palabra «dropshipping»: es el servicio que tiene contratado.
             boolean socio = "INTEGRATION".equalsIgnoreCase(o.getSource());
-            vars.put("tagline", socio ? BrandTagline.of(UserRole.PARTNER, notice.lang())
-                    : BrandTagline.of(notice.lang()));
+            vars.put("tagline",
+                    socio ? BrandTagline.of(UserRole.PARTNER, notice.lang()) : BrandTagline.of(notice.lang()));
             emailQueue.enqueue(email, notice.title(), "emails/notification", vars);
         } catch (RuntimeException e) {
             log.warn("order email '{}' failed for {}: {}", notice.title(), o.getOrderNumber(), e.getMessage());

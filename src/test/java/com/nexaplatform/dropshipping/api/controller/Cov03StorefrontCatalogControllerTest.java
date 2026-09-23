@@ -193,8 +193,8 @@ class Cov03StorefrontCatalogControllerTest {
      * multiplica en dólares y se convierte al final.
      */
     private static PricingService.PricedAmount precio(BigDecimal display) {
-        return new PricingService.PricedAmount(null, display, display, "EUR", "€", null, null, null, null, null,
-                null, null, null, null);
+        return new PricingService.PricedAmount(null, display, display, "EUR", "€", null, null, null, null, null, null,
+                null, null, null);
     }
 
     private static ProductSummaryView resumen(UUID id) {
@@ -242,12 +242,10 @@ class Cov03StorefrontCatalogControllerTest {
     /* ==================== importar por URL ==================== */
 
     @ParameterizedTest
-    @CsvSource({
-            "https://detail.1688.com/offer/912345678.html, 1688,       OFFER-912345678",
+    @CsvSource({"https://detail.1688.com/offer/912345678.html, 1688,       OFFER-912345678",
             "https://item.taobao.com/item.htm?id=654321,   taobao,     654321",
             "https://es.aliexpress.com/item/100500.html,   aliexpress, 100500",
-            "https://www.ebay.com/itm/zapatos-rojos/98765, ebay,       98765"
-    })
+            "https://www.ebay.com/itm/zapatos-rojos/98765, ebay,       98765"})
     void cadaMercadoSeReconocePorSuFormaDeUrl(String url, String fuente, String externo) {
         when(productRepository.findBySourceAndExternalId(fuente, externo)).thenReturn(Optional.empty());
 
@@ -277,8 +275,8 @@ class Cov03StorefrontCatalogControllerTest {
         when(productRepository.findBySourceAndExternalId("1688", "OFFER-77")).thenReturn(Optional.of(p));
         when(productMapper.toSummary(p, "es")).thenReturn(view);
 
-        ImportUrlResponse res = controller.importByUrl(
-                new ImportUrlRequest("https://detail.1688.com/offer/77.html"), "es");
+        ImportUrlResponse res = controller.importByUrl(new ImportUrlRequest("https://detail.1688.com/offer/77.html"),
+                "es");
 
         assertThat(res.matched()).isTrue();
         assertThat(res.product()).isSameAs(view);
@@ -302,7 +300,7 @@ class Cov03StorefrontCatalogControllerTest {
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(pricingService.displayCurrencySymbol()).thenReturn("€");
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(p, null)).thenReturn(precio(new BigDecimal("12.50")));
+        when(pricingService.priceFor(eq(p), isNull(), anyInt(), any())).thenReturn(precio(new BigDecimal("12.50")));
         when(currencyService.formatDisplay(any(), eq("EUR"))).thenAnswer(inv -> inv.getArgument(0) + " €");
 
         CartQuoteOut out = controller.cartQuote(List.of(new CartQuoteItemIn(p.getId(), null, 3)));
@@ -320,10 +318,10 @@ class Cov03StorefrontCatalogControllerTest {
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(productRepository.findById(vivo.getId())).thenReturn(Optional.of(vivo));
         when(productRepository.findById(borrado)).thenReturn(Optional.empty());
-        when(pricingService.priceFor(vivo, null)).thenReturn(precio(new BigDecimal("10.00")));
+        when(pricingService.priceFor(eq(vivo), isNull(), anyInt(), any())).thenReturn(precio(new BigDecimal("10.00")));
 
-        CartQuoteOut out = controller.cartQuote(
-                List.of(new CartQuoteItemIn(borrado, null, 1), new CartQuoteItemIn(vivo.getId(), null, 1)));
+        CartQuoteOut out = controller
+                .cartQuote(List.of(new CartQuoteItemIn(borrado, null, 1), new CartQuoteItemIn(vivo.getId(), null, 1)));
 
         assertThat(out.items()).hasSize(1);
         assertThat(out.subtotal()).isEqualByComparingTo("10.00");
@@ -334,7 +332,7 @@ class Cov03StorefrontCatalogControllerTest {
         ProductEntity p = producto();
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(p, null)).thenReturn(precio(null));
+        when(pricingService.priceFor(eq(p), isNull(), anyInt(), any())).thenReturn(precio(null));
 
         CartQuoteOut out = controller.cartQuote(List.of(new CartQuoteItemIn(p.getId(), null, 2)));
 
@@ -347,7 +345,7 @@ class Cov03StorefrontCatalogControllerTest {
         ProductEntity p = producto();
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(p, null)).thenReturn(precio(new BigDecimal("9.00")));
+        when(pricingService.priceFor(eq(p), isNull(), anyInt(), any())).thenReturn(precio(new BigDecimal("9.00")));
 
         CartQuoteOut out = controller.cartQuote(List.of(new CartQuoteItemIn(p.getId(), null, -5)));
 
@@ -371,7 +369,7 @@ class Cov03StorefrontCatalogControllerTest {
         p.getVariants().add(v);
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(p, v)).thenReturn(precio(new BigDecimal("20.00")));
+        when(pricingService.priceFor(eq(p), eq(v), anyInt(), any())).thenReturn(precio(new BigDecimal("20.00")));
 
         CartQuoteOut out = controller.cartQuote(List.of(new CartQuoteItemIn(p.getId(), v.getId(), 2)));
 
@@ -391,8 +389,7 @@ class Cov03StorefrontCatalogControllerTest {
         when(rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(), "ES"))
                 .thenReturn(List.of(tarifa(s, 500, 200, null, null)));
 
-        List<ShippingQuoteItem> quote = controller.shippingQuote(
-                new ShippingQuoteRequest(p.getId(), null, 3, "es"));
+        List<ShippingQuoteItem> quote = controller.shippingQuote(new ShippingQuoteRequest(p.getId(), null, 3, "es"));
 
         // 3 x 500 g = 1,5 kg -> 500 + 200*1,5 = 800 céntimos
         assertThat(quote).hasSize(1);
@@ -429,8 +426,8 @@ class Cov03StorefrontCatalogControllerTest {
 
         List<ShippingQuoteItem> quote = controller.shippingQuote(new ShippingQuoteRequest(p.getId(), null, 1, "es"));
 
-        assertThat(quote).extracting(ShippingQuoteItem::cost)
-                .containsExactly(new BigDecimal("4.00"), new BigDecimal("15.00"));
+        assertThat(quote).extracting(ShippingQuoteItem::cost).containsExactly(new BigDecimal("4.00"),
+                new BigDecimal("15.00"));
     }
 
     @Test
@@ -506,14 +503,13 @@ class Cov03StorefrontCatalogControllerTest {
         p.setBasePrice(new BigDecimal("99"));
         ProductPriceTierEntity tramo1 = ProductPriceTierEntity.builder().minQty(1).maxQty(9)
                 .unitPrice(new BigDecimal("90")).build();
-        ProductPriceTierEntity tramo10 = ProductPriceTierEntity.builder().minQty(10)
-                .unitPrice(new BigDecimal("70")).build();
+        ProductPriceTierEntity tramo10 = ProductPriceTierEntity.builder().minQty(10).unitPrice(new BigDecimal("70"))
+                .build();
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId())).thenReturn(List.of(tramo1, tramo10));
         when(currencyService.toUsd(new BigDecimal("70"), "CNY")).thenReturn(new BigDecimal("10"));
-        when(marginService.apply(new BigDecimal("10"), p, null)).thenReturn(
-                new MarginService.PriceWithMargin(new BigDecimal("10"), new BigDecimal("25"), null,
-                        new BigDecimal("150")));
+        when(marginService.apply(new BigDecimal("10"), p, null)).thenReturn(new MarginService.PriceWithMargin(
+                new BigDecimal("10"), new BigDecimal("25"), null, new BigDecimal("150")));
         when(rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(), "ES"))
                 .thenReturn(List.of(tarifa(s, 300, 0, null, null), tarifa(s, 900, 0, null, null)));
         identidadEnDivisa();
@@ -539,8 +535,8 @@ class Cov03StorefrontCatalogControllerTest {
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId())).thenReturn(List.of());
         // Sin divisa propia el catálogo importado de 1688 se asume en CNY.
         when(currencyService.toUsd(new BigDecimal("50"), "CNY")).thenReturn(new BigDecimal("7"));
-        when(marginService.apply(new BigDecimal("7"), p, null)).thenReturn(
-                new MarginService.PriceWithMargin(new BigDecimal("7"), new BigDecimal("17"), null, null));
+        when(marginService.apply(new BigDecimal("7"), p, null))
+                .thenReturn(new MarginService.PriceWithMargin(new BigDecimal("7"), new BigDecimal("17"), null, null));
         identidadEnDivisa();
 
         MarginEstimate est = controller.marginEstimate(p.getId(), "es", 1, null);
@@ -574,8 +570,8 @@ class Cov03StorefrontCatalogControllerTest {
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId())).thenReturn(List.of());
         when(currencyService.toUsd(new BigDecimal("1"), "CNY")).thenReturn(new BigDecimal("1"));
-        when(marginService.apply(new BigDecimal("1"), p, null)).thenReturn(
-                new MarginService.PriceWithMargin(new BigDecimal("1"), new BigDecimal("100"), null, null));
+        when(marginService.apply(new BigDecimal("1"), p, null))
+                .thenReturn(new MarginService.PriceWithMargin(new BigDecimal("1"), new BigDecimal("100"), null, null));
         identidadEnDivisa();
 
         MarginEstimate est = controller.marginEstimate(p.getId(), "es", 1, null);
@@ -600,8 +596,8 @@ class Cov03StorefrontCatalogControllerTest {
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId())).thenReturn(List.of());
         when(currencyService.toUsd(any(), anyString())).thenReturn(BigDecimal.ONE);
-        when(marginService.apply(any(), any(), any())).thenReturn(
-                new MarginService.PriceWithMargin(BigDecimal.ONE, new BigDecimal("2"), null, null));
+        when(marginService.apply(any(), any(), any()))
+                .thenReturn(new MarginService.PriceWithMargin(BigDecimal.ONE, new BigDecimal("2"), null, null));
         when(rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(), "ES"))
                 .thenReturn(List.of(tarifa(s, 0, 100, null, null)));
         identidadEnDivisa();
@@ -712,8 +708,8 @@ class Cov03StorefrontCatalogControllerTest {
         when(tagRepository.findProductIdsByTag("oferta"))
                 .thenReturn(List.of(activo.getId(), retirado.getId(), otroActivo.getId()));
         when(productRepository.findAllById(any())).thenReturn(List.of(activo, retirado, otroActivo));
-        when(productMapper.toSummary(any(), anyString())).thenAnswer(inv -> resumen(
-                ((ProductEntity) inv.getArgument(0)).getId()));
+        when(productMapper.toSummary(any(), anyString()))
+                .thenAnswer(inv -> resumen(((ProductEntity) inv.getArgument(0)).getId()));
 
         List<ProductSummaryView> vistos = controller.productsByTag("oferta", "es", 1);
 
@@ -787,8 +783,8 @@ class Cov03StorefrontCatalogControllerTest {
         // Sin resultados estables, recargar la misma búsqueda daría una lista distinta cada vez.
         List<ProductEntity> pool = List.of(producto(), producto(), producto());
         when(productRepository.findVisibleByStatus(eq(ProductStatus.ACTIVE), any())).thenReturn(new PageImpl<>(pool));
-        when(productMapper.toSummary(any(), anyString())).thenAnswer(inv -> resumen(
-                ((ProductEntity) inv.getArgument(0)).getId()));
+        when(productMapper.toSummary(any(), anyString()))
+                .thenAnswer(inv -> resumen(((ProductEntity) inv.getArgument(0)).getId()));
 
         ImageSearchRequest conAmbas = new ImageSearchRequest("BASE64", "https://otra/foto.jpg", 3);
         ImageSearchRequest soloBase64 = new ImageSearchRequest("BASE64", null, 3);
@@ -808,8 +804,8 @@ class Cov03StorefrontCatalogControllerTest {
             pool.add(producto());
         }
         when(productRepository.findVisibleByStatus(eq(ProductStatus.ACTIVE), any())).thenReturn(new PageImpl<>(pool));
-        when(productMapper.toSummary(any(), anyString())).thenAnswer(inv -> resumen(
-                ((ProductEntity) inv.getArgument(0)).getId()));
+        when(productMapper.toSummary(any(), anyString()))
+                .thenAnswer(inv -> resumen(((ProductEntity) inv.getArgument(0)).getId()));
 
         assertThat(controller.searchByImage(new ImageSearchRequest(null, "https://x/y.jpg", pedidos), "es"))
                 .hasSize(24);
@@ -822,8 +818,8 @@ class Cov03StorefrontCatalogControllerTest {
             pool.add(producto());
         }
         when(productRepository.findVisibleByStatus(eq(ProductStatus.ACTIVE), any())).thenReturn(new PageImpl<>(pool));
-        when(productMapper.toSummary(any(), anyString())).thenAnswer(inv -> resumen(
-                ((ProductEntity) inv.getArgument(0)).getId()));
+        when(productMapper.toSummary(any(), anyString()))
+                .thenAnswer(inv -> resumen(((ProductEntity) inv.getArgument(0)).getId()));
 
         List<ImageSearchResult> res = controller.searchByImage(new ImageSearchRequest(null, null, null), "es");
 
@@ -905,13 +901,13 @@ class Cov03StorefrontCatalogControllerTest {
 
     /** Una ficha CON todo lo interno puesto, para comprobar qué sale y qué no según quién pregunte. */
     private static ProductDetailView fichaConDatosDeProveedor(UUID id) {
-        return new ProductDetailView(id, "vestido", "1688", "993114937459", null, null, "Vestido", null, null,
-                null, null, null, null, 1, null, null, null, 0, 0, new BigDecimal("33.33"), null, "ACTIVE",
+        return new ProductDetailView(id, "vestido", "1688", "993114937459", null, null, "Vestido", null, null, null,
+                null, null, null, 1, null, null, null, 0, 0, new BigDecimal("33.33"), null, "ACTIVE",
                 "https://detail.1688.com/offer/993114937459.html", null, null, List.of(), List.of(), List.of(),
-                List.of(), new BigDecimal("4.10"), null, null, null, null, "30,11 €", new BigDecimal("150"),
-                "11,43 €", "1,49 €", "2,05 €", new BigDecimal("8.98"), "8,98 €", new BigDecimal("3.08"),
-                new BigDecimal("2.00"), "3,08 €", "2,00 €", null, null, false, null, false, null, null, null,
-                null, null, null, null, false,
+                List.of(), new BigDecimal("4.10"), null, null, null, null, "30,11 €", new BigDecimal("150"), "11,43 €",
+                "1,49 €", "2,05 €", new BigDecimal("1.49"), new BigDecimal("8.98"), "8,98 €", new BigDecimal("3.08"),
+                new BigDecimal("2.00"), "3,08 €", "2,00 €", null, null, false, null, false, null, null, null, null,
+                null, null, null, false,
                 // La tienda pone parte del porte: es PÚBLICO y tiene que sobrevivir a la limpieza.
                 true);
     }
@@ -996,8 +992,8 @@ class Cov03StorefrontCatalogControllerTest {
     @Test
     void alAdministradorSeLeSigueDandoElOrigen() {
         UUID id = UUID.randomUUID();
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "jefe", "x", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("jefe", "x",
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
 
         ProductDetailView paraElAdmin = controller.detailBySlug("vestido", "es", List.of());
@@ -1011,8 +1007,8 @@ class Cov03StorefrontCatalogControllerTest {
     @Test
     void elOperadorTampocoVeElOrigen() {
         UUID id = UUID.randomUUID();
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "soporte", "x", List.of(new SimpleGrantedAuthority("ROLE_OPERATOR"))));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("soporte", "x",
+                List.of(new SimpleGrantedAuthority("ROLE_OPERATOR"))));
         when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
 
         assertThat(controller.detailBySlug("vestido", "es", List.of()).sourceUrl()).isNull();
@@ -1025,8 +1021,8 @@ class Cov03StorefrontCatalogControllerTest {
     @Test
     void alRevisorSeLeDaElOrigenParaCotejarLasFotos() {
         UUID id = UUID.randomUUID();
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "revisor", "x", List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("revisor", "x",
+                List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
         when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
 
         ProductDetailView paraElRevisor = controller.detailBySlug("vestido", "es", List.of());
@@ -1044,8 +1040,8 @@ class Cov03StorefrontCatalogControllerTest {
     @Test
     void alRevisorNoSeLeDaElDesgloseDePrecio() {
         UUID id = UUID.randomUUID();
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "revisor", "x", List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("revisor", "x",
+                List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
         when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
 
         ProductDetailView paraElRevisor = controller.detailBySlug("vestido", "es", List.of());
@@ -1061,10 +1057,10 @@ class Cov03StorefrontCatalogControllerTest {
     }
 
     private static ProductDetailView fichaVacia(UUID id) {
-        return new ProductDetailView(id, "vestido", null, null, null, null, "Vestido", null, null, null, null,
-                null, null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(),
-                List.of(), List.of(), List.of(), null, null, null, null, null, null, null, null, null, null,
-                null, null, false, null, false);
+        return new ProductDetailView(id, "vestido", null, null, null, null, "Vestido", null, null, null, null, null,
+                null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(), List.of(),
+                List.of(), List.of(), null, null, null, null, null, null, null, null, null, null, null, null, false,
+                null, false);
     }
 
     @Test
@@ -1080,8 +1076,8 @@ class Cov03StorefrontCatalogControllerTest {
         when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(300);
         when(dutyBadges.lineasDe(List.of(enCarrito))).thenReturn(tresLineas);
 
-        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, Boolean.TRUE, List.of(enCarrito), null);
+        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, Boolean.TRUE, List.of(enCarrito), null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull(), isNull());
@@ -1099,8 +1095,8 @@ class Cov03StorefrontCatalogControllerTest {
         // una promesa que allí no significa nada.
         when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(0);
 
-        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, UUID.randomUUID(), null, null, null);
+        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, UUID.randomUUID(), null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull(), isNull());

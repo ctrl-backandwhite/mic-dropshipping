@@ -61,16 +61,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestPropertySource(properties = {
         // Límites REALES del canal contratado. Sin ellos (por defecto 0 = sin límite) todo viajaría en un
         // solo bulto y el reparto —que es lo que decide cuántas veces se cobra el derecho— no se probaría.
-        "nexadrop.yunexpress.max-parcel-weight-grams=2000",
-        "nexadrop.yunexpress.max-parcel-value-cents=15500",
-        "nexadrop.yunexpress.max-parcel-units=0"
-})
+        "nexadrop.yunexpress.max-parcel-weight-grams=2000", "nexadrop.yunexpress.max-parcel-value-cents=15500",
+        "nexadrop.yunexpress.max-parcel-units=0"})
 class CustomsDutyIT extends BaseIntegration {
 
     /** Los 27 Estados miembros: lista LEGAL, no un importe. Solo ellos llevan el derecho de 3 EUR. */
-    private static final Set<String> UE_27 = Set.of("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI",
-            "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI",
-            "ES", "SE");
+    private static final Set<String> UE_27 = Set.of("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE",
+            "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
 
     /** Subpartidas del Sistema Armonizado usadas en los casos (6 dígitos = lo que declara el H7). */
     private static final String HS_CAMISETAS = "610910";
@@ -134,10 +131,8 @@ class CustomsDutyIT extends BaseIntegration {
     void productosDistintosConLaMismaSubpartidaSonUnaLinea() {
         // El ejemplo de la propia guía de la Comisión: anorak, cortavientos y cazadora comparten la
         // subpartida 6104 19 y pagan 3 EUR EN TOTAL. Contarlos como tres productos cobraba 9 EUR.
-        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(
-                linea(HS_ANORAKS + "0000", 1, 300, 400),
-                linea(HS_ANORAKS + "9010", 1, 300, 400),
-                linea(HS_ANORAKS, 1, 300, 400)));
+        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(linea(HS_ANORAKS + "0000", 1, 300, 400),
+                linea(HS_ANORAKS + "9010", 1, 300, 400), linea(HS_ANORAKS, 1, 300, 400)));
 
         assertThat(bultos).hasSize(1);
         assertThat(bultos.get(0).tariffLines()).isEqualTo(1);
@@ -161,9 +156,8 @@ class CustomsDutyIT extends BaseIntegration {
     @Test
     @DisplayName("Dos subpartidas distintas son dos líneas: 652 céntimos exactos")
     void dosSubpartidasDistintasSonDosLineas() {
-        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(
-                linea(HS_CAMISETAS, 3, 200, 200),
-                linea(HS_VAQUEROS, 2, 500, 400)));
+        List<DutyParcel> bultos = lineasAduaneras
+                .parcelsOf(List.of(linea(HS_CAMISETAS, 3, 200, 200), linea(HS_VAQUEROS, 2, 500, 400)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(2);
         assertThat(valoracion.valuate("ES", 1600, 0, bultos).handlingFeeCents()).isEqualTo(652);
@@ -172,9 +166,8 @@ class CustomsDutyIT extends BaseIntegration {
     @Test
     @DisplayName("Un producto SIN código HS cuenta como línea propia (se cobra de más, nunca de menos)")
     void unProductoSinCodigoHsEsLineaPropia() {
-        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(
-                linea(HS_CAMISETAS, 1, 300, 200),
-                linea(null, 1, 300, 200)));
+        List<DutyParcel> bultos = lineasAduaneras
+                .parcelsOf(List.of(linea(HS_CAMISETAS, 1, 300, 200), linea(null, 1, 300, 200)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(2);
         assertThat(valoracion.valuate("ES", 600, 0, bultos).handlingFeeCents()).isEqualTo(652);
@@ -185,9 +178,8 @@ class CustomsDutyIT extends BaseIntegration {
     void unHsIncompletoNoAgrupaConNadie() {
         // "6109" no llega a subpartida: no se puede afirmar que dos productos compartan clasificación, así
         // que cada uno declara por su cuenta. Cobrar de más es recuperable; infradeclarar, no.
-        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(
-                linea("6109", 1, 300, 200),
-                linea("6109", 1, 300, 200)));
+        List<DutyParcel> bultos = lineasAduaneras
+                .parcelsOf(List.of(linea("6109", 1, 300, 200), linea("6109", 1, 300, 200)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(2);
         assertThat(valoracion.valuate("ES", 600, 0, bultos).handlingFeeCents()).isEqualTo(652);
@@ -196,10 +188,8 @@ class CustomsDutyIT extends BaseIntegration {
     @Test
     @DisplayName("Un HS con puntos o espacios se normaliza y SÍ agrupa: una línea (326)")
     void unHsConSeparadoresSeNormaliza() {
-        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(
-                linea("6109.10.00", 1, 300, 200),
-                linea(" 6109 10 ", 1, 300, 200),
-                linea(HS_CAMISETAS, 1, 300, 200)));
+        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(linea("6109.10.00", 1, 300, 200),
+                linea(" 6109 10 ", 1, 300, 200), linea(HS_CAMISETAS, 1, 300, 200)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(1);
         assertThat(valoracion.valuate("ES", 900, 0, bultos).handlingFeeCents()).isEqualTo(326);
@@ -292,9 +282,8 @@ class CustomsDutyIT extends BaseIntegration {
     void cadaBultoDeclaraSusPropiasLineas() {
         // Dos unidades de 1.100 g cada una: no caben juntas (2.200 > 2.000), así que va una por bulto y
         // cada bulto tiene UNA sola clasificación. Total 2 líneas = 652, no 4 líneas = 1.304.
-        List<DutyParcel> bultos = lineasAduaneras.parcelsOf(List.of(
-                linea(HS_CAMISETAS, 1, 500, 1100),
-                linea(HS_VAQUEROS, 1, 500, 1100)));
+        List<DutyParcel> bultos = lineasAduaneras
+                .parcelsOf(List.of(linea(HS_CAMISETAS, 1, 500, 1100), linea(HS_VAQUEROS, 1, 500, 1100)));
 
         assertThat(bultos).hasSize(2);
         assertThat(bultos).allMatch(b -> b.tariffLines() == 1);
@@ -337,8 +326,7 @@ class CustomsDutyIT extends BaseIntegration {
             // La franquicia no bloquea aquí; el transportista puede, y son cosas distintas: en la UE no
             // acepta a partir de 155 USD, que con el euro por debajo de 1,033 se alcanza ANTES que los
             // 150 EUR de la norma. Ver `limiteDelTransportistaEnCentimosUsd`.
-            anota(descuadres, pais, "bloqueo en umbral-1",
-                    rechazaElTransportista(regla, umbral - 1), v.blocked());
+            anota(descuadres, pais, "bloqueo en umbral-1", rechazaElTransportista(regla, umbral - 1), v.blocked());
             anota(descuadres, pais, "recargo con una línea", derecho, v.handlingFeeCents());
         }
         assertThat(descuadres).as("países cuyo importe no cuadra").isEmpty();
@@ -362,8 +350,7 @@ class CustomsDutyIT extends BaseIntegration {
             // Fiscalmente está DENTRO —«does not exceed»— y aun así el pedido puede no venderse: el
             // transportista rechaza «igual o mayor» que SU tope, y el borde exacto es justo el caso que
             // su condición nombra. Una cosa es que no haya que pagar impuestos y otra que alguien lo lleve.
-            anota(descuadres, pais, "bloqueo en el umbral exacto",
-                    rechazaElTransportista(regla, umbral), v.blocked());
+            anota(descuadres, pais, "bloqueo en el umbral exacto", rechazaElTransportista(regla, umbral), v.blocked());
             anota(descuadres, pais, "recargo en el umbral exacto", derecho, v.handlingFeeCents());
         }
         assertThat(descuadres).as("países cuyo borde exacto no cuadra").isEmpty();
@@ -395,10 +382,8 @@ class CustomsDutyIT extends BaseIntegration {
     void elUmbralDeLaUnionEuropeaEstaEnDieciseisMilTrescientosCuatro() {
         assertThat(aCentimosUsd(new BigDecimal("150.00"), "EUR")).isEqualTo(16304);
 
-        assertThat(valoracion.valuate("FR", 16304, 0, List.of(new DutyParcel(16304, 1))).deMinimisExceeded())
-                .isFalse();
-        assertThat(valoracion.valuate("FR", 16305, 0, List.of(new DutyParcel(16305, 1))).deMinimisExceeded())
-                .isTrue();
+        assertThat(valoracion.valuate("FR", 16304, 0, List.of(new DutyParcel(16304, 1))).deMinimisExceeded()).isFalse();
+        assertThat(valoracion.valuate("FR", 16305, 0, List.of(new DutyParcel(16305, 1))).deMinimisExceeded()).isTrue();
     }
 
     @Test
@@ -407,16 +392,13 @@ class CustomsDutyIT extends BaseIntegration {
         // 20 CAD ÷ 1,36 = 14,705882… → 14,7059 USD → 1.470,59 céntimos → 1.471 (HALF_UP). El redondeo del
         // borde importa: con truncamiento serían 1.470 y un pedido de 1.471 se bloquearía sin motivo.
         assertThat(aCentimosUsd(new BigDecimal("20.00"), "CAD")).isEqualTo(1471);
-        assertThat(valoracion.valuate("CA", 1471, 0, List.of(new DutyParcel(1471, 1))).deMinimisExceeded())
-                .isFalse();
+        assertThat(valoracion.valuate("CA", 1471, 0, List.of(new DutyParcel(1471, 1))).deMinimisExceeded()).isFalse();
         assertThat(valoracion.valuate("CA", 1472, 0, List.of(new DutyParcel(1472, 1))).blocked()).isTrue();
 
         // Suiza: 62 CHF ÷ 0,91 = 68,1319 USD → 6.813 céntimos.
         assertThat(aCentimosUsd(new BigDecimal("62.00"), "CHF")).isEqualTo(6813);
-        assertThat(valoracion.valuate("CH", 6813, 0, List.of(new DutyParcel(6813, 1))).deMinimisExceeded())
-                .isFalse();
-        assertThat(valoracion.valuate("CH", 6814, 0, List.of(new DutyParcel(6814, 1))).deMinimisExceeded())
-                .isTrue();
+        assertThat(valoracion.valuate("CH", 6813, 0, List.of(new DutyParcel(6813, 1))).deMinimisExceeded()).isFalse();
+        assertThat(valoracion.valuate("CH", 6814, 0, List.of(new DutyParcel(6814, 1))).deMinimisExceeded()).isTrue();
 
         // Reino Unido: 135 GBP ÷ 0,79 = 170,8861 USD → 17.089 céntimos. Y NO lleva el derecho de 3 EUR.
         assertThat(aCentimosUsd(new BigDecimal("135.00"), "GBP")).isEqualTo(17089);
@@ -432,16 +414,14 @@ class CustomsDutyIT extends BaseIntegration {
         // franquicia. Se mira `deMinimisExceeded` y no `blocked` porque lo que este caso mide es el borde
         // FISCAL: el bloqueo lleva desde el 17-ago otra regla encima —el tope del transportista, 155 USD—
         // que a 160 USD salta siempre y taparía el movimiento que se quiere observar.
-        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).deMinimisExceeded())
-                .isFalse();
+        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).deMinimisExceeded()).isFalse();
 
         // Con EUR = 0,95 el mismo umbral legal (150 EUR) vale 15.789 céntimos USD → el MISMO pedido queda
         // FUERA. No es un fallo: es que el borde está en euros y el cobro en dólares. Queda documentado
         // para que nadie lo lea como una regresión cuando cambie la cotización del día.
         divisas.overrideRate("EUR", new BigDecimal("0.95"));
         assertThat(aCentimosUsd(new BigDecimal("150.00"), "EUR")).isEqualTo(15789);
-        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).deMinimisExceeded())
-                .isTrue();
+        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).deMinimisExceeded()).isTrue();
         // Y con cualquiera de las dos cotizaciones el transportista ya lo había rechazado por su cuenta:
         // 160 USD supera sus 155 USD. Que el pedido no se pueda vender no depende de la tasa del día.
         assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).blocked()).isTrue();
@@ -509,8 +489,7 @@ class CustomsDutyIT extends BaseIntegration {
 
         // Y el derecho es EXCLUSIVO de los 27: ninguna otra fila de la tabla lo lleva sembrado.
         List<String> conDerecho = jdbcTemplate.queryForList(
-                "SELECT country_code FROM country_customs_rule WHERE per_article_fee_amount > 0",
-                String.class);
+                "SELECT country_code FROM country_customs_rule WHERE per_article_fee_amount > 0", String.class);
         assertThat(conDerecho).containsExactlyInAnyOrderElementsOf(UE_27);
     }
 
@@ -612,10 +591,10 @@ class CustomsDutyIT extends BaseIntegration {
         CheckoutTotals cobro = totalesCheckout.compute("ES", null, 7_777, 349, bultos);
 
         assertThat(cobro).isEqualTo(previa);
-        assertThat(previa.taxCents()).isEqualTo(1706);            // (7.777 + 349) × 21% = 1.706,46 → 1.706
+        assertThat(previa.taxCents()).isEqualTo(1706); // (7.777 + 349) × 21% = 1.706,46 → 1.706
         assertThat(previa.customsHandlingCents()).isEqualTo(978); // 3 partidas × 3,26 $
-        assertThat(previa.shippingCents()).isEqualTo(1327);       // 349 + 978
-        assertThat(previa.totalCents(7_777)).isEqualTo(10_810);   // 7.777 + 1.327 + 1.706
+        assertThat(previa.shippingCents()).isEqualTo(1327); // 349 + 978
+        assertThat(previa.totalCents(7_777)).isEqualTo(10_810); // 7.777 + 1.327 + 1.706
     }
 
     @Test
@@ -679,8 +658,7 @@ class CustomsDutyIT extends BaseIntegration {
      * subpartida, y dejarla fuera mantiene la partida como único criterio, que es justo lo que afirman.
      */
     private static Line linea(String hs, int cantidad, int precioUnitarioCents, int pesoGramos) {
-        return new Line(UUID.randomUUID(), hs, null, "CN", cantidad, precioUnitarioCents, pesoGramos,
-                0, 0, 0, false);
+        return new Line(UUID.randomUUID(), hs, null, "CN", cantidad, precioUnitarioCents, pesoGramos, 0, 0, 0, false);
     }
 
     /** Las reglas con franquicia configurada, que son las que tienen borde que comprobar. */
@@ -689,8 +667,7 @@ class CustomsDutyIT extends BaseIntegration {
                 + "per_article_fee_amount, per_article_fee_currency, over_threshold_policy, "
                 + "handling_fee_cents, handling_percent_bps, vat_prepay_percent_bps, "
                 + "carrier_max_amount, carrier_max_currency, carrier_max_alt_amount, carrier_max_alt_currency "
-                + "FROM country_customs_rule WHERE active = TRUE AND de_minimis_amount > 0 "
-                + "ORDER BY country_code");
+                + "FROM country_customs_rule WHERE active = TRUE AND de_minimis_amount > 0 " + "ORDER BY country_code");
     }
 
     /**
@@ -724,8 +701,7 @@ class CustomsDutyIT extends BaseIntegration {
     }
 
     private int umbralEnCentimosUsd(Map<String, Object> regla) {
-        return aCentimosUsd((BigDecimal) regla.get("de_minimis_amount"),
-                (String) regla.get("de_minimis_currency"));
+        return aCentimosUsd((BigDecimal) regla.get("de_minimis_amount"), (String) regla.get("de_minimis_currency"));
     }
 
     private int derechoPorLineaEnCentimosUsd(Map<String, Object> regla) {
@@ -755,8 +731,7 @@ class CustomsDutyIT extends BaseIntegration {
     /** Tasa de la divisa contra el dólar tal y como está en la tabla; null si esa divisa no está. */
     private BigDecimal tasaVsUsd(String divisa) {
         List<BigDecimal> tasas = jdbcTemplate.queryForList(
-                "SELECT rate_vs_usd FROM currency_rate WHERE UPPER(code) = UPPER(?)", BigDecimal.class,
-                divisa);
+                "SELECT rate_vs_usd FROM currency_rate WHERE UPPER(code) = UPPER(?)", BigDecimal.class, divisa);
         return tasas.isEmpty() ? null : tasas.get(0);
     }
 
@@ -767,8 +742,7 @@ class CustomsDutyIT extends BaseIntegration {
     }
 
     /** Acumula descuadres en vez de cortar en el primero: interesa la lista COMPLETA de países que fallan. */
-    private static void anota(List<String> descuadres, String pais, String concepto, Object esperado,
-            Object obtenido) {
+    private static void anota(List<String> descuadres, String pais, String concepto, Object esperado, Object obtenido) {
         if (!esperado.equals(obtenido)) {
             descuadres.add("%s · %s: esperado %s, obtenido %s".formatted(pais, concepto, esperado, obtenido));
         }
@@ -791,10 +765,8 @@ class CustomsDutyIT extends BaseIntegration {
         try {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
             Resource[] migraciones = resolver.getResources("classpath*:db/changelog/*.sql");
-            List<Resource> enOrden = Arrays.stream(migraciones)
-                    .sorted(Comparator.comparingInt(CustomsDutyIT::versionDe)
-                            .thenComparing(r -> r.getFilename() == null ? "" : r.getFilename()))
-                    .toList();
+            List<Resource> enOrden = Arrays.stream(migraciones).sorted(Comparator.comparingInt(CustomsDutyIT::versionDe)
+                    .thenComparing(r -> r.getFilename() == null ? "" : r.getFilename())).toList();
             for (Resource migracion : enOrden) {
                 for (String sentencia : sentenciasDe(migracion.getContentAsString(StandardCharsets.UTF_8))) {
                     if (afectaASemillasDeCalculo(sentencia)) {

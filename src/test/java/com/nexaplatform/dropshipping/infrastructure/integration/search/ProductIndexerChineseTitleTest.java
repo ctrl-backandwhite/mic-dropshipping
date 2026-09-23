@@ -23,11 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProductIndexerChineseTitleTest {
 
     @ParameterizedTest(name = "«{0}» es chino → se indexa")
-    @ValueSource(strings = {
-            "单扣长袖女士西装外套",
-            "女款小狗刺绣爱心纽扣针织毛衣",
-            "女士缎面长裙，V领长袖",          // mezcla ideogramas con latinos: sigue siendo chino
-            "2024新款女装",                   // con cifras
+    @ValueSource(strings = {"单扣长袖女士西装外套", "女款小狗刺绣爱心纽扣针织毛衣", "女士缎面长裙，V领长袖", // mezcla ideogramas con latinos: sigue siendo chino
+            "2024新款女装", // con cifras
     })
     @DisplayName("un título con ideogramas se reconoce como chino")
     void reconoceElChino(String titulo) {
@@ -35,14 +32,9 @@ class ProductIndexerChineseTitleTest {
     }
 
     @ParameterizedTest(name = "«{0}» NO es chino → no se indexa")
-    @ValueSource(strings = {
-            "Blazer de mujer con botón único y manga larga",
-            "Women's single-button blazer with long sleeve",
-            "Blazer femme à bouton unique et manches longues",
-            "Gestrickter Pullover mit Hündchen-Stickerei",
-            "Vestido de tirantes con volantes para mujer",
-            "   ",
-    })
+    @ValueSource(strings = {"Blazer de mujer con botón único y manga larga",
+            "Women's single-button blazer with long sleeve", "Blazer femme à bouton unique et manches longues",
+            "Gestrickter Pullover mit Hündchen-Stickerei", "Vestido de tirantes con volantes para mujer", "   ",})
     @DisplayName("un título en cualquier lengua europea NO se toma por chino")
     void rechazaLoQueNoEsChino(String titulo) {
         assertThat(esChino(titulo)).isFalse();

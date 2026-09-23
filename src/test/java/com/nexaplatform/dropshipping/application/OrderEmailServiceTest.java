@@ -39,8 +39,8 @@ class OrderEmailServiceTest {
     OrderEmailService service;
 
     private static Order order(String number, String trackingNumber, String carrier, String currency) {
-        return Order.builder().id(UUID.randomUUID()).orderNumber(number).trackingNumber(trackingNumber)
-                .carrier(carrier).currency(currency).build();
+        return Order.builder().id(UUID.randomUUID()).orderNumber(number).trackingNumber(trackingNumber).carrier(carrier)
+                .currency(currency).build();
     }
 
     /* ---------------- paymentConfirmed ---------------- */
@@ -197,8 +197,8 @@ class OrderEmailServiceTest {
 
         service.delivered(o, "buyer@x.com", "es");
 
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido ha sido entregado"),
-                eq("emails/notification"), anyMap());
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido ha sido entregado"), eq("emails/notification"),
+                anyMap());
     }
 
     /* ---------------- refunded ---------------- */
@@ -231,8 +231,7 @@ class OrderEmailServiceTest {
                 varsCap.capture());
         List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
         // Nº de pedido, importe y destino (tarjeta original) presentes en el bloque.
-        assertThat(details).isNotNull()
-                .anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"))
+        assertThat(details).isNotNull().anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"))
                 .anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"))
                 .anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
     }
@@ -262,8 +261,8 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Actualización de tu envío"),
-                eq("emails/notification"), varsCap.capture());
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Actualización de tu envío"), eq("emails/notification"),
+                varsCap.capture());
         String body = (String) varsCap.getValue().get("bodyHtml");
         assertThat(body).contains("NX-500").contains("Madrid").contains("TRK-9");
     }
@@ -271,8 +270,7 @@ class OrderEmailServiceTest {
     @Test
     void trackingUpdate_swallowsEnqueueFailureWithoutBreakingFlow() {
         Order o = order("NX-500", "TRK-9", null, "USD");
-        doThrow(new RuntimeException("queue down"))
-                .when(emailQueue).enqueue(any(), any(), any(), anyMap());
+        doThrow(new RuntimeException("queue down")).when(emailQueue).enqueue(any(), any(), any(), anyMap());
 
         assertThatCode(() -> service.trackingUpdate(o, "buyer@x.com", "es", "En tránsito", "Madrid"))
                 .doesNotThrowAnyException();

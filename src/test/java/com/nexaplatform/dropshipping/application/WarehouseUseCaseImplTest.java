@@ -137,8 +137,7 @@ class WarehouseUseCaseImplTest {
         when(warehouseRepository.getById(id)).thenReturn(null);
 
         Warehouse cambios = Warehouse.builder().build();
-        assertThatThrownBy(() -> useCase.update(id, cambios))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.update(id, cambios)).isInstanceOf(NotFoundException.class);
         verify(warehouseRepository, never()).update(any());
     }
 

@@ -81,8 +81,8 @@ public class ChatUseCaseImpl implements ChatUseCase {
     @Value("${nexadrop.chat.daily-limit-global:5000}")
     private int dailyLimitGlobal;
 
-    public ChatUseCaseImpl(ChatProvider provider, List<ChatTool> tools, StringRedisTemplate redis,
-            ObjectMapper mapper, PolicyCatalog policies) {
+    public ChatUseCaseImpl(ChatProvider provider, List<ChatTool> tools, StringRedisTemplate redis, ObjectMapper mapper,
+            PolicyCatalog policies) {
         this.provider = provider;
         this.tools = tools.stream().collect(Collectors.toMap(t -> t.spec().name(), Function.identity()));
         this.redis = redis;
@@ -92,8 +92,7 @@ public class ChatUseCaseImpl implements ChatUseCase {
 
     @Override
     public ChatAnswer ask(String conversationId, String message, ChatContext context) {
-        String id = conversationId == null || conversationId.isBlank() ? UUID.randomUUID().toString()
-                : conversationId;
+        String id = conversationId == null || conversationId.isBlank() ? UUID.randomUUID().toString() : conversationId;
         if (!provider.available()) {
             return new ChatAnswer(id, null, List.of(), true, null, 0, ChatAnswer.UNAVAILABLE);
         }
@@ -107,9 +106,7 @@ public class ChatUseCaseImpl implements ChatUseCase {
         conversacion.addAll(historial);
         conversacion.add(ChatMessage.user(message));
 
-        List<ChatToolSpec> disponibles = tools.values().stream()
-                .filter(t -> t.allowedFor(context))
-                .map(ChatTool::spec)
+        List<ChatToolSpec> disponibles = tools.values().stream().filter(t -> t.allowedFor(context)).map(ChatTool::spec)
                 .toList();
 
         Set<ChatProductRef> productos = new LinkedHashSet<>();
@@ -255,7 +252,8 @@ public class ChatUseCaseImpl implements ChatUseCase {
             }
             List<ChatMessage> turnos = new ArrayList<>();
             for (JsonNode turno : mapper.readTree(crudo)) {
-                ChatRole role = ChatRole.ASSISTANT.apiValue().equals(turno.path("r").asText()) ? ChatRole.ASSISTANT
+                ChatRole role = ChatRole.ASSISTANT.apiValue().equals(turno.path("r").asText())
+                        ? ChatRole.ASSISTANT
                         : ChatRole.USER;
                 turnos.add(new ChatMessage(role, turno.path("c").asText(""), null, List.of()));
             }
@@ -276,7 +274,8 @@ public class ChatUseCaseImpl implements ChatUseCase {
             if (respuesta != null && !respuesta.isBlank()) {
                 turnos.add(ChatMessage.assistant(respuesta, List.of()));
             }
-            List<ChatMessage> recientes = turnos.size() <= MAX_TURNOS ? turnos
+            List<ChatMessage> recientes = turnos.size() <= MAX_TURNOS
+                    ? turnos
                     : turnos.subList(turnos.size() - MAX_TURNOS, turnos.size());
             for (ChatMessage turno : recientes) {
                 ObjectNode node = array.addObject();

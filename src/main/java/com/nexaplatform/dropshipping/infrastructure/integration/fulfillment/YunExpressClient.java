@@ -100,9 +100,7 @@ public class YunExpressClient {
         if (body != null && !body.isEmpty()) {
             sb.append("body=").append(body).append('&');
         }
-        sb.append("date=").append(date)
-                .append("&method=").append(method)
-                .append("&uri=").append(uri);
+        sb.append("date=").append(date).append("&method=").append(method).append("&uri=").append(uri);
         return sb.toString();
     }
 
@@ -138,12 +136,9 @@ public class YunExpressClient {
         payload.put("appSecret", appSecret);
         payload.put("sourceKey", sourceKey);
         String body = writeJson(payload);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + TOKEN_PATH))
-                .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "application/json;charset=UTF-8")
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(baseUrl + TOKEN_PATH))
+                .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json;charset=UTF-8")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
         JsonNode response = readJson(send(request, TOKEN_PATH));
         String token = response.path("accessToken").asText(null);
         if (token == null || token.isBlank()) {
@@ -205,19 +200,14 @@ public class YunExpressClient {
     private HttpRequest signedRequest(String method, String path, String url, String body, Duration timeout) {
         String date = Long.toString(System.currentTimeMillis());
         String signature = sign(signatureContent(method, path, body, date));
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(timeout)
-                .header("Content-Type", "application/json;charset=utf-8")
-                .header("Accept-Language", "en-US")
-                .header("token", accessToken())
-                .header("date", date)
-                .header("sign", signature);
+        HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url)).timeout(timeout)
+                .header("Content-Type", "application/json;charset=utf-8").header("Accept-Language", "en-US")
+                .header("token", accessToken()).header("date", date).header("sign", signature);
         if ("GET".equals(method)) {
             return builder.GET().build();
         }
-        return builder.POST(HttpRequest.BodyPublishers.ofString(
-                body == null ? "" : body, StandardCharsets.UTF_8)).build();
+        return builder.POST(HttpRequest.BodyPublishers.ofString(body == null ? "" : body, StandardCharsets.UTF_8))
+                .build();
     }
 
     /**
@@ -232,13 +222,14 @@ public class YunExpressClient {
      */
     private String send(HttpRequest request, String path) {
         try {
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = http.send(request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() == 401) {
                 throw new YunExpressAuthException("YunExpress 401 en " + path + ": " + response.body());
             }
             if (response.statusCode() / 100 != 2 && !isBusinessError(response.body())) {
-                throw new IllegalStateException("YunExpress HTTP " + response.statusCode() + " en " + path
-                        + ": " + response.body());
+                throw new IllegalStateException(
+                        "YunExpress HTTP " + response.statusCode() + " en " + path + ": " + response.body());
             }
             return response.body();
         } catch (IOException e) {
@@ -287,10 +278,8 @@ public class YunExpressClient {
             if (entry.getValue() == null || entry.getValue().isBlank()) {
                 continue;
             }
-            sb.append(sb.isEmpty() ? '?' : '&')
-                    .append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
-                    .append('=')
-                    .append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+            sb.append(sb.isEmpty() ? '?' : '&').append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
+                    .append('=').append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
         }
         return sb.toString();
     }

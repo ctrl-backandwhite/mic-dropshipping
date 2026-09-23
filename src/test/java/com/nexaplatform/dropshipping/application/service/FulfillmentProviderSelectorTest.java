@@ -26,8 +26,8 @@ class FulfillmentProviderSelectorTest {
     private final FulfillmentProvider yunExpress = new TransportistaDePrueba("YUNEXPRESS");
     private final FulfillmentProvider segundo = new TransportistaDePrueba("SEGUNDO");
 
-    private final FulfillmentProviderSelector selector =
-            new FulfillmentProviderSelector(List.of(yunExpress, segundo), yunExpress);
+    private final FulfillmentProviderSelector selector = new FulfillmentProviderSelector(List.of(yunExpress, segundo),
+            yunExpress);
 
     @Test
     void eligeAlTransportistaQueCobroElPorte() {

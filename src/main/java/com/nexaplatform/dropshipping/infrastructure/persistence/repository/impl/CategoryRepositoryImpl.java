@@ -145,8 +145,8 @@ public class CategoryRepositoryImpl implements CategoryRepository {
         }
         // Add the genuinely new languages.
         for (Map.Entry<String, String> e : wanted.entrySet()) {
-            current.add(CategoryTranslationEntity.builder().category(c).language(e.getKey()).name(e.getValue())
-                    .build());
+            current.add(
+                    CategoryTranslationEntity.builder().category(c).language(e.getKey()).name(e.getValue()).build());
         }
     }
 }

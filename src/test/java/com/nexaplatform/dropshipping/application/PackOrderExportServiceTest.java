@@ -47,8 +47,8 @@ class PackOrderExportServiceTest {
 
     private static SupplierPurchaseEntity purchase(String domestic) {
         return SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
-                .status(SupplierPurchaseStatus.IN_TRANSIT).warehouseCode("CNCHASHAN")
-                .domesticTracking(domestic).build();
+                .status(SupplierPurchaseStatus.IN_TRANSIT).warehouseCode("CNCHASHAN").domesticTracking(domestic)
+                .build();
     }
 
     @Test
@@ -104,8 +104,7 @@ class PackOrderExportServiceTest {
         PackOrderPlan plan = service.plan();
 
         assertThat(plan.rows()).isEmpty();
-        assertThat(plan.issues()).singleElement()
-                .satisfies(i -> assertThat(i.reason()).contains("campos cruzados"));
+        assertThat(plan.issues()).singleElement().satisfies(i -> assertThat(i.reason()).contains("campos cruzados"));
     }
 
     @Test
@@ -116,8 +115,7 @@ class PackOrderExportServiceTest {
         PackOrderPlan plan = service.plan();
 
         assertThat(plan.rows()).isEmpty();
-        assertThat(plan.issues()).singleElement()
-                .satisfies(i -> assertThat(i.reason()).contains("no tiene número YT"));
+        assertThat(plan.issues()).singleElement().satisfies(i -> assertThat(i.reason()).contains("no tiene número YT"));
     }
 
     @Test
@@ -130,8 +128,7 @@ class PackOrderExportServiceTest {
         PackOrderPlan plan = service.plan();
 
         assertThat(plan.rows()).isEmpty();
-        assertThat(plan.issues()).singleElement()
-                .satisfies(i -> assertThat(i.reason()).contains("duplicado"));
+        assertThat(plan.issues()).singleElement().satisfies(i -> assertThat(i.reason()).contains("duplicado"));
     }
 
     @Test
@@ -152,8 +149,8 @@ class PackOrderExportServiceTest {
 
     @Test
     void elFicheroLlevaElEncabezadoExactoDeLaPlantillaOficial() throws IOException {
-        PackOrderRow row = new PackOrderRow(PackServiceType.CONSOLIDATE, "CNCHASHAN",
-                List.of("SF123", "JT456"), List.of("YT999"), false, false, true, "Consolidar");
+        PackOrderRow row = new PackOrderRow(PackServiceType.CONSOLIDATE, "CNCHASHAN", List.of("SF123", "JT456"),
+                List.of("YT999"), false, false, true, "Consolidar");
 
         byte[] xls = service.toXls(List.of(row));
 

@@ -53,11 +53,10 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void unPedidoDeCincoFamiliasPagaCincoLineas() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea("620342", 5),   // vaqueros
-                linea("610910", 3),   // camisetas
-                linea("640399", 1),   // zapatos
-                linea("610711", 3),   // bóxer
+        List<DutyParcel> bultos = service.parcelsOf(List.of(linea("620342", 5), // vaqueros
+                linea("610910", 3), // camisetas
+                linea("640399", 1), // zapatos
+                linea("610711", 3), // bóxer
                 linea("620293", 1))); // abrigo
 
         assertThat(bultos).hasSize(1);
@@ -84,10 +83,8 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void productosDistintosConLaMismaSubpartidaSonUnaSolaLinea() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea("610419", 1, "Women's suit"),
-                linea("610419", 1, "Women's suit"),
-                linea("610419", 1, "Women's suit")));
+        List<DutyParcel> bultos = service.parcelsOf(List.of(linea("610419", 1, "Women's suit"),
+                linea("610419", 1, "Women's suit"), linea("610419", 1, "Women's suit")));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(1);
     }
@@ -95,8 +92,8 @@ class CustomsDutyLinesServiceTest {
     /** Se agrupa por los 6 primeros dígitos (subpartida del H7), aunque el código venga con más detalle. */
     @Test
     void seAgrupaPorLosSeisPrimerosDigitos() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea("6104199010", 1), linea("610419 90 20", 1), linea("6104.19.90.90", 1)));
+        List<DutyParcel> bultos = service
+                .parcelsOf(List.of(linea("6104199010", 1), linea("610419 90 20", 1), linea("6104.19.90.90", 1)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(1);
     }
@@ -107,8 +104,8 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void unProductoSinClasificacionCuentaComoLineaPropia() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea(null, 1), linea("", 2), linea("123", 1), linea("620342", 4)));
+        List<DutyParcel> bultos = service
+                .parcelsOf(List.of(linea(null, 1), linea("", 2), linea("123", 1), linea("620342", 4)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(4);
     }
@@ -124,9 +121,8 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void dosDescripcionesDistintasConLaMismaSubpartidaSonDosLineas() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea("620342", 1, "Men denim trousers"),
-                linea("620342", 1, "Women denim skirt")));
+        List<DutyParcel> bultos = service
+                .parcelsOf(List.of(linea("620342", 1, "Men denim trousers"), linea("620342", 1, "Women denim skirt")));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(2);
     }
@@ -137,10 +133,8 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void laDescripcionSeNormalizaEnEspaciosYMayusculas() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea("620342", 1, "Cotton T-Shirt"),
-                linea("620342", 1, "  cotton   t-shirt "),
-                linea("620342", 1, "COTTON T-SHIRT")));
+        List<DutyParcel> bultos = service.parcelsOf(List.of(linea("620342", 1, "Cotton T-Shirt"),
+                linea("620342", 1, "  cotton   t-shirt "), linea("620342", 1, "COTTON T-SHIRT")));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(1);
     }
@@ -151,9 +145,9 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void dosOrigenesDistintosConLaMismaDescripcionSonDosLineas() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                new Line(UUID.randomUUID(), "620342", "Denim trousers", "CN", 1, 1000, 500, 0, 0, 0, false),
-                new Line(UUID.randomUUID(), "620342", "Denim trousers", "VN", 1, 1000, 500, 0, 0, 0, false)));
+        List<DutyParcel> bultos = service.parcelsOf(
+                List.of(new Line(UUID.randomUUID(), "620342", "Denim trousers", "CN", 1, 1000, 500, 0, 0, 0, false),
+                        new Line(UUID.randomUUID(), "620342", "Denim trousers", "VN", 1, 1000, 500, 0, 0, 0, false)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(2);
     }
@@ -164,10 +158,8 @@ class CustomsDutyLinesServiceTest {
      */
     @Test
     void sinDescripcionSoloAgrupaLaSubpartida() {
-        List<DutyParcel> bultos = service.parcelsOf(List.of(
-                linea("610419", 1, null),
-                linea("610419", 1, "   "),
-                linea("610419", 1, null)));
+        List<DutyParcel> bultos = service
+                .parcelsOf(List.of(linea("610419", 1, null), linea("610419", 1, "   "), linea("610419", 1, null)));
 
         assertThat(bultos.get(0).tariffLines()).isEqualTo(1);
     }
@@ -204,10 +196,9 @@ class CustomsDutyLinesServiceTest {
         ProductEntity pantalon = producto("620342", "Men denim trousers");
         ProductEntity falda = producto("620342", "Women denim skirt");
 
-        List<DutyParcel> comoLaVistaPrevia = service.parcelsOf(List.of(
-                lineaDe(pantalon, 200, 150, 30), lineaDe(falda, 180, 140, 25)));
-        List<DutyParcel> comoElPedido = service.parcelsOf(List.of(
-                lineaDe(pantalon, 0, 0, 0), lineaDe(falda, 0, 0, 0)));
+        List<DutyParcel> comoLaVistaPrevia = service
+                .parcelsOf(List.of(lineaDe(pantalon, 200, 150, 30), lineaDe(falda, 180, 140, 25)));
+        List<DutyParcel> comoElPedido = service.parcelsOf(List.of(lineaDe(pantalon, 0, 0, 0), lineaDe(falda, 0, 0, 0)));
 
         assertThat(comoLaVistaPrevia).isEqualTo(comoElPedido);
         assertThat(comoLaVistaPrevia.get(0).tariffLines()).isEqualTo(2);

@@ -108,7 +108,7 @@ class Cov02ObjectStorageServiceTest {
         ReflectionTestUtils.setField(service, "publicUrl", PUBLIC_URL + "///");
         conCliente();
 
-        String url = service.upload("a/b.jpg", new byte[] {1, 2, 3}, "image/jpeg");
+        String url = service.upload("a/b.jpg", new byte[]{1, 2, 3}, "image/jpeg");
 
         assertThat(url).isEqualTo(PUBLIC_URL + "/a/b.jpg");
     }
@@ -118,7 +118,7 @@ class Cov02ObjectStorageServiceTest {
         conCliente();
         ArgumentCaptor<PutObjectArgs> captor = ArgumentCaptor.forClass(PutObjectArgs.class);
 
-        service.upload("fotos/a.jpg", new byte[] {1, 2, 3}, "image/jpeg");
+        service.upload("fotos/a.jpg", new byte[]{1, 2, 3}, "image/jpeg");
 
         verify(client).putObject(captor.capture());
         assertThat(captor.getValue().contentType()).isEqualTo("image/jpeg");
@@ -132,7 +132,7 @@ class Cov02ObjectStorageServiceTest {
         conCliente();
         ArgumentCaptor<PutObjectArgs> captor = ArgumentCaptor.forClass(PutObjectArgs.class);
 
-        String url = service.upload("c.bin", new byte[] {9}, "  ");
+        String url = service.upload("c.bin", new byte[]{9}, "  ");
 
         assertThat(url).isEqualTo(PUBLIC_URL + "/c.bin");
         verify(client).putObject(captor.capture());
@@ -143,11 +143,10 @@ class Cov02ObjectStorageServiceTest {
     void subirTraduceLosNueveFallosDelSdkAUnaSolaExcepcionDeAlmacen() throws Exception {
         conCliente();
         when(client.putObject(any(PutObjectArgs.class))).thenThrow(new IOException("red caída"));
-        byte[] datos = new byte[] {1};
+        byte[] datos = new byte[]{1};
 
         assertThatThrownBy(() -> service.upload("x.jpg", datos, "image/jpeg"))
-                .isInstanceOf(ObjectStorageException.class)
-                .hasMessageContaining("x.jpg");
+                .isInstanceOf(ObjectStorageException.class).hasMessageContaining("x.jpg");
     }
 
     /* ============ descarga ============ */
@@ -156,7 +155,7 @@ class Cov02ObjectStorageServiceTest {
     void descargarDevuelveLosBytesDelObjeto() throws Exception {
         conCliente();
         GetObjectResponse respuesta = mock(GetObjectResponse.class);
-        when(respuesta.readAllBytes()).thenReturn(new byte[] {7, 7});
+        when(respuesta.readAllBytes()).thenReturn(new byte[]{7, 7});
         when(client.getObject(any(GetObjectArgs.class))).thenReturn(respuesta);
 
         assertThat(service.download("foto.jpg")).containsExactly(7, 7);
@@ -167,8 +166,7 @@ class Cov02ObjectStorageServiceTest {
         conCliente();
         when(client.getObject(any(GetObjectArgs.class))).thenThrow(new IOException("404"));
 
-        assertThatThrownBy(() -> service.download("no-existe.jpg"))
-                .isInstanceOf(ObjectStorageException.class);
+        assertThatThrownBy(() -> service.download("no-existe.jpg")).isInstanceOf(ObjectStorageException.class);
     }
 
     /* ============ bytes desde la URL pública ============ */
@@ -203,7 +201,7 @@ class Cov02ObjectStorageServiceTest {
     void deLaUrlPublicaSeDerivaLaClaveYSeLeePorElEndpointInterno() throws Exception {
         conCliente();
         GetObjectResponse respuesta = mock(GetObjectResponse.class);
-        when(respuesta.readAllBytes()).thenReturn(new byte[] {5});
+        when(respuesta.readAllBytes()).thenReturn(new byte[]{5});
         when(client.getObject(any(GetObjectArgs.class))).thenReturn(respuesta);
         ArgumentCaptor<GetObjectArgs> captor = ArgumentCaptor.forClass(GetObjectArgs.class);
 

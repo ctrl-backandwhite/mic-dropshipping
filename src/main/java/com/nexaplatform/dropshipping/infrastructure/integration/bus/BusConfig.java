@@ -98,8 +98,7 @@ public class BusConfig {
     public ConcurrentKafkaListenerContainerFactory<String, String> busListenerContainerFactory(
             @Qualifier("busConsumerFactory") ConsumerFactory<String, String> busConsumerFactory,
             @Qualifier("busKafkaTemplate") KafkaTemplate<String, Object> busKafkaTemplate) {
-        ConcurrentKafkaListenerContainerFactory<String, String> factoria =
-                new ConcurrentKafkaListenerContainerFactory<>();
+        ConcurrentKafkaListenerContainerFactory<String, String> factoria = new ConcurrentKafkaListenerContainerFactory<>();
         factoria.setConsumerFactory(busConsumerFactory);
         // Un solo hilo: el orden dentro de cada producto importa —la categoría antes que el
         // producto, el alta antes que la corrección— y con varios hilos se pierde.

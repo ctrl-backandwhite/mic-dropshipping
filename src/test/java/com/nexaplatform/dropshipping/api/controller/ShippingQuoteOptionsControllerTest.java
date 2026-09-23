@@ -55,15 +55,15 @@ class ShippingQuoteOptionsControllerTest {
 
     /** Vista previa mínima con las dos opciones cotizadas y {@code elegida} como la aplicada. */
     private static CheckoutPreviewService.Preview preview(ShippingOption elegida) {
-        ShippingQuote quote = new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping",
-                5, 8, "EU", OPCIONES);
-        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, 1000, false, null, 0, false,
-                "150 EUR", true);
-        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(785, 0, 785,
-                375, 2100, customs);
+        ShippingQuote quote = new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping", 5, 8, "EU",
+                OPCIONES);
+        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, 1000, false, null, 0, false, "150 EUR",
+                true);
+        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(785, 0, 785, 375, 2100,
+                customs);
         return new CheckoutPreviewService.Preview(quote, 1000, 0, 785, 375, 2100, new BigDecimal("10.00"),
-                BigDecimal.ZERO, new BigDecimal("7.85"), new BigDecimal("3.75"), new BigDecimal("21.60"),
-                totals, null, null, null, List.of(), elegida);
+                BigDecimal.ZERO, new BigDecimal("7.85"), new BigDecimal("3.75"), new BigDecimal("21.60"), totals, null,
+                null, null, List.of(), elegida);
     }
 
     @BeforeEach
@@ -72,13 +72,16 @@ class ShippingQuoteOptionsControllerTest {
         lenient().when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(i -> i.getArgument(0));
         lenient().when(currencyService.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(i -> i.<BigDecimal>getArgument(0).toPlainString() + " €");
-        lenient().when(checkoutPreview.compute(anyString(), nullable(String.class), any(), nullable(java.util.UUID.class),
-                nullable(String.class), nullable(String.class))).thenReturn(preview(OPCIONES.getFirst()));
+        lenient()
+                .when(checkoutPreview.compute(anyString(), nullable(String.class), any(),
+                        nullable(java.util.UUID.class), nullable(String.class), nullable(String.class)))
+                .thenReturn(preview(OPCIONES.getFirst()));
     }
 
     private ShippingQuoteController.QuoteResponse cotizar(String shippingOptionCode) {
-        return controller.quote(new ShippingQuoteController.QuoteRequest("ES", null, List.of(), null,
-                shippingOptionCode), null).getBody();
+        return controller
+                .quote(new ShippingQuoteController.QuoteRequest("ES", null, List.of(), null, shippingOptionCode), null)
+                .getBody();
     }
 
     @Test
@@ -98,18 +101,18 @@ class ShippingQuoteOptionsControllerTest {
     void transportistaDesconocido() {
         // Si mañana se añade un tercero y nadie se acuerda de darle nombre, la opción tiene que seguir
         // siendo comprensible en vez de enseñar un hueco o un identificador interno.
-        ShippingQuote quote = new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping",
-                5, 8, "EU", List.of(new ShippingOption("X", "Otra", 785, 5, 8, "TRANSPORTISTA_NUEVO")));
-        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, 1000, false, null, 0, false,
-                "150 EUR", true);
-        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(785, 0, 785,
-                375, 2100, customs);
-        lenient().when(checkoutPreview.compute(anyString(), nullable(String.class), any(),
-                nullable(java.util.UUID.class), nullable(String.class), nullable(String.class)))
-                .thenReturn(new CheckoutPreviewService.Preview(quote, 1000, 0, 785, 375, 2100,
-                        new BigDecimal("10.00"), BigDecimal.ZERO, new BigDecimal("7.85"),
-                        new BigDecimal("3.75"), new BigDecimal("21.60"), totals, null, null, null,
-                        List.of(), null));
+        ShippingQuote quote = new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping", 5, 8, "EU",
+                List.of(new ShippingOption("X", "Otra", 785, 5, 8, "TRANSPORTISTA_NUEVO")));
+        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, 1000, false, null, 0, false, "150 EUR",
+                true);
+        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(785, 0, 785, 375, 2100,
+                customs);
+        lenient()
+                .when(checkoutPreview.compute(anyString(), nullable(String.class), any(),
+                        nullable(java.util.UUID.class), nullable(String.class), nullable(String.class)))
+                .thenReturn(new CheckoutPreviewService.Preview(quote, 1000, 0, 785, 375, 2100, new BigDecimal("10.00"),
+                        BigDecimal.ZERO, new BigDecimal("7.85"), new BigDecimal("3.75"), new BigDecimal("21.60"),
+                        totals, null, null, null, List.of(), null));
 
         ShippingQuoteController.QuoteResponse res = cotizar(null);
 
@@ -159,8 +162,8 @@ class ShippingQuoteOptionsControllerTest {
         cotizar("THPHR");
 
         ArgumentCaptor<String> canal = ArgumentCaptor.forClass(String.class);
-        verify(checkoutPreview).compute(anyString(), nullable(String.class), any(),
-                nullable(java.util.UUID.class), nullable(String.class), canal.capture());
+        verify(checkoutPreview).compute(anyString(), nullable(String.class), any(), nullable(java.util.UUID.class),
+                nullable(String.class), canal.capture());
         assertThat(canal.getValue()).isEqualTo("THPHR");
     }
 
@@ -194,16 +197,16 @@ class ShippingQuoteOptionsControllerTest {
     @Test
     @DisplayName("los países se nombran en el idioma pedido, no en el que están guardados")
     void losPaisesSeNombranEnElIdiomaPedido() {
-        when(shippingQuoteService.supportedCountries()).thenReturn(List.of(
-                new FulfillmentProvider.SupportedCountry("DE", "Alemania"),
-                new FulfillmentProvider.SupportedCountry("US", "Estados Unidos")));
+        when(shippingQuoteService.supportedCountries())
+                .thenReturn(List.of(new FulfillmentProvider.SupportedCountry("DE", "Alemania"),
+                        new FulfillmentProvider.SupportedCountry("US", "Estados Unidos")));
 
         LocaleHolder.set("en");
         try {
             List<FulfillmentProvider.SupportedCountry> paises = controller.supportedCountries().getBody();
 
-            assertThat(paises).extracting(FulfillmentProvider.SupportedCountry::countryName)
-                    .containsExactly("Germany", "United States");
+            assertThat(paises).extracting(FulfillmentProvider.SupportedCountry::countryName).containsExactly("Germany",
+                    "United States");
         } finally {
             LocaleHolder.clear();
         }
@@ -219,8 +222,7 @@ class ShippingQuoteOptionsControllerTest {
         LocaleHolder.set("en");
         try {
             assertThat(controller.supportedCountries().getBody())
-                    .extracting(FulfillmentProvider.SupportedCountry::countryName)
-                    .containsExactly("Kosovo");
+                    .extracting(FulfillmentProvider.SupportedCountry::countryName).containsExactly("Kosovo");
         } finally {
             LocaleHolder.clear();
         }
@@ -234,10 +236,10 @@ class ShippingQuoteOptionsControllerTest {
     @Test
     @DisplayName("los países salen ordenados por el nombre traducido, no por el guardado")
     void losPaisesSalenOrdenadosPorElNombreTraducido() {
-        when(shippingQuoteService.supportedCountries()).thenReturn(List.of(
-                new FulfillmentProvider.SupportedCountry("DE", "Alemania"),
-                new FulfillmentProvider.SupportedCountry("SA", "Arabia Saudí"),
-                new FulfillmentProvider.SupportedCountry("AR", "Argentina")));
+        when(shippingQuoteService.supportedCountries())
+                .thenReturn(List.of(new FulfillmentProvider.SupportedCountry("DE", "Alemania"),
+                        new FulfillmentProvider.SupportedCountry("SA", "Arabia Saudí"),
+                        new FulfillmentProvider.SupportedCountry("AR", "Argentina")));
 
         LocaleHolder.set("en");
         try {

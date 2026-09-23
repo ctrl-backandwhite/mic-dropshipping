@@ -32,15 +32,9 @@ public class ChatController {
     public ResponseEntity<ChatAnswerDtoOut> ask(@Valid @RequestBody ChatAskDtoIn body) {
         ChatContext context = new ChatContext(usuarioActual(), body.getLang());
         ChatAnswer answer = chatUseCase.ask(body.getConversationId(), body.getMessage(), context);
-        return ResponseEntity.ok(ChatAnswerDtoOut.builder()
-                .conversationId(answer.conversationId())
-                .reply(answer.reply())
-                .products(answer.products())
-                .degraded(answer.degraded())
-                .reason(answer.reason())
-                .searchQuery(answer.searchQuery())
-                .searchTotal(answer.searchTotal())
-                .build());
+        return ResponseEntity.ok(ChatAnswerDtoOut.builder().conversationId(answer.conversationId())
+                .reply(answer.reply()).products(answer.products()).degraded(answer.degraded()).reason(answer.reason())
+                .searchQuery(answer.searchQuery()).searchTotal(answer.searchTotal()).build());
     }
 
     /**

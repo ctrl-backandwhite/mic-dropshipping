@@ -32,22 +32,19 @@ class CustomsRuleUpsertIT extends BaseIntegration {
     }
 
     private static Map<String, Object> reglaMinima() {
-        return Map.of("taxMode", "DDP", "deMinimisAmount", 150, "deMinimisCurrency", "EUR",
-                "overThresholdPolicy", "BLOCK", "handlingFeeCents", 0, "handlingPercentBps", 0,
-                "overThresholdSurchargeCents", 0, "dutyRateBps", 0, "active", true);
+        return Map.of("taxMode", "DDP", "deMinimisAmount", 150, "deMinimisCurrency", "EUR", "overThresholdPolicy",
+                "BLOCK", "handlingFeeCents", 0, "handlingPercentBps", 0, "overThresholdSurchargeCents", 0,
+                "dutyRateBps", 0, "active", true);
     }
 
     @Test
     @DisplayName("se puede dar de alta la regla de un país que no tenía ninguna")
     void seCreaLaReglaDeUnPaisNuevo() {
-        client.put().uri(RUTA + "PT")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(reglaMinima())
-                .exchange()
-                .expectStatus().isOk();
+        client.put().uri(RUTA + "PT").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(reglaMinima()).exchange().expectStatus().isOk();
 
-        Integer filas = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM country_customs_rule WHERE country_code = 'PT'", Integer.class);
+        Integer filas = jdbcTemplate
+                .queryForObject("SELECT COUNT(*) FROM country_customs_rule WHERE country_code = 'PT'", Integer.class);
         assertThat(filas).isEqualTo(1);
     }
 
@@ -56,14 +53,11 @@ class CustomsRuleUpsertIT extends BaseIntegration {
     void laReglaNuevaNaceSinLimiteDelTransportista() {
         // Cero significa «sin dato», y sin dato no se bloquea a nadie. Rellenarlo con los 150 EUR de la UE
         // impondría a un país nuevo un tope que quizá su línea no tiene.
-        client.put().uri(RUTA + "MX")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(reglaMinima())
-                .exchange()
-                .expectStatus().isOk();
+        client.put().uri(RUTA + "MX").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(reglaMinima()).exchange().expectStatus().isOk();
 
-        Map<String, Object> fila = jdbcTemplate.queryForMap(
-                "SELECT carrier_max_amount, carrier_max_currency, carrier_max_alt_amount,"
+        Map<String, Object> fila = jdbcTemplate
+                .queryForMap("SELECT carrier_max_amount, carrier_max_currency, carrier_max_alt_amount,"
                         + " carrier_max_alt_currency, carrier_prepays_vat"
                         + " FROM country_customs_rule WHERE country_code = 'MX'");
 
@@ -89,14 +83,11 @@ class CustomsRuleUpsertIT extends BaseIntegration {
                 + " VALUES (gen_random_uuid(), 'ES', 'DDP', 150, 'EUR', 'BLOCK', 0, 0, 0, 0, 0,"
                 + " 3.00, 'EUR', 150.00, 'EUR', 155.00, 'USD', true, true, now(), now())");
 
-        client.put().uri(RUTA + "ES")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(reglaMinima())
-                .exchange()
-                .expectStatus().isOk();
+        client.put().uri(RUTA + "ES").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(reglaMinima()).exchange().expectStatus().isOk();
 
-        Map<String, Object> fila = jdbcTemplate.queryForMap(
-                "SELECT carrier_max_amount, carrier_max_alt_amount, carrier_prepays_vat,"
+        Map<String, Object> fila = jdbcTemplate
+                .queryForMap("SELECT carrier_max_amount, carrier_max_alt_amount, carrier_prepays_vat,"
                         + " per_article_fee_amount FROM country_customs_rule WHERE country_code = 'ES'");
 
         assertThat(((Number) fila.get("carrier_max_amount")).intValue()).isEqualTo(150);

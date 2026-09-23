@@ -32,20 +32,13 @@ public class CartSuggestionController {
                 .map(l -> new CartSuggestionService.Linea(l.getProductId(), l.getVariantId(), l.getQuantity()))
                 .toList();
         CartSuggestionService.Sugerencias resultado = suggestions.para(carrito, body.getLang());
-        return ResponseEntity.ok(CartSuggestionsDtoOut.builder()
-                .gramosLibres(resultado.gramosLibres())
+        return ResponseEntity.ok(CartSuggestionsDtoOut.builder().gramosLibres(resultado.gramosLibres())
                 .otroBultoFormatted(resultado.otroBultoFormatted())
                 .items(resultado.items().stream()
-                .map(s -> CartSuggestionDtoOut.builder()
-                        .id(s.id())
-                        .slug(s.slug())
-                        .title(s.title())
-                        .image(s.image())
-                        .dutyExtraFormatted(s.dutyExtraFormatted())
-                        .shippingExtraFormatted(s.shippingExtraFormatted())
-                        .shippingAloneFormatted(s.shippingAloneFormatted())
-                        .motivo(s.motivo())
-                        .build())
+                        .map(s -> CartSuggestionDtoOut.builder().id(s.id()).slug(s.slug()).title(s.title())
+                                .image(s.image()).dutyExtraFormatted(s.dutyExtraFormatted())
+                                .shippingExtraFormatted(s.shippingExtraFormatted())
+                                .shippingAloneFormatted(s.shippingAloneFormatted()).motivo(s.motivo()).build())
                         .toList())
                 .build());
     }

@@ -105,16 +105,16 @@ class DesgloseConSubvencionTest {
 
     private static CheckoutPreviewService.Preview previewConSubvencion() {
         ShippingQuote quote = new ShippingQuote(true, "ES", PORTE, "Standard", "Standard", 5, 8, "EU", List.of());
-        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, SUBTOTAL, false, null, ARANCEL,
-                false, "150 EUR", false);
+        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, SUBTOTAL, false, null, ARANCEL, false,
+                "150 EUR", false);
         // El envío COBRADO ya lleva la subvención descontada; el porte base, no.
         int cobrado = PORTE + ARANCEL - SUBVENCION;
         // La bolsa cubre el porte entero y parte del arancel, que es como se reparte de verdad.
-        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(PORTE, ARANCEL,
-                cobrado, IVA, 2100, customs, PORTE, SUBVENCION - PORTE);
+        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(PORTE, ARANCEL, cobrado,
+                IVA, 2100, customs, PORTE, SUBVENCION - PORTE);
         return new CheckoutPreviewService.Preview(quote, SUBTOTAL, 0, cobrado, IVA, 2100,
                 BigDecimal.valueOf(SUBTOTAL, 2), BigDecimal.ZERO, BigDecimal.valueOf(cobrado, 2),
-                BigDecimal.valueOf(IVA, 2), BigDecimal.valueOf(SUBTOTAL + cobrado + IVA, 2), totals,
-                null, null, null, List.of(), null);
+                BigDecimal.valueOf(IVA, 2), BigDecimal.valueOf(SUBTOTAL + cobrado + IVA, 2), totals, null, null, null,
+                List.of(), null);
     }
 }

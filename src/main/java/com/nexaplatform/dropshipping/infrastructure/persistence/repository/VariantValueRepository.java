@@ -33,8 +33,7 @@ public interface VariantValueRepository extends JpaRepository<VariantValueEntity
      * ven rotas, porque el proveedor responde 403 a quien enlaza sus imágenes desde otra web.
      */
     @Query("SELECT v FROM VariantValueEntity v WHERE v.option.product.id IN :productIds "
-            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' "
-            + "AND v.imageMirrorFailedAt IS NULL "
+            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' " + "AND v.imageMirrorFailedAt IS NULL "
             + "AND (v.imageCdnUrl IS NULL OR v.imageCdnUrl NOT LIKE :publicPrefix)")
     List<VariantValueEntity> findNeedingImageMirrorByProducts(@Param("publicPrefix") String publicPrefix,
             @Param("productIds") List<UUID> productIds);
@@ -66,7 +65,6 @@ public interface VariantValueRepository extends JpaRepository<VariantValueEntity
     @Transactional
     @Query(value = "UPDATE variant_value SET image_mirror_failed_at = NULL WHERE id IN ("
             + "SELECT id FROM variant_value WHERE image_mirror_failed_at IS NOT NULL "
-            + "AND image_mirror_failed_at <= :antesDe ORDER BY image_mirror_failed_at LIMIT :tope)",
-            nativeQuery = true)
+            + "AND image_mirror_failed_at <= :antesDe ORDER BY image_mirror_failed_at LIMIT :tope)", nativeQuery = true)
     int requeueFailed(@Param("antesDe") Instant antesDe, @Param("tope") int tope);
 }

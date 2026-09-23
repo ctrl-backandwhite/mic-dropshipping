@@ -51,14 +51,14 @@ public class GithubOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         }
 
         Map<String, Object> attributes = new HashMap<>(user.getAttributes());
-        EmailInfo resolved = resolveEmail(userRequest.getAccessToken().getTokenValue(),
-                (String) attributes.get(EMAIL));
+        EmailInfo resolved = resolveEmail(userRequest.getAccessToken().getTokenValue(), (String) attributes.get(EMAIL));
         attributes.put(EMAIL, resolved == null ? null : resolved.email());
         attributes.put("email_verified", resolved != null && resolved.verified());
 
-        String configuredName = userRequest.getClientRegistration().getProviderDetails()
-                .getUserInfoEndpoint().getUserNameAttributeName();
-        String nameAttributeKey = configuredName != null && !configuredName.isBlank() ? configuredName
+        String configuredName = userRequest.getClientRegistration().getProviderDetails().getUserInfoEndpoint()
+                .getUserNameAttributeName();
+        String nameAttributeKey = configuredName != null && !configuredName.isBlank()
+                ? configuredName
                 : DEFAULT_NAME_ATTRIBUTE;
         Collection<? extends GrantedAuthority> authorities = user.getAuthorities();
         return new DefaultOAuth2User(authorities, attributes, nameAttributeKey);
@@ -94,12 +94,9 @@ public class GithubOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetchEmails(String accessToken) {
         try {
-            List<Map<String, Object>> emails = restClient.get()
-                    .uri(EMAILS_URL)
+            List<Map<String, Object>> emails = restClient.get().uri(EMAILS_URL)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
-                    .retrieve()
-                    .body(List.class);
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json").retrieve().body(List.class);
             return emails != null ? emails : List.of();
         } catch (RuntimeException ex) {
             log.warn("::> [GITHUB-OAUTH2] No se pudo consultar /user/emails: {}", ex.getMessage());

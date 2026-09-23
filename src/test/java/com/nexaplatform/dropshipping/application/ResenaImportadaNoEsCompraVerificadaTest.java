@@ -47,8 +47,8 @@ class ResenaImportadaNoEsCompraVerificadaTest {
     @Test
     void elDistintivoNoSeActivaSolo() {
         // Construir una reseña sin decir nada del distintivo no debe activarlo por omisión.
-        ProductReviewEntity review = ProductReviewEntity.builder()
-                .rating((short) 5).authorName("l**7").body("Muy buen producto").build();
+        ProductReviewEntity review = ProductReviewEntity.builder().rating((short) 5).authorName("l**7")
+                .body("Muy buen producto").build();
 
         assertThat(review.isVerifiedPurchase()).isFalse();
     }

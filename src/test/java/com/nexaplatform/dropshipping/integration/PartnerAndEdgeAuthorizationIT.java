@@ -70,16 +70,15 @@ class PartnerAndEdgeAuthorizationIT extends BaseIntegration {
     void partnerOrders_conScopeOrdersWrite_noEsProhibido() {
         Integer status = client.post().uri(PARTNER_ORDERS)
                 .header("Authorization", bearer(jwt.partnerToken(List.of("orders.write"))))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().returnResult(Void.class)
-                .getStatus().value();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().returnResult(Void.class).getStatus()
+                .value();
 
         assertThat(status).as("partner con orders.write no debe ser bloqueado por auth").isNotIn(401, 403);
     }
 
     @Test
     void partnerOrders_conScopeSoloCatalogRead_es403() {
-        client.post().uri(PARTNER_ORDERS)
-                .header("Authorization", bearer(jwt.partnerToken(List.of("catalog.read"))))
+        client.post().uri(PARTNER_ORDERS).header("Authorization", bearer(jwt.partnerToken(List.of("catalog.read"))))
                 .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().expectStatus().isForbidden();
     }
 
@@ -92,7 +91,8 @@ class PartnerAndEdgeAuthorizationIT extends BaseIntegration {
         Integer status = client.post().uri(WEBHOOK_STRIPE).contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{\"invalid\":true}").exchange().returnResult(Void.class).getStatus().value();
 
-        assertThat(status).as("/api/webhooks/stripe es permitAll: la firma la valida el controller, no la cadena de auth")
+        assertThat(status)
+                .as("/api/webhooks/stripe es permitAll: la firma la valida el controller, no la cadena de auth")
                 .isNotIn(401, 403);
     }
 
@@ -103,8 +103,8 @@ class PartnerAndEdgeAuthorizationIT extends BaseIntegration {
     @Test
     void crossToken_userAdminContraPartnerCatalog_es403() {
         // Un access token de usuario ADMIN no lleva claim scope → sin SCOPE_catalog.read → 403.
-        client.get().uri(PARTNER_CATALOG_PRODUCTS).header("Authorization", bearer(jwt.userToken("ADMIN")))
-                .exchange().expectStatus().isForbidden();
+        client.get().uri(PARTNER_CATALOG_PRODUCTS).header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

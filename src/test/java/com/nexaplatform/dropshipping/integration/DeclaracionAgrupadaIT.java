@@ -52,14 +52,11 @@ import static org.mockito.Mockito.when;
  * y la guía emite dos líneas. Sin él, esta clase pasaría igual el día que la agrupación dejara de
  * aplicarse: estaría midiendo que el cálculo devuelve un número, no que devuelve ESTE.
  */
-@TestPropertySource(properties = {
-        "nexadrop.fulfillment.sync-enabled=false",
+@TestPropertySource(properties = {"nexadrop.fulfillment.sync-enabled=false",
         // Sin límite de bulto: los dos artículos viajan juntos. El reparto en bultos —que también decide
         // cuántas veces se cobra el derecho— ya lo certifica CustomsDutyIT; aquí se mide la AGRUPACIÓN.
-        "nexadrop.yunexpress.max-parcel-weight-grams=0",
-        "nexadrop.yunexpress.max-parcel-value-cents=0",
-        "nexadrop.yunexpress.max-parcel-units=0"
-})
+        "nexadrop.yunexpress.max-parcel-weight-grams=0", "nexadrop.yunexpress.max-parcel-value-cents=0",
+        "nexadrop.yunexpress.max-parcel-units=0"})
 class DeclaracionAgrupadaIT extends BaseIntegration {
 
     private static final String COTIZAR = "/api/shipping/quote";
@@ -133,9 +130,9 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
 
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         when(fulfillment.nombre()).thenReturn(TRANSPORTISTA);
-        when(fulfillment.quote(anyString(), any())).thenReturn(new ShippingQuote(true, PAIS, PORTE_CENTS,
-                "Standard Shipping", "Standard Shipping", 5, 8, "EU",
-                List.of(new ShippingOption(CANAL, "Apparel line", PORTE_CENTS, 5, 8))));
+        when(fulfillment.quote(anyString(), any()))
+                .thenReturn(new ShippingQuote(true, PAIS, PORTE_CENTS, "Standard Shipping", "Standard Shipping", 5, 8,
+                        "EU", List.of(new ShippingOption(CANAL, "Apparel line", PORTE_CENTS, 5, 8))));
 
         direccionId = crearDireccion();
     }
@@ -148,16 +145,14 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
         // 1 · La vista previa: el arancel del carrito es UN derecho, no dos.
         JsonNode previa = cotizar();
         assertThat(previa.get("customsHandlingUsdCents").asInt())
-                .as("dos vestidos de la misma terna son UNA línea de declaración")
-                .isEqualTo(ARANCEL_POR_LINEA_CENTS);
+                .as("dos vestidos de la misma terna son UNA línea de declaración").isEqualTo(ARANCEL_POR_LINEA_CENTS);
 
         // 2 · El pedido cobra ESO y congela con qué descripción se declaró. Sin el snapshot, aprobar o
         // retirar el grupo después de cobrar cambiaría lo que se declara y el pedido dejaría de cuadrar.
         UUID pedidoId = pagarConMonedero();
         assertThat(enteroDe("SELECT customs_duty_cents FROM customer_order WHERE id = ?", pedidoId))
                 .isEqualTo(ARANCEL_POR_LINEA_CENTS);
-        assertThat(descripcionesCongeladas(pedidoId))
-                .as("las dos líneas se congelan con la descripción del grupo")
+        assertThat(descripcionesCongeladas(pedidoId)).as("las dos líneas se congelan con la descripción del grupo")
                 .containsExactly(DESCRIPCION_DEL_GRUPO, DESCRIPCION_DEL_GRUPO);
         assertThat(descripcionesCongeladasZh(pedidoId))
                 .as("y con su chino: una línea de la declaración lleva un solo EName y un solo CName")
@@ -179,8 +174,7 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
         // que cargar catálogo abarate el arancel por accidente.
         sembrarGrupo(null);
 
-        assertThat(cotizar().get("customsHandlingUsdCents").asInt())
-                .isEqualTo(2 * ARANCEL_POR_LINEA_CENTS);
+        assertThat(cotizar().get("customsHandlingUsdCents").asInt()).isEqualTo(2 * ARANCEL_POR_LINEA_CENTS);
 
         UUID pedidoId = pagarConMonedero();
         assertThat(declaracionDe(pedidoId)).hasSize(2);
@@ -192,11 +186,10 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
         // El freno de mano por destino: si una aduana empezara a contar distinto, se apaga ESE país sin
         // desplegar y sin tocar los grupos aprobados, que siguen valiendo para los otros 26.
         aprobarElGrupo();
-        jdbcTemplate.update("UPDATE country_customs_rule SET group_declaration_lines = false"
-                + " WHERE country_code = ?", PAIS);
+        jdbcTemplate.update(
+                "UPDATE country_customs_rule SET group_declaration_lines = false" + " WHERE country_code = ?", PAIS);
 
-        assertThat(cotizar().get("customsHandlingUsdCents").asInt())
-                .isEqualTo(2 * ARANCEL_POR_LINEA_CENTS);
+        assertThat(cotizar().get("customsHandlingUsdCents").asInt()).isEqualTo(2 * ARANCEL_POR_LINEA_CENTS);
         assertThat(declaracionDe(pagarConMonedero())).hasSize(2);
     }
 
@@ -210,8 +203,7 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
                  "items":[{"productId":"%s","quantity":1},{"productId":"%s","quantity":1}]}
                 """.formatted(PAIS, CANAL, vestidoAzul, vestidoRojo);
         return cuerpo(client.post().uri(COTIZAR).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isOk());
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isOk());
     }
 
     private UUID pagarConMonedero() {
@@ -219,13 +211,11 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
                 {"shippingAddressId":"%s","paymentMethod":"WALLET","shippingOptionCode":"%s",
                  "items":[{"productId":"%s","quantity":1},{"productId":"%s","quantity":1}]}
                 """.formatted(direccionId, CANAL, vestidoAzul, vestidoRojo);
-        JsonNode pedido = cuerpo(client.post().uri(CHECKOUT)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
+        JsonNode pedido = cuerpo(client.post().uri(CHECKOUT).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
                 // La clave de idempotencia es OBLIGATORIA en todo lo que mueve dinero: sin ella el
                 // servidor responde 400. Un arnés de prueba es un cliente más y tiene que mandarla.
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+                .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(pedido.get("id").asText());
     }
 
@@ -234,10 +224,8 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
                 {"fullName":"Compradora de prueba","phone":"+34600000000","line1":"Gran Via 1",
                  "city":"Madrid","state":"M","postalCode":"28013","country":"%s","isDefault":true}
                 """.formatted(PAIS);
-        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(creada.get("id").asText());
     }
 
@@ -249,10 +237,10 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
      * despacho, que sí es transaccional.
      */
     private List<ParcelDeclaration> declaracionDe(UUID pedidoId) {
-        YunExpressFulfillmentService despacho =
-                new YunExpressFulfillmentService(null, null, null, null, productos, null, null, null);
-        return new TransactionTemplate(transacciones).execute(estado ->
-                despacho.declaredParcels(pedidos.findById(pedidoId).orElseThrow()));
+        YunExpressFulfillmentService despacho = new YunExpressFulfillmentService(null, null, null, null, productos,
+                null, null, null);
+        return new TransactionTemplate(transacciones)
+                .execute(estado -> despacho.declaredParcels(pedidos.findById(pedidoId).orElseThrow()));
     }
 
     /* ==================================================================================
@@ -269,11 +257,12 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
      *                   NO agrupe
      */
     private void sembrarGrupo(Instant aprobadoEn) {
-        jdbcTemplate.update("INSERT INTO customs_declaration_group (id, hs6, material, usage_code, ename,"
-                + " cname, product_count, approved_at, approved_by, created_at, updated_at)"
-                + " VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, 2, ?, ?, now(), now())",
-                HS6, MATERIAL.toUpperCase(), USO.toUpperCase(), DESCRIPCION_DEL_GRUPO,
-                DESCRIPCION_ZH_DEL_GRUPO, aprobadoEn == null ? null : java.sql.Timestamp.from(aprobadoEn),
+        jdbcTemplate.update(
+                "INSERT INTO customs_declaration_group (id, hs6, material, usage_code, ename,"
+                        + " cname, product_count, approved_at, approved_by, created_at, updated_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, 2, ?, ?, now(), now())",
+                HS6, MATERIAL.toUpperCase(), USO.toUpperCase(), DESCRIPCION_DEL_GRUPO, DESCRIPCION_ZH_DEL_GRUPO,
+                aprobadoEn == null ? null : java.sql.Timestamp.from(aprobadoEn),
                 aprobadoEn == null ? null : "admin@nx036.local");
     }
 
@@ -288,8 +277,7 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
                 + " base_price, currency, shipping_cny, iva_cny, weight_grams, hs_code, customs_material,"
                 + " customs_usage, country_of_origin, created_at, updated_at)"
                 + " VALUES (?, ?, ?, 'TEST', ?, 'ACTIVE', 1, 20.0000, 'USD', 0, 0, 300, ?, ?, ?, 'CN',"
-                + " now(), now())",
-                id, "vestido-" + sufijo, "ext-" + sufijo, tituloZh, HS6, MATERIAL, USO);
+                + " now(), now())", id, "vestido-" + sufijo, "ext-" + sufijo, tituloZh, HS6, MATERIAL, USO);
         insertarTraduccion(id, "en", tituloEn);
         insertarTraduccion(id, "zh", tituloZh);
         insertarTraduccion(id, "es", tituloEn);
@@ -298,8 +286,7 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
 
     private void insertarTraduccion(UUID productoId, String idioma, String titulo) {
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
-                + " updated_at) VALUES (gen_random_uuid(), ?, ?, ?, now(), now())",
-                productoId, idioma, titulo);
+                + " updated_at) VALUES (gen_random_uuid(), ?, ?, ?, now(), now())", productoId, idioma, titulo);
     }
 
     private void insertarUsuario(UUID id, String email) {
@@ -314,8 +301,9 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
     }
 
     private void insertarIva(String pais, int rateBps) {
-        jdbcTemplate.update("INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
-                + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
+                        + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
                 pais, rateBps);
     }
 
@@ -325,8 +313,7 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
                 + " de_minimis_amount, de_minimis_currency, over_threshold_policy, per_article_fee_amount,"
                 + " per_article_fee_currency, group_declaration_lines, active, created_at, updated_at)"
                 + " VALUES (gen_random_uuid(), ?, 'DDP', 0, 'USD', 'SURCHARGE', ?::numeric, 'USD', true,"
-                + " true, now(), now())",
-                pais, BigDecimal.valueOf(derechoUsdCents, 2).toPlainString());
+                + " true, now(), now())", pais, BigDecimal.valueOf(derechoUsdCents, 2).toPlainString());
     }
 
     /* ==================================================================================
@@ -334,8 +321,9 @@ class DeclaracionAgrupadaIT extends BaseIntegration {
      * ================================================================================== */
 
     private List<String> descripcionesCongeladas(UUID pedidoId) {
-        return jdbcTemplate.queryForList("SELECT declared_description FROM order_item WHERE order_id = ?"
-                + " ORDER BY declared_description", String.class, pedidoId);
+        return jdbcTemplate.queryForList(
+                "SELECT declared_description FROM order_item WHERE order_id = ?" + " ORDER BY declared_description",
+                String.class, pedidoId);
     }
 
     private List<String> descripcionesCongeladasZh(UUID pedidoId) {

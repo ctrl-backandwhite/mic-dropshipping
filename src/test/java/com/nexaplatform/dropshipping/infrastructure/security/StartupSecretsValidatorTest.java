@@ -41,8 +41,7 @@ class StartupSecretsValidatorTest {
 
         assertThat(claves).isNotEmpty();
         assertThat(claves).allSatisfy(clave -> assertThat(configuracion)
-                .as("el validador lee '%s', que no está definida en application.yml", clave)
-                .containsKey(clave));
+                .as("el validador lee '%s', que no está definida en application.yml", clave).containsKey(clave));
     }
 
     @Test
@@ -67,19 +66,17 @@ class StartupSecretsValidatorTest {
     void enPreSinKekAborta() {
         StartupSecretsValidator validador = validador("pre", "", "hmac-propio", "acceso-propio", "secreta");
 
-        assertThatThrownBy(validador::validate)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(validador::validate).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("NX_TOKEN_KEKS");
     }
 
     @Test
     @DisplayName("en pro, el secreto de baja por defecto aborta el arranque")
     void enProConUnsubscribePorDefectoAborta() {
-        StartupSecretsValidator validador = validador("pro", KEK_VALIDA,
-                "dev-unsubscribe-secret-change-me", "acceso-propio", "secreta");
+        StartupSecretsValidator validador = validador("pro", KEK_VALIDA, "dev-unsubscribe-secret-change-me",
+                "acceso-propio", "secreta");
 
-        assertThatThrownBy(validador::validate)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(validador::validate).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("EMAIL_UNSUBSCRIBE_SECRET");
     }
 
@@ -89,8 +86,7 @@ class StartupSecretsValidatorTest {
     void enPreConAccessKeyPorDefectoAborta() {
         StartupSecretsValidator validador = validador("pre", KEK_VALIDA, "hmac-propio", "nexadrop", "secreta");
 
-        assertThatThrownBy(validador::validate)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(validador::validate).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("STORAGE_ACCESS_KEY");
     }
 
@@ -108,8 +104,7 @@ class StartupSecretsValidatorTest {
         StartupSecretsValidator validador = validador("pro", KEK_VALIDA, "hmac-propio", "acceso-propio", "secreta");
         ReflectionTestUtils.setField(validador, "captchaHmacKey", "");
 
-        assertThatThrownBy(validador::validate)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(validador::validate).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CAPTCHA_HMAC_KEY");
     }
 
@@ -128,13 +123,12 @@ class StartupSecretsValidatorTest {
         StartupSecretsValidator validador = validador("pre", KEK_VALIDA, "hmac-propio", "acceso-propio", "secreta");
         ReflectionTestUtils.setField(validador, "cdnSharedSecret", "");
 
-        assertThatThrownBy(validador::validate)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(validador::validate).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CDN_SHARED_SECRET");
     }
 
-    private static StartupSecretsValidator validador(String perfil, String kek, String unsubscribe,
-                                                     String accessKey, String secretKey) {
+    private static StartupSecretsValidator validador(String perfil, String kek, String unsubscribe, String accessKey,
+            String secretKey) {
         MockEnvironment entorno = new MockEnvironment();
         entorno.setActiveProfiles(perfil);
         StartupSecretsValidator validador = new StartupSecretsValidator(entorno);

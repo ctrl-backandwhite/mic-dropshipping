@@ -30,55 +30,29 @@ class PaymentEntityMapperTest {
         Map<String, Object> providerResponse = new HashMap<>();
         providerResponse.put("intent", "pi_123");
 
-        Payment source = Payment.builder()
-                .id(UUID.randomUUID())
-                .orderId(UUID.randomUUID())
-                .purpose("ORDER_PAYMENT")
-                .method(PaymentMethod.CARD)
-                .status(PaymentStatus.SUCCEEDED)
-                .amountDisplay(new BigDecimal("12.3400"))
-                .currencyDisplay("EUR")
-                .amountUsdCents(1334L)
-                .settlementCurrency("USD")
-                .settlementAmount(new BigDecimal("13.3400"))
-                .provider("stripe")
-                .providerRef("pi_123")
-                .providerResponse(providerResponse)
-                .idempotencyKey("idem-1")
-                .cryptoAddress(null)
-                .cryptoChain(null)
-                .cryptoExpiresAt(null)
-                .qrUrl(null)
-                .errorMessage(null)
-                .build();
+        Payment source = Payment.builder().id(UUID.randomUUID()).orderId(UUID.randomUUID()).purpose("ORDER_PAYMENT")
+                .method(PaymentMethod.CARD).status(PaymentStatus.SUCCEEDED).amountDisplay(new BigDecimal("12.3400"))
+                .currencyDisplay("EUR").amountUsdCents(1334L).settlementCurrency("USD")
+                .settlementAmount(new BigDecimal("13.3400")).provider("stripe").providerRef("pi_123")
+                .providerResponse(providerResponse).idempotencyKey("idem-1").cryptoAddress(null).cryptoChain(null)
+                .cryptoExpiresAt(null).qrUrl(null).errorMessage(null).build();
 
         PaymentEntity entity = mapper.toEntity(source);
         Payment result = mapper.toDomain(entity);
 
-        assertThat(result).usingRecursiveComparison()
-                .ignoringFields(
-                        // auditoría resuelta por JPA / ignorada en toEntity
-                        "createdAt", "updatedAt", "createdBy", "updatedBy",
-                        // derivados de relaciones gestionadas (user/wallet) ignoradas en toEntity
-                        "userId", "walletId", "userEmail")
-                .isEqualTo(source);
+        assertThat(result).usingRecursiveComparison().ignoringFields(
+                // auditoría resuelta por JPA / ignorada en toEntity
+                "createdAt", "updatedAt", "createdBy", "updatedBy",
+                // derivados de relaciones gestionadas (user/wallet) ignoradas en toEntity
+                "userId", "walletId", "userEmail").isEqualTo(source);
     }
 
     @Test
     void toEntity_ignoresAuditAndManagedRelations() {
-        Payment source = Payment.builder()
-                .id(UUID.randomUUID())
-                .userId(UUID.randomUUID())
-                .walletId(UUID.randomUUID())
-                .method(PaymentMethod.PAYPAL)
-                .status(PaymentStatus.PENDING)
-                .settlementCurrency("USD")
-                .userEmail("buyer@nx036.local")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .createdBy("creator")
-                .updatedBy("editor")
-                .build();
+        Payment source = Payment.builder().id(UUID.randomUUID()).userId(UUID.randomUUID()).walletId(UUID.randomUUID())
+                .method(PaymentMethod.PAYPAL).status(PaymentStatus.PENDING).settlementCurrency("USD")
+                .userEmail("buyer@nx036.local").createdAt(Instant.now()).updatedAt(Instant.now()).createdBy("creator")
+                .updatedBy("editor").build();
 
         PaymentEntity entity = mapper.toEntity(source);
 

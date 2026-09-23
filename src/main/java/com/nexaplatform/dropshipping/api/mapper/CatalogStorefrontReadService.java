@@ -182,9 +182,9 @@ public class CatalogStorefrontReadService {
         // OpenSearch no responde, cae a la BD (misma proyección) — igual que categorías/productos.
         Optional<List<IndexedSupplier>> indexed = supplierSearchService.listFromIndex(null);
         if (indexed.isPresent()) {
-            return indexed.get().stream()
-                    .map(s -> new SupplierView(s.id(), s.externalId(), s.name(), s.nameZh(), s.country(), s.city(),
-                            s.rating(), s.yearsActive(), s.verified(), s.trustPass(), s.productCount()))
+            return indexed
+                    .get().stream().map(s -> new SupplierView(s.id(), s.externalId(), s.name(), s.nameZh(), s.country(),
+                            s.city(), s.rating(), s.yearsActive(), s.verified(), s.trustPass(), s.productCount()))
                     .toList();
         }
         return supplierRepository.findAll().stream().sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
@@ -233,8 +233,8 @@ public class CatalogStorefrontReadService {
     // reflejaría" por moneda).
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
-            ProductListFilters filters, String sort) {
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, ProductListFilters filters,
+            String sort) {
         return listing(page, size, lang, filters, sort, null);
     }
 
@@ -250,8 +250,8 @@ public class CatalogStorefrontReadService {
      */
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
-            ProductListFilters filters, String sort, Integer semilla) {
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, ProductListFilters filters,
+            String sort, Integer semilla) {
         return listing(page, size, lang, filters, sort, semilla);
     }
 
@@ -294,8 +294,8 @@ public class CatalogStorefrontReadService {
         // «Ver los productos» de una promoción: lista solo los alcanzados por ella (por categoría o por
         // producto; una promoción global no filtra). Se resuelve una vez y se aplica en el mismo barrido
         // en memoria que el resto de filtros de la capa de aplicación.
-        java.util.function.Predicate<ProductEntity> promoFilter =
-                promotionService.reachFilter(filters.promotionId()).orElse(null);
+        java.util.function.Predicate<ProductEntity> promoFilter = promotionService.reachFilter(filters.promotionId())
+                .orElse(null);
 
         // Texto libre: el idioma activo acota el fuzzy a UN idioma (buscando "botas" en español, el fuzzy
         // contra los 8 idiomas casaba "botao" en portugués) y `ranked` ordena por relevancia — el término
@@ -305,10 +305,9 @@ public class CatalogStorefrontReadService {
         // `wide` = mirar también dentro de las descripciones largas. Se deja para el segundo intento: una
         // falda cuya descripción dice "combina con botas" no es un resultado de "botas", pero sí es mejor
         // que devolver la página vacía cuando NADA casa por título/atributo/variante.
-        BiFunction<Boolean, Pageable, Page<ProductEntity>> search = (wide, pg) -> productRepository
-                .searchStorefront(ProductStatus.ACTIVE, needle, categoryId, supplierId, null, null, shipCc,
-                        freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin,
-                        verifiedFilter ? verified : null, langCode, wide, ranked, pg);
+        BiFunction<Boolean, Pageable, Page<ProductEntity>> search = (wide, pg) -> productRepository.searchStorefront(
+                ProductStatus.ACTIVE, needle, categoryId, supplierId, null, null, shipCc, freeShipping, selfPickup,
+                hasVideo, minRatingBd, inventoryMin, verifiedFilter ? verified : null, langCode, wide, ranked, pg);
 
         // Los filtros que NO se pueden delegar: promoción, certificación, verificado y precio. Este último
         // porque el número que ve el usuario (displayPrice) sale de la variante representativa → coste en
@@ -318,8 +317,7 @@ public class CatalogStorefrontReadService {
         // `verified` YA NO va aquí: lo resuelve el SQL. Filtrarlo en memoria obligaba a pasar por el
         // camino del `scan` de 5.000 filas, que con un catálogo mayor deja fuera al resto — el filtro
         // devolvía 0 resultados sin que nada fallara.
-        InMemoryFilters postFilters = new InMemoryFilters(promoFilter, certUp, false, null, minPrice,
-                maxPrice);
+        InMemoryFilters postFilters = new InMemoryFilters(promoFilter, certUp, false, null, minPrice, maxPrice);
 
         // TEXTO LIBRE → OpenSearch, que es el motor principal de la búsqueda: entiende la morfología de los
         // 8 idiomas (plurales, acentos, chino) y devuelve los productos ORDENADOS POR RELEVANCIA. Aquí solo
@@ -335,10 +333,11 @@ public class CatalogStorefrontReadService {
         if (needle != null) {
             Optional<List<UUID>> relevant = productSearchService.searchRelevantIds(needle, langCode);
             if (relevant.isPresent()) {
-                List<UUID> ids = delGrupo == null ? relevant.get()
+                List<UUID> ids = delGrupo == null
+                        ? relevant.get()
                         : relevant.get().stream().filter(delGrupo::contains).toList();
-                return fromRelevantIds(ids, categoryId, supplierId, shipCc, freeShipping, selfPickup,
-                        hasVideo, minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
+                return fromRelevantIds(ids, categoryId, supplierId, shipCc, freeShipping, selfPickup, hasVideo,
+                        minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
             }
             // Si el buscador no ha podido responder (caído, índice aún sin construir) se sigue por SQL: la
             // búsqueda se degrada, pero el catálogo NUNCA deja de funcionar.
@@ -399,9 +398,9 @@ public class CatalogStorefrontReadService {
         }
         Set<UUID> vistos = new LinkedHashSet<>();
         for (ProductListFilters.DutyLine linea : dutyLines) {
-            declarationGroupRepository.findById(linea.groupId()).ifPresent(g -> vistos.addAll(
-                    productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(), g.getMaterial(),
-                            g.getUsageCode(), linea.originCountry())));
+            declarationGroupRepository.findById(linea.groupId())
+                    .ifPresent(g -> vistos.addAll(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(),
+                            g.getMaterial(), g.getUsageCode(), linea.originCountry())));
         }
         return List.copyOf(vistos);
     }
@@ -483,8 +482,7 @@ public class CatalogStorefrontReadService {
     }
 
     private List<ProductSummaryView> applyPostFilters(List<ProductEntity> entities, InMemoryFilters f, String lang) {
-        return entities.stream()
-                .filter(p -> f.promo() == null || f.promo().test(p))
+        return entities.stream().filter(p -> f.promo() == null || f.promo().test(p))
                 .filter(p -> f.certification() == null || (p.getCertifications() != null && p.getCertifications()
                         .stream().anyMatch(c -> c != null && c.toUpperCase().contains(f.certification()))))
                 .filter(p -> !f.verifiedFilter() || f.verified().equals(Boolean.TRUE.equals(p.getVerified())))
@@ -540,8 +538,8 @@ public class CatalogStorefrontReadService {
     // que son LAZY, y sin sesión abierta el endpoint entero devuelve un 500. Sin esto, las cinco pruebas
     // de ProductHistoryFlowIT fallaban con LazyInitializationException.
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> historial(List<ProductViewHistoryService.FichaVista> fichas,
-            int page, int size, String lang) {
+    public PageResponse<ProductSummaryView> historial(List<ProductViewHistoryService.FichaVista> fichas, int page,
+            int size, String lang) {
         int safe = Math.min(size, 100);
         Pageable pageable = PageRequest.of(page, safe);
         if (fichas == null || fichas.isEmpty()) {
@@ -551,8 +549,7 @@ public class CatalogStorefrontReadService {
         Map<UUID, ProductEntity> byId = productRepository.findAllById(ids).stream()
                 .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
                 .collect(Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
-        List<ProductSummaryView> all = fichas.stream()
-                .filter(ficha -> byId.containsKey(ficha.productId()))
+        List<ProductSummaryView> all = fichas.stream().filter(ficha -> byId.containsKey(ficha.productId()))
                 .map(ficha -> productMapper.toSummary(byId.get(ficha.productId()), lang,
                         precioGuardadoUtilizable(ficha)
                                 ? pricingService.precioYaVisto(ficha.precio(), ficha.moneda(), ficha.formateado())
@@ -600,8 +597,8 @@ public class CatalogStorefrontReadService {
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
-        return listing(page, size, lang, ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice),
-                sort, null);
+        return listing(page, size, lang, ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice), sort,
+                null);
     }
 
     /* ============================ helpers ============================ */
@@ -705,8 +702,7 @@ public class CatalogStorefrontReadService {
         int baraja = Math.floorMod(semilla, BARAJAS);
         // El alias `p` es el de TODAS las consultas del escaparate que reciben este Sort; Spring Data no
         // cualifica las expresiones marcadas como «unsafe», así que hay que escribirlo aquí.
-        return JpaSort.unsafe(Sort.Direction.ASC,
-                "function('md5', concat(cast(p.id as string), '" + baraja + "'))");
+        return JpaSort.unsafe(Sort.Direction.ASC, "function('md5', concat(cast(p.id as string), '" + baraja + "'))");
     }
 
     /**

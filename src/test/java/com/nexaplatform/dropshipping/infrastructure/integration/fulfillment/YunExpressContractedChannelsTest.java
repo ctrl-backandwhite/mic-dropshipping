@@ -26,11 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class YunExpressContractedChannelsTest {
 
-    private static final List<RateOption> COTIZADOS = List.of(
-            rate("FZZXR", "55.00", 4, 14),
-            rate("THPHR", "57.50", 5, 25),
-            rate("BKPHR", "73.00", 3, 8),
-            rate("MUZXR", "80.00", 6, 12));
+    private static final List<RateOption> COTIZADOS = List.of(rate("FZZXR", "55.00", 4, 14),
+            rate("THPHR", "57.50", 5, 25), rate("BKPHR", "73.00", 3, 8), rate("MUZXR", "80.00", 6, 12));
 
     private static RateOption rate(String code, String amount, int min, int max) {
         return new RateOption(code, code, new BigDecimal(amount), "RMB", min, max);
@@ -51,10 +48,9 @@ class YunExpressContractedChannelsTest {
     @Test
     @DisplayName("sin lista no se filtra nada: hay cuentas y entornos sin esta restricción")
     void sinListaNoSeFiltra() {
-        assertThat(codigos(YunExpressFulfillmentService.contractedRates(COTIZADOS, Set.of())))
-                .containsExactly("FZZXR", "THPHR", "BKPHR", "MUZXR");
-        assertThat(codigos(YunExpressFulfillmentService.contractedRates(COTIZADOS, null)))
-                .hasSize(4);
+        assertThat(codigos(YunExpressFulfillmentService.contractedRates(COTIZADOS, Set.of()))).containsExactly("FZZXR",
+                "THPHR", "BKPHR", "MUZXR");
+        assertThat(codigos(YunExpressFulfillmentService.contractedRates(COTIZADOS, null))).hasSize(4);
     }
 
     @Test
@@ -72,8 +68,7 @@ class YunExpressContractedChannelsTest {
         // llame parecido no la hace utilizable. Si algún día se contrata, se añade a la lista y ya está.
         List<RateOption> conVariante = List.of(rate("FZZXR-AMZ", "55.00", 4, 10), rate("THPHR", "57.50", 5, 25));
 
-        assertThat(codigos(YunExpressFulfillmentService.contractedRates(conVariante, Set.of("FZZXR"))))
-                .isEmpty();
+        assertThat(codigos(YunExpressFulfillmentService.contractedRates(conVariante, Set.of("FZZXR")))).isEmpty();
     }
 
     @Test
@@ -83,8 +78,7 @@ class YunExpressContractedChannelsTest {
         // de zonas y el destino se puede apagar; con una opción falsa, se cobra un envío imposible.
         List<RateOption> soloNoContratados = List.of(rate("MUZXR", "80.00", 6, 12));
 
-        assertThat(YunExpressFulfillmentService.contractedRates(soloNoContratados, Set.of("FZZXR", "THPHR")))
-                .isEmpty();
+        assertThat(YunExpressFulfillmentService.contractedRates(soloNoContratados, Set.of("FZZXR", "THPHR"))).isEmpty();
     }
 
     @Test

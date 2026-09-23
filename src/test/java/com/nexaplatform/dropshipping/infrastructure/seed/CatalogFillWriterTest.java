@@ -55,14 +55,14 @@ class CatalogFillWriterTest {
     private CatalogFillWriter writer;
 
     private static IngestProductRequest req(String externalId, String titleZh) {
-        return new IngestProductRequest("1688", externalId, titleZh, null, null, null, 1,
-                new BigDecimal("19.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+        return new IngestProductRequest("1688", externalId, titleZh, null, null, null, 1, new BigDecimal("19.90"),
+                "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
                 "https://detail.1688.com/offer/" + externalId + ".html", null, null, List.of(), null, null, null);
     }
 
     private ProductEntity stubProduct(String externalId, String slug) {
-        ProductEntity p = ProductEntity.builder().source("1688").externalId(externalId).slug(slug)
-                .moq(1).monthlySales(100).reviewCount(30).build();
+        ProductEntity p = ProductEntity.builder().source("1688").externalId(externalId).slug(slug).moq(1)
+                .monthlySales(100).reviewCount(30).build();
         p.setId(UUID.randomUUID());
         when(catalogService.upsertProduct(any(IngestProductRequest.class))).thenReturn(p);
         when(productRepository.findById(p.getId())).thenReturn(Optional.of(p));
@@ -74,9 +74,9 @@ class CatalogFillWriterTest {
     void write_rebuildsSlugFromSpanishTitle_whenChineseTitleLeftItDegraded() {
         ProductEntity p = stubProduct("954159512484", "-954159512484");
 
-        writer.write(req("954159512484", "厚底女鞋增高休闲板鞋"),
-                "Zapatillas retro de mujer con plataforma", "Retro platform sneakers", "Ténis retrô",
-                "厚底女鞋增高休闲板鞋", "desc es", "desc en", "desc pt", "desc zh", null);
+        writer.write(req("954159512484", "厚底女鞋增高休闲板鞋"), "Zapatillas retro de mujer con plataforma",
+                "Retro platform sneakers", "Ténis retrô", "厚底女鞋增高休闲板鞋", "desc es", "desc en", "desc pt", "desc zh",
+                null);
 
         assertThat(p.getSlug()).isEqualTo("zapatillas-retro-de-mujer-con-plataforma-954159512484");
     }
@@ -85,8 +85,7 @@ class CatalogFillWriterTest {
     void write_keepsExistingReadableSlug_soReimportDoesNotChangeTheUrl() {
         ProductEntity p = stubProduct("954159512484", "slug-bueno-de-antes-954159512484");
 
-        writer.write(req("954159512484", "厚底女鞋增高休闲板鞋"),
-                "Otro título distinto", "Another title", "Outro título",
+        writer.write(req("954159512484", "厚底女鞋增高休闲板鞋"), "Otro título distinto", "Another title", "Outro título",
                 "厚底女鞋增高休闲板鞋", "desc es", "desc en", "desc pt", "desc zh", null);
 
         assertThat(p.getSlug()).isEqualTo("slug-bueno-de-antes-954159512484");
@@ -96,8 +95,7 @@ class CatalogFillWriterTest {
     void write_leavesSlugAlone_whenSpanishTitleHasNothingToSlugify() {
         ProductEntity p = stubProduct("954159512484", "-954159512484");
 
-        writer.write(req("954159512484", "厚底女鞋"), "厚底女鞋", "厚底女鞋", "厚底女鞋",
-                "厚底女鞋", "desc", "desc", "desc", "desc", null);
+        writer.write(req("954159512484", "厚底女鞋"), "厚底女鞋", "厚底女鞋", "厚底女鞋", "厚底女鞋", "desc", "desc", "desc", "desc", null);
 
         assertThat(p.getSlug()).isEqualTo("-954159512484");
     }
@@ -148,8 +146,8 @@ class CatalogFillWriterTest {
         ProductEntity p = stubProduct("954159512484", "-954159512484");
 
         writer.write(req("954159512484", "Vaqueros rotos de hombre"), "Vaqueros rotos de hombre",
-                "Vaqueros rotos de hombre", "Vaqueros rotos de hombre", "Vaqueros rotos de hombre",
-                "desc es", "desc es", "desc es", "desc es", null);
+                "Vaqueros rotos de hombre", "Vaqueros rotos de hombre", "Vaqueros rotos de hombre", "desc es",
+                "desc es", "desc es", "desc es", null);
 
         assertThat(p.getTranslations()).extracting(ProductTranslationEntity::getLanguage)
                 .containsExactlyInAnyOrder("es", "en", "pt", "zh");

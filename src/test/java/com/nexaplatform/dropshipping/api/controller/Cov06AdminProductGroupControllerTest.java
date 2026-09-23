@@ -165,9 +165,8 @@ class Cov06AdminProductGroupControllerTest {
         when(productRepository.existsById(nuevo)).thenReturn(true);
         when(productRepository.existsById(inexistente)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> resp = controller
-                .addMembers(id, Map.of("productIds", List.of(nuevo.toString(), yaEstaba.toString(),
-                        inexistente.toString())));
+        ResponseEntity<Map<String, Object>> resp = controller.addMembers(id,
+                Map.of("productIds", List.of(nuevo.toString(), yaEstaba.toString(), inexistente.toString())));
 
         assertThat(resp.getBody()).containsEntry("added", 1);
         verify(memberRepository).save(any(ProductGroupMemberEntity.class));

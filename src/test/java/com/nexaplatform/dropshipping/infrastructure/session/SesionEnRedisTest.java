@@ -28,8 +28,7 @@ class SesionEnRedisTest {
     @Test
     @DisplayName("está la autoconfiguración de sesión de Spring Boot")
     void esta_la_autoconfiguracion() {
-        assertThatCode(() -> Class.forName(
-                "org.springframework.boot.session.autoconfigure.SessionAutoConfiguration"))
+        assertThatCode(() -> Class.forName("org.springframework.boot.session.autoconfigure.SessionAutoConfiguration"))
                 .as("falta spring-boot-session: sin él la sesión se queda en la memoria "
                         + "del pod y el acceso se rompe con varias réplicas")
                 .doesNotThrowAnyException();
@@ -38,17 +37,15 @@ class SesionEnRedisTest {
     @Test
     @DisplayName("está la implementación de sesión sobre Redis")
     void esta_la_implementacion_de_redis() {
-        assertThatCode(() -> Class.forName(
-                "org.springframework.session.data.redis.RedisSessionRepository"))
-                .as("falta spring-session-data-redis")
-                .doesNotThrowAnyException();
+        assertThatCode(() -> Class.forName("org.springframework.session.data.redis.RedisSessionRepository"))
+                .as("falta spring-session-data-redis").doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("y las dos piezas son de la misma familia de versiones")
     void versiones_coherentes() throws Exception {
-        String sesion = Class.forName("org.springframework.session.data.redis.RedisSessionRepository")
-                .getPackage().getImplementationVersion();
+        String sesion = Class.forName("org.springframework.session.data.redis.RedisSessionRepository").getPackage()
+                .getImplementationVersion();
         String boot = Class.forName("org.springframework.boot.session.autoconfigure.SessionAutoConfiguration")
                 .getPackage().getImplementationVersion();
         // No se exige igualdad exacta: se comprueba que ninguna venga sin versión,

@@ -10,8 +10,8 @@ import java.util.UUID;
 /** Spring Data repo de los límites de bulto por canal y país. */
 public interface CarrierChannelLimitRepository extends JpaRepository<CarrierChannelLimitEntity, UUID> {
 
-    Optional<CarrierChannelLimitEntity> findByChannelCodeIgnoreCaseAndCountryCodeIgnoreCase(
-            String channelCode, String countryCode);
+    Optional<CarrierChannelLimitEntity> findByChannelCodeIgnoreCaseAndCountryCodeIgnoreCase(String channelCode,
+            String countryCode);
 
     List<CarrierChannelLimitEntity> findAllByOrderByChannelCodeAscCountryCodeAsc();
 }

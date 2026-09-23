@@ -79,10 +79,10 @@ public class ProductSearchService {
      * <p>Los campos que solo sirven para CASAR ({@code descAll}, {@code attrs}, {@code variants}) tampoco
      * salen: el escaparate no los pinta y el motor los usa dentro del índice, no en la respuesta.
      */
-    private static final Set<String> CAMPOS_PUBLICOS = Set.of("id", "slug", "status", "mainImage",
-            "categoryId", "categoryName", "rating", "monthlySales", "trendScore", "inventoryCount",
-            "shipFrom", "hasVideo", "hasImage", "freeShipping", "selfPickup", "verified",
-            "titleEs", "titleEn", "titlePt", "titleFr", "titleIt", "titleDe", "titleNl");
+    private static final Set<String> CAMPOS_PUBLICOS = Set.of("id", "slug", "status", "mainImage", "categoryId",
+            "categoryName", "rating", "monthlySales", "trendScore", "inventoryCount", "shipFrom", "hasVideo",
+            "hasImage", "freeShipping", "selfPickup", "verified", "titleEs", "titleEn", "titlePt", "titleFr", "titleIt",
+            "titleDe", "titleNl");
 
     private final OpenSearchClient client;
     private final ProductIndexer indexer;
@@ -110,10 +110,8 @@ public class ProductSearchService {
 
     private Optional<List<UUID>> executeIds(String needle, String lang, boolean wide) {
         try {
-            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(indexer.indexName())
-                    .from(0).size(MAX_IDS)
-                    .source(src -> src.fetch(false))
-                    .query(visibleAndMatching(needle, lang, wide))
+            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(indexer.indexName()).from(0)
+                    .size(MAX_IDS).source(src -> src.fetch(false)).query(visibleAndMatching(needle, lang, wide))
                     .sort(srt -> srt.score(sc -> sc.order(SortOrder.Desc)))
                     .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
             return Optional.of(response.hits().hits().stream().map(h -> UUID.fromString(h.id())).toList());
@@ -127,8 +125,7 @@ public class ProductSearchService {
 
     /** Solo productos publicados y con imagen espejada — mismo criterio de visibilidad que el SQL del escaparate. */
     private Query visibleAndMatching(String needle, String lang, boolean wide) {
-        return Query.of(q -> q.bool(b -> b
-                .must(matching(needle, lang, wide))
+        return Query.of(q -> q.bool(b -> b.must(matching(needle, lang, wide))
                 .filter(f -> f.term(t -> t.field("status").value(FieldValue.of("ACTIVE"))))
                 .filter(f -> f.term(t -> t.field("hasImage").value(FieldValue.of(true))))));
     }
@@ -142,23 +139,23 @@ public class ProductSearchService {
         return Query.of(q -> q.bool(b -> {
             // Frase exacta en el idioma del usuario: "botas de agua" gana a los que solo llevan "botas".
             b.should(s -> s.matchPhrase(m -> m.field(titleField).query(needle).boost(10f)));
-            b.should(s -> s.match(m -> m.field(titleField).query(FieldValue.of(needle))
-                    .minimumShouldMatch(MOST_TERMS).boost(8f)));
+            b.should(s -> s.match(
+                    m -> m.field(titleField).query(FieldValue.of(needle)).minimumShouldMatch(MOST_TERMS).boost(8f)));
             // Los demás idiomas comparten un campo sin stemming: una coincidencia LITERAL entre idiomas es
             // intencional (un usuario en español buscando "blazer"), pero no debe competir con su idioma.
-            b.should(s -> s.match(m -> m.field("titleAll").query(FieldValue.of(needle))
-                    .minimumShouldMatch(MOST_TERMS).boost(3f)));
+            b.should(s -> s.match(
+                    m -> m.field("titleAll").query(FieldValue.of(needle)).minimumShouldMatch(MOST_TERMS).boost(3f)));
             // CON minimumShouldMatch, igual que el resto. Sin él esta cláusula era un OR puro: bastaba
             // que UNA palabra de la consulta apareciera en el campo para que el documento entrara con
             // peso 3. Como el analizador `cjk` no filtra palabras vacías, "de" casaba con miles de
             // productos y los colaba por delante del que se buscaba. Que un campo se llame "Zh" no
             // garantiza que su contenido sea chino, así que la cláusula tiene que defenderse sola.
-            b.should(s -> s.match(m -> m.field("titleZh").query(FieldValue.of(needle))
-                    .minimumShouldMatch(MOST_TERMS).boost(3f)));
-            b.should(s -> s.match(m -> m.field("attrs").query(FieldValue.of(needle))
-                    .minimumShouldMatch(MOST_TERMS).boost(2f)));
-            b.should(s -> s.match(m -> m.field("variants").query(FieldValue.of(needle))
-                    .minimumShouldMatch(MOST_TERMS).boost(1.5f)));
+            b.should(s -> s.match(
+                    m -> m.field("titleZh").query(FieldValue.of(needle)).minimumShouldMatch(MOST_TERMS).boost(3f)));
+            b.should(s -> s.match(
+                    m -> m.field("attrs").query(FieldValue.of(needle)).minimumShouldMatch(MOST_TERMS).boost(2f)));
+            b.should(s -> s.match(
+                    m -> m.field("variants").query(FieldValue.of(needle)).minimumShouldMatch(MOST_TERMS).boost(1.5f)));
             b.should(s -> s.match(m -> m.field("categoryName").query(FieldValue.of(needle))
                     .minimumShouldMatch(MOST_TERMS).boost(1f)));
             if (wide) {
@@ -166,8 +163,8 @@ public class ProductSearchService {
                         .minimumShouldMatch(MOST_TERMS).boost(0.5f)));
                 // Tolerancia a erratas SOLO en esta pasada: con ella activada siempre, "botas" arrastraba
                 // vecinos a una edición de distancia ("bolas", "botao") que no son lo que se pide.
-                b.should(s -> s.match(m -> m.field(titleField).query(FieldValue.of(needle))
-                        .fuzziness("AUTO").boost(0.5f)));
+                b.should(s -> s
+                        .match(m -> m.field(titleField).query(FieldValue.of(needle)).fuzziness("AUTO").boost(0.5f)));
             }
             // ANCLA AL TÍTULO — lo que hace coherente el resultado.
             //
@@ -194,8 +191,7 @@ public class ProductSearchService {
      * por muchos atributos que casen.
      */
     private static Query anclaEnTitulo(String needle, String titleField) {
-        return Query.of(q -> q.bool(b -> b
-                .should(s -> s.match(m -> m.field(titleField).query(FieldValue.of(needle))))
+        return Query.of(q -> q.bool(b -> b.should(s -> s.match(m -> m.field(titleField).query(FieldValue.of(needle))))
                 .should(s -> s.match(m -> m.field("titleAll").query(FieldValue.of(needle))))
                 .should(s -> s.match(m -> m.field("titleZh").query(FieldValue.of(needle))))
                 // La categoría cuenta como título a estos efectos: buscar «vestidos» debe traer lo que
@@ -214,8 +210,7 @@ public class ProductSearchService {
     // Caché de resultados de búsqueda (TTL 60s): la búsqueda es el punto caliente de OpenSearch bajo carga
     // y las consultas populares se repiten. Clave = keyword+idioma+page+size. NO depende de la moneda (los
     // hits devuelven el documento indexado, sin precio convertido). Solo se cachean keywords no vacías.
-    @Cacheable(value = CACHE_SEARCH, key = "#keyword + ':' + #language + ':' + #page + ':' + #size",
-            condition = "#keyword != null && !#keyword.isBlank()")
+    @Cacheable(value = CACHE_SEARCH, key = "#keyword + ':' + #language + ':' + #page + ':' + #size", condition = "#keyword != null && !#keyword.isBlank()")
     public SearchResultDtoOut searchTyped(String keyword, String language, int page, int size) {
         // Se acota el tamaño por arriba para proteger al motor de búsqueda y también POR ABAJO: un
         // `size` o `page` negativos llegaban tal cual a OpenSearch, que respondía con un error y salía
@@ -226,11 +221,11 @@ public class ProductSearchService {
         String lang = normalizeLang(language);
         boolean blank = keyword == null || keyword.isBlank();
         try {
-            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(indexer.indexName())
-                    .from(fromOffset).size(pageSize)
-                    .query(blank ? visibleAll() : visibleAndMatching(keyword, lang, false))
-                    .sort(srt -> srt.score(sc -> sc.order(SortOrder.Desc)))
-                    .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
+            SearchResponse<Map> response = client
+                    .search(SearchRequest.of(s -> s.index(indexer.indexName()).from(fromOffset).size(pageSize)
+                            .query(blank ? visibleAll() : visibleAndMatching(keyword, lang, false))
+                            .sort(srt -> srt.score(sc -> sc.order(SortOrder.Desc)))
+                            .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
 
             List<SearchHitDtoOut> hits = response.hits().hits().stream().map(h -> {
                 Map<String, Object> doc = soloCamposPublicos(h.source());
@@ -264,8 +259,7 @@ public class ProductSearchService {
 
     /** Todo el catálogo visible (sin término de búsqueda). */
     private Query visibleAll() {
-        return Query.of(q -> q.bool(b -> b
-                .must(m -> m.matchAll(a -> a))
+        return Query.of(q -> q.bool(b -> b.must(m -> m.matchAll(a -> a))
                 .filter(f -> f.term(t -> t.field("status").value(FieldValue.of("ACTIVE"))))
                 .filter(f -> f.term(t -> t.field("hasImage").value(FieldValue.of(true))))));
     }

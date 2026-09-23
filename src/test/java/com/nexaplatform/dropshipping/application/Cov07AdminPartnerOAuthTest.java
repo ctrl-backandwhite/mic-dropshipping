@@ -136,8 +136,7 @@ class Cov07AdminPartnerOAuthTest {
     @Test
     void rotarElSecretoGuardaElNuevoHashYDevuelveElSecretoEnClaroUnaSolaVez() {
         RegisteredClient existing = RegisteredClient.withId("id-1").clientId("partner_x").clientName("Tienda Ana")
-                .clientSecret("HASH_VIEJO")
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .clientSecret("HASH_VIEJO").clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scope("catalog.read").build();
         when(registeredClientRepository.findByClientId("partner_x")).thenReturn(existing);
         when(passwordEncoder.encode(anyString())).thenReturn("HASH_NUEVO");

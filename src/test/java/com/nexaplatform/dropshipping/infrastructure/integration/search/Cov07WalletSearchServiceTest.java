@@ -62,8 +62,7 @@ class Cov07WalletSearchServiceTest {
     @Test
     void laUrlApuntaAlPrimerNodoSinBarrasFinales() {
         // Varios nodos separados por coma y con barras de más es lo que llega por configuración.
-        assertThat(ReflectionTestUtils.getField(service, "searchUrl"))
-                .isEqualTo("http://nodo-1:9400/wallets/_search");
+        assertThat(ReflectionTestUtils.getField(service, "searchUrl")).isEqualTo("http://nodo-1:9400/wallets/_search");
     }
 
     /* ==================== degradación a base de datos ==================== */
@@ -110,8 +109,7 @@ class Cov07WalletSearchServiceTest {
 
     @Test
     void siNingunIdentificadorEsValidoSeCaeALaBaseDeDatos() throws Exception {
-        respond(200, "{\"hits\":{\"total\":{\"value\":2},\"hits\":["
-                + "{\"_id\":\"no-es-uuid\"},{\"_id\":\"  \"}]}}");
+        respond(200, "{\"hits\":{\"total\":{\"value\":2},\"hits\":[" + "{\"_id\":\"no-es-uuid\"},{\"_id\":\"  \"}]}}");
 
         assertThat(service.pageIds(null, null, null, 0, 10)).isEmpty();
     }
@@ -122,9 +120,8 @@ class Cov07WalletSearchServiceTest {
     void losIdentificadoresSalenDelSourceYSiFaltaDelIdDelDocumento() throws Exception {
         UUID conSource = UUID.randomUUID();
         UUID soloId = UUID.randomUUID();
-        respond(200, "{\"hits\":{\"total\":{\"value\":42},\"hits\":["
-                + "{\"_id\":\"otro\",\"_source\":{\"id\":\"" + conSource + "\"}},"
-                + "{\"_id\":\"" + soloId + "\"}]}}");
+        respond(200, "{\"hits\":{\"total\":{\"value\":42},\"hits\":[" + "{\"_id\":\"otro\",\"_source\":{\"id\":\""
+                + conSource + "\"}}," + "{\"_id\":\"" + soloId + "\"}]}}");
 
         Optional<WalletSearchService.IdPage> page = service.pageIds(null, null, null, 0, 10);
 
@@ -137,11 +134,11 @@ class Cov07WalletSearchServiceTest {
     @Test
     void losIdentificadoresQueNoSonUuidSeDescartanSinTumbarLaPagina() throws Exception {
         UUID valido = UUID.randomUUID();
-        respond(200, "{\"hits\":{\"total\":{\"value\":3},\"hits\":["
-                + "{\"_id\":\"basura\"},{\"_id\":\"" + valido + "\"}]}}");
+        respond(200, "{\"hits\":{\"total\":{\"value\":3},\"hits\":[" + "{\"_id\":\"basura\"},{\"_id\":\"" + valido
+                + "\"}]}}");
 
-        assertThat(service.pageIds(null, null, null, 0, 10)).get()
-                .extracting(WalletSearchService.IdPage::ids).isEqualTo(List.of(valido));
+        assertThat(service.pageIds(null, null, null, 0, 10)).get().extracting(WalletSearchService.IdPage::ids)
+                .isEqualTo(List.of(valido));
     }
 
     /* ==================== consulta enviada al índice ==================== */
@@ -153,11 +150,8 @@ class Cov07WalletSearchServiceTest {
         service.pageIds("  ", "  ", null, 3, 20);
 
         String body = sentBody();
-        assertThat(body).contains("\"query\":{\"match_all\":{}}")
-                .contains("\"from\":60")
-                .contains("\"size\":20")
-                .contains("\"_source\":[\"id\"]")
-                .contains("\"track_total_hits\":true")
+        assertThat(body).contains("\"query\":{\"match_all\":{}}").contains("\"from\":60").contains("\"size\":20")
+                .contains("\"_source\":[\"id\"]").contains("\"track_total_hits\":true")
                 .contains("{\"createdAt\":{\"order\":\"desc\"}}");
     }
 
@@ -178,8 +172,7 @@ class Cov07WalletSearchServiceTest {
         service.pageIds(null, " activa ", "eur", 0, 10);
 
         String body = sentBody();
-        assertThat(body).contains("{\"term\":{\"status\":\"ACTIVA\"}}")
-                .contains("{\"term\":{\"currency\":\"EUR\"}}")
+        assertThat(body).contains("{\"term\":{\"status\":\"ACTIVA\"}}").contains("{\"term\":{\"currency\":\"EUR\"}}")
                 .contains("\"bool\":{\"must\":[");
     }
 

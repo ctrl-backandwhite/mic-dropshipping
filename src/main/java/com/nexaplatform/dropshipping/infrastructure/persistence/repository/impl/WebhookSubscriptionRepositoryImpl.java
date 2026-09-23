@@ -26,7 +26,8 @@ public class WebhookSubscriptionRepositoryImpl implements WebhookSubscriptionRep
 
     @Override
     public WebhookSubscription save(WebhookSubscription model) {
-        WebhookSubscriptionEntity entity = webhookSubscriptionJpaRepositoryAdapter.save(webhookSubscriptionEntityMapper.toEntity(model));
+        WebhookSubscriptionEntity entity = webhookSubscriptionJpaRepositoryAdapter
+                .save(webhookSubscriptionEntityMapper.toEntity(model));
         return webhookSubscriptionEntityMapper.toDomain(entity);
     }
 

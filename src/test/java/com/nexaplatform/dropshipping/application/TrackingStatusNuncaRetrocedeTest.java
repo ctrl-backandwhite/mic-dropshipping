@@ -61,11 +61,11 @@ class TrackingStatusNuncaRetrocedeTest {
     void setUp() {
         orderRepository = mock(OrderRepository.class);
         provider = mock(YunExpressFulfillmentService.class);
-        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), unSoloTransportista(provider),
-                mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class), new ObjectMapper(),
-                mock(YunExpressEventCipher.class), mock(OpsAlertService.class), mock(NotificationUseCase.class),
-                mock(OrderShipmentRepository.class), mock(OrderShipmentItemRepository.class),
-                mock(TrackingViewMapper.class), readyPurchases());
+        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
+                unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class),
+                mock(OrderEmailService.class), new ObjectMapper(), mock(YunExpressEventCipher.class),
+                mock(OpsAlertService.class), mock(NotificationUseCase.class), mock(OrderShipmentRepository.class),
+                mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -104,8 +104,7 @@ class TrackingStatusNuncaRetrocedeTest {
     void enUnPushDesordenadoGanaElEventoMasAvanzado() {
         // El array trae primero la entrega y después la salida del almacén. Sin guardia, el pedido se
         // quedaba anunciando la salida pese a estar ya entregado.
-        pushLlega(OrderStatus.DELIVERED,
-                step(OrderStatus.DELIVERED, "Entregado al destinatario"),
+        pushLlega(OrderStatus.DELIVERED, step(OrderStatus.DELIVERED, "Entregado al destinatario"),
                 step(OrderStatus.SHIPPED, "Salida del almacén de origen"));
 
         assertThat(order.getTrackingStatus()).isEqualTo(OrderStatus.DELIVERED.name());

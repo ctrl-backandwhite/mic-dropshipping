@@ -186,9 +186,7 @@ public interface ProductEntityMapper {
 
     @Named("priceTierToDomain")
     @Mapping(target = "id", source = "id")
-    ProductPriceTier toPriceTierDomain(
-            ProductPriceTierEntity entity);
+    ProductPriceTier toPriceTierDomain(ProductPriceTierEntity entity);
 
-    List<ProductPriceTier> toPriceTierDomainList(
-            List<ProductPriceTierEntity> entities);
+    List<ProductPriceTier> toPriceTierDomainList(List<ProductPriceTierEntity> entities);
 }

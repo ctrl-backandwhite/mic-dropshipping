@@ -118,8 +118,8 @@ class ChatUseCaseImplTest {
         Mockito.when(valores.increment(Mockito.startsWith("chat:cupo:global:"))).thenReturn(10L);
         Mockito.when(valores.increment(Mockito.startsWith("chat:cupo:user:"))).thenReturn(101L);
 
-        ChatAnswer answer = useCase(proveedor, List.of())
-                .ask(null, "hola", new ChatContext(java.util.UUID.randomUUID(), "es"));
+        ChatAnswer answer = useCase(proveedor, List.of()).ask(null, "hola",
+                new ChatContext(java.util.UUID.randomUUID(), "es"));
 
         assertEquals("QUOTA", answer.reason());
         assertTrue(proveedor.recibido.isEmpty());
@@ -195,8 +195,8 @@ class ChatUseCaseImplTest {
     @DisplayName("Cuando el modelo pide una herramienta, se ejecuta y se recogen los productos")
     void ejecutaHerramienta() {
         ProveedorFalso proveedor = new ProveedorFalso();
-        proveedor.guion.add(new ChatReply(null, List.of(
-                new ChatToolCall("call_1", "buscar_productos", "{\"consulta\":\"zapatillas\"}"))));
+        proveedor.guion.add(new ChatReply(null,
+                List.of(new ChatToolCall("call_1", "buscar_productos", "{\"consulta\":\"zapatillas\"}"))));
         proveedor.guion.add(new ChatReply("He encontrado dos.", List.of()));
         HerramientaFalsa herramienta = new HerramientaFalsa();
 
@@ -217,8 +217,8 @@ class ChatUseCaseImplTest {
     @DisplayName("Una herramienta que el modelo se inventa no rompe la conversación")
     void herramientaDesconocida() {
         ProveedorFalso proveedor = new ProveedorFalso();
-        proveedor.guion.add(new ChatReply(null, List.of(
-                new ChatToolCall("call_1", "herramienta_que_no_existe", "{}"))));
+        proveedor.guion
+                .add(new ChatReply(null, List.of(new ChatToolCall("call_1", "herramienta_que_no_existe", "{}"))));
         proveedor.guion.add(new ChatReply("Disculpa, no puedo con eso.", List.of()));
 
         ChatAnswer answer = useCase(proveedor, List.of(new HerramientaFalsa())).ask(null, "haz algo", contexto);

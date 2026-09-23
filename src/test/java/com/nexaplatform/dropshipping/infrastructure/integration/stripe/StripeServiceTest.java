@@ -92,8 +92,7 @@ class StripeServiceTest {
             assertThat(raw).containsEntry("email", "buyer@nx.com");
             @SuppressWarnings("unchecked")
             Map<String, Object> md = (Map<String, Object>) raw.get("metadata");
-            assertThat(md).containsEntry("platform", PLATFORM_ID)
-                    .containsEntry("env", PLATFORM_ENV)
+            assertThat(md).containsEntry("platform", PLATFORM_ID).containsEntry("env", PLATFORM_ENV)
                     .containsEntry("user_id", "user-42");
         }
     }
@@ -111,8 +110,8 @@ class StripeServiceTest {
             si.verify(() -> SetupIntent.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
             assertThat(raw).containsEntry("customer", "cus_1");
-            assertThat(raw.get("payment_method_types")).asInstanceOf(
-                    org.assertj.core.api.InstanceOfAssertFactories.list(String.class)).contains("card");
+            assertThat(raw.get("payment_method_types"))
+                    .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(String.class)).contains("card");
         }
     }
 
@@ -150,8 +149,8 @@ class StripeServiceTest {
             assertThat(id).isEqualTo("price_existing");
             price.verify(() -> Price.list(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("lookup_keys")).asInstanceOf(
-                            org.assertj.core.api.InstanceOfAssertFactories.list(String.class))
+            assertThat(raw.get("lookup_keys"))
+                    .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(String.class))
                     .containsExactly("nx_pro_monthly_1999_usd");
         }
     }
@@ -239,8 +238,8 @@ class StripeServiceTest {
         try (MockedStatic<Subscription> s = mockStatic(Subscription.class)) {
             s.when(() -> Subscription.create(any(SubscriptionCreateParams.class))).thenReturn(sub);
 
-            StripeService.SubResult result = service.createSubscription("cus_1", "price_1", "pm_1",
-                    "txr_1", "PRO", "user-7", "localsub-9");
+            StripeService.SubResult result = service.createSubscription("cus_1", "price_1", "pm_1", "txr_1", "PRO",
+                    "user-7", "localsub-9");
 
             assertThat(result.id()).isEqualTo("sub_1");
             assertThat(result.status()).isEqualTo("active");
@@ -252,14 +251,12 @@ class StripeServiceTest {
             assertThat(raw).containsEntry("customer", "cus_1");
             assertThat(raw).containsEntry("payment_behavior", "error_if_incomplete");
             assertThat(raw).containsEntry("default_payment_method", "pm_1");
-            assertThat(raw.get("default_tax_rates")).asInstanceOf(
-                    org.assertj.core.api.InstanceOfAssertFactories.list(String.class)).contains("txr_1");
+            assertThat(raw.get("default_tax_rates"))
+                    .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(String.class)).contains("txr_1");
             @SuppressWarnings("unchecked")
             Map<String, Object> md = (Map<String, Object>) raw.get("metadata");
-            assertThat(md).containsEntry("purpose", "subscription")
-                    .containsEntry("plan_code", "PRO")
-                    .containsEntry("user_id", "user-7")
-                    .containsEntry("subscription_id", "localsub-9")
+            assertThat(md).containsEntry("purpose", "subscription").containsEntry("plan_code", "PRO")
+                    .containsEntry("user_id", "user-7").containsEntry("subscription_id", "localsub-9")
                     .containsEntry("platform", PLATFORM_ID);
         }
     }

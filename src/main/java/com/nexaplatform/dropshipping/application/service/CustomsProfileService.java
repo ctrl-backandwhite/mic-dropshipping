@@ -50,7 +50,7 @@ public class CustomsProfileService {
      */
     public boolean applyDefaults(ProductEntity product, String categorySlug) {
         if (isNoneOrBlank(product.getBatteryType())) {
-            product.setBatteryType("NONE");   // columna obligatoria: nunca puede quedar nula
+            product.setBatteryType("NONE"); // columna obligatoria: nunca puede quedar nula
         }
         Optional<CategoryCustomsProfileEntity> found = resolve(categorySlug);
         if (found.isEmpty()) {

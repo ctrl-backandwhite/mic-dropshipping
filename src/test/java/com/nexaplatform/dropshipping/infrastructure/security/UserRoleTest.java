@@ -26,8 +26,7 @@ class UserRoleTest {
      */
     @Test
     void createAdminUserDto_pattern_accepts_every_role() throws Exception {
-        String patron = CreateAdminUserDtoIn.class.getDeclaredField("role")
-                .getAnnotation(Pattern.class).regexp();
+        String patron = CreateAdminUserDtoIn.class.getDeclaredField("role").getAnnotation(Pattern.class).regexp();
         for (UserRole rol : UserRole.values()) {
             assertThat(rol.name()).as("el rol %s falta en el patrón %s", rol, patron).matches(patron);
         }

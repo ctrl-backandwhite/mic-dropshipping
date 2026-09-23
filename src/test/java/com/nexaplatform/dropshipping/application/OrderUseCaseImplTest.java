@@ -27,6 +27,7 @@ import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -79,6 +80,9 @@ class OrderUseCaseImplTest {
     NotificationsPublisher notificationsPublisher;
     @Mock
     PricingService pricingService;
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
     @Mock
     AffiliateProgramService affiliateProgramService;
     @Mock
@@ -109,8 +113,8 @@ class OrderUseCaseImplTest {
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService orderSearchService;
 
     @org.mockito.Spy
-    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService = new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(
+            null);
 
     @InjectMocks
     OrderUseCaseImpl orderUseCase;
@@ -143,18 +147,18 @@ class OrderUseCaseImplTest {
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */
     private static PricingService.PricedAmount priced(String retail) {
         BigDecimal r = retail == null ? null : new BigDecimal(retail);
-        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, null, BigDecimal.ZERO,
-                r, BigDecimal.ZERO, BigDecimal.ZERO, null, null, null);
+        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, null, BigDecimal.ZERO, r, BigDecimal.ZERO,
+                BigDecimal.ZERO, null, null, null);
     }
 
     @Test
     void create_order_with_two_items_computes_totals() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
-                .build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50"))
+                .moq(1).titleZh("Widget").build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
-        when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced("12.50"));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new CreateOrderRequest("EXT-001",
@@ -178,11 +182,11 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_rejected_when_destination_blocks_over_threshold() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
-                .build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50"))
+                .moq(1).titleZh("Widget").build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
-        when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced("12.50"));
         CustomsValuationService.CustomsValuation blocked = new CustomsValuationService.CustomsValuation("MX",
                 TaxMode.DDP, 0, true, OverThresholdPolicy.BLOCK, 0, true, "150 EUR", false);
         when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), any()))
@@ -193,8 +197,7 @@ class OrderUseCaseImplTest {
                 List.of(new OrderItemInput(productId, null, 3)), null);
         UUID userId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> orderUseCase.createOrder(userId, null, req))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> orderUseCase.createOrder(userId, null, req)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("MX");
         verify(orderRepository, never()).save(any(Order.class));
     }
@@ -205,7 +208,7 @@ class OrderUseCaseImplTest {
         ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).titleZh("noprice").moq(1).build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
-        when(pricingService.priceFor(any(), any())).thenReturn(priced(null));
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced(null));
 
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
@@ -232,7 +235,8 @@ class OrderUseCaseImplTest {
     void variant_price_overrides_product_price() {
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10"))
+                .moq(1).titleZh("p").build();
         product.setId(productId);
         ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("15")).sku("V1").stock(10)
                 .active(true).build();
@@ -240,7 +244,7 @@ class OrderUseCaseImplTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(variantId)).thenReturn(Optional.of(variant));
-        when(pricingService.priceFor(any(), any())).thenReturn(priced("15"));
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced("15"));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
@@ -257,7 +261,8 @@ class OrderUseCaseImplTest {
         // para que el front identifique y quite la línea rota.
         UUID productId = UUID.randomUUID();
         UUID staleVariantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10"))
+                .moq(1).titleZh("p").build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(staleVariantId)).thenReturn(Optional.empty());
@@ -268,7 +273,8 @@ class OrderUseCaseImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
                 .isInstanceOfSatisfying(NotFoundException.class, ex -> {
                     org.assertj.core.api.Assertions.assertThat(ex.getCode()).isEqualTo("CART_ITEM_UNAVAILABLE");
-                    org.assertj.core.api.Assertions.assertThat(ex.getDetail()).containsExactly(staleVariantId.toString());
+                    org.assertj.core.api.Assertions.assertThat(ex.getDetail())
+                            .containsExactly(staleVariantId.toString());
                 });
     }
 
@@ -301,9 +307,9 @@ class OrderUseCaseImplTest {
         orderUseCase.refundOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
-                org.mockito.ArgumentMatchers.eq(2500L), org.mockito.ArgumentMatchers.eq(id),
-                org.mockito.ArgumentMatchers.eq("refund-" + id), org.mockito.ArgumentMatchers.anyString());
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(2500L),
+                org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.eq("refund-" + id),
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     // ---------------- cancelación por el cliente (cancelMyOrder) ----------------
@@ -321,9 +327,9 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelMyOrder(buyer, id, true); // reembolso a la wallet (inmediato)
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
-                org.mockito.ArgumentMatchers.eq(1500L), org.mockito.ArgumentMatchers.eq(id),
-                org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(1500L),
+                org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.eq("cancel-" + id),
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -334,10 +340,9 @@ class OrderUseCaseImplTest {
         Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-8").totalCents(4000)
                 .build();
         order.setId(id);
-        com.nexaplatform.dropshipping.domain.model.Payment card =
-                com.nexaplatform.dropshipping.domain.model.Payment.builder().id(paymentId)
-                        .status(com.nexaplatform.dropshipping.domain.enums.PaymentStatus.SUCCEEDED)
-                        .provider("stripe").build();
+        com.nexaplatform.dropshipping.domain.model.Payment card = com.nexaplatform.dropshipping.domain.model.Payment
+                .builder().id(paymentId).status(com.nexaplatform.dropshipping.domain.enums.PaymentStatus.SUCCEEDED)
+                .provider("stripe").build();
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
         when(paymentUseCase.listOrderPayments(id)).thenReturn(List.of(card));
@@ -346,9 +351,8 @@ class OrderUseCaseImplTest {
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(paymentUseCase).refundOrderPayment(id, paymentId, 0);
-        verify(walletUseCase, never()).deposit(any(), org.mockito
-                .ArgumentMatchers.anyLong(), any(), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString());
+        verify(walletUseCase, never()).deposit(any(), org.mockito.ArgumentMatchers.anyLong(), any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -371,8 +375,7 @@ class OrderUseCaseImplTest {
         order.setId(id);
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true)).isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -389,11 +392,9 @@ class OrderUseCaseImplTest {
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
         when(supplierPurchaseService.anyBought(id)).thenReturn(true);
 
-        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true)).isInstanceOf(BusinessException.class)
                 // El CÓDIGO es el contrato: es lo que el front traduce al idioma del comprador.
-                .hasFieldOrPropertyWithValue("code", "ORDER_NOT_CANCELLABLE")
-                .hasMessageContaining("already purchased");
+                .hasFieldOrPropertyWithValue("code", "ORDER_NOT_CANCELLABLE").hasMessageContaining("already purchased");
 
         assertThat(order.getStatus()).as("el pedido no se toca").isEqualTo(OrderStatus.PAID);
         verify(walletUseCase, never()).deposit(any(), org.mockito.ArgumentMatchers.anyLong(), any(),
@@ -452,9 +453,9 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
-                org.mockito.ArgumentMatchers.eq(3000L), org.mockito.ArgumentMatchers.eq(id),
-                org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(3000L),
+                org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.eq("cancel-" + id),
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -481,11 +482,11 @@ class OrderUseCaseImplTest {
      */
     private UUID productoConMoq(int moq) {
         UUID id = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE)
-                .basePrice(new BigDecimal("10.00")).moq(moq).titleZh("Lote").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10.00"))
+                .moq(moq).titleZh("Lote").build();
         product.setId(id);
         lenient().when(productRepository.findById(id)).thenReturn(Optional.of(product));
-        lenient().when(pricingService.priceFor(any(), any())).thenReturn(priced("10.00"));
+        lenient().when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced("10.00"));
         lenient().when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
         return id;
     }
@@ -493,8 +494,8 @@ class OrderUseCaseImplTest {
     /** Variante comprable de un producto, para componer lotes mixtos. */
     private UUID varianteDe(String sku) {
         UUID id = UUID.randomUUID();
-        ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("10"))
-                .sku(sku).stock(10).active(true).build();
+        ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("10")).sku(sku).stock(10)
+                .active(true).build();
         variant.setId(id);
         lenient().when(variantRepository.findById(id)).thenReturn(Optional.of(variant));
         return id;
@@ -502,8 +503,8 @@ class OrderUseCaseImplTest {
 
     private CreateOrderRequest pedidoCon(List<OrderItemInput> items) {
         return new CreateOrderRequest("EXT-MOQ",
-                new AddressInput("John Doe", "555", "j@x.com", "Line 1", null, "Madrid", "M", "28001", "ES"),
-                null, items, null);
+                new AddressInput("John Doe", "555", "j@x.com", "Line 1", null, "Madrid", "M", "28001", "ES"), null,
+                items, null);
     }
 
     /**
@@ -516,9 +517,9 @@ class OrderUseCaseImplTest {
     void elMinimoSeCumpleMezclandoVariantes() {
         UUID producto = productoConMoq(2);
 
-        Order order = orderUseCase.createOrder(UUID.randomUUID(), null, pedidoCon(List.of(
-                new OrderItemInput(producto, varianteDe("ROJO-M"), 1),
-                new OrderItemInput(producto, varianteDe("AZUL-L"), 1))));
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null,
+                pedidoCon(List.of(new OrderItemInput(producto, varianteDe("ROJO-M"), 1),
+                        new OrderItemInput(producto, varianteDe("AZUL-L"), 1))));
 
         assertThat(order.getItems()).hasSize(2);
     }
@@ -540,8 +541,7 @@ class OrderUseCaseImplTest {
         UUID producto = productoConMoq(3);
 
         assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null,
-                pedidoCon(List.of(new OrderItemInput(producto, null, 2)))))
-                .isInstanceOf(BusinessException.class)
+                pedidoCon(List.of(new OrderItemInput(producto, null, 2))))).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("mínimo");
     }
 
@@ -556,17 +556,16 @@ class OrderUseCaseImplTest {
         UUID uno = UUID.randomUUID();
         UUID otro = UUID.randomUUID();
         for (UUID id : List.of(uno, otro)) {
-            ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE)
-                    .basePrice(new BigDecimal("10.00")).moq(2).titleZh("Lote").build();
+            ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10.00"))
+                    .moq(2).titleZh("Lote").build();
             p.setId(id);
             lenient().when(productRepository.findById(id)).thenReturn(Optional.of(p));
         }
-        lenient().when(pricingService.priceFor(any(), any())).thenReturn(priced("10.00"));
+        lenient().when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced("10.00"));
         lenient().when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, pedidoCon(List.of(
-                new OrderItemInput(uno, null, 1),
-                new OrderItemInput(otro, null, 1)))))
+        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null,
+                pedidoCon(List.of(new OrderItemInput(uno, null, 1), new OrderItemInput(otro, null, 1)))))
                 .isInstanceOf(BusinessException.class);
     }
 

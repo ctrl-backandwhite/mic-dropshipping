@@ -64,7 +64,8 @@ class ProductIndexerTest {
         f.setAccessible(true);
         f.set(indexer, INDEX);
         // Los atributos del producto se consultan aparte (no cuelgan de la entidad): sin stub, null.
-        org.mockito.Mockito.lenient().when(productAttributeRepository.findByProduct_Id(org.mockito.ArgumentMatchers.any()))
+        org.mockito.Mockito.lenient()
+                .when(productAttributeRepository.findByProduct_Id(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(java.util.List.of());
     }
 
@@ -72,33 +73,23 @@ class ProductIndexerTest {
         SupplierEntity supplier = new SupplierEntity();
         supplier.setId(UUID.randomUUID());
 
-        com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity category =
-                new com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity();
+        com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity category = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity();
         category.setId(UUID.randomUUID());
 
-        ProductEntity p = ProductEntity.builder()
-                .slug("cool-widget")
-                .source("alibaba")
-                .externalId("EXT-1")
-                .status(ProductStatus.ACTIVE)
-                .titleZh("酷小工具")
-                .basePrice(new BigDecimal("12.3400"))
-                .trendScore(new BigDecimal("99.0"))
-                .monthlySales(42)
-                .rating(new BigDecimal("4.5"))
-                .supplier(supplier)
-                .category(category)
-                .build();
+        ProductEntity p = ProductEntity.builder().slug("cool-widget").source("alibaba").externalId("EXT-1")
+                .status(ProductStatus.ACTIVE).titleZh("酷小工具").basePrice(new BigDecimal("12.3400"))
+                .trendScore(new BigDecimal("99.0")).monthlySales(42).rating(new BigDecimal("4.5")).supplier(supplier)
+                .category(category).build();
         // BaseEntity id is not part of the @Builder → set it afterwards.
         p.setId(UUID.randomUUID());
 
-        ProductTranslationEntity es = ProductTranslationEntity.builder()
-                .language("es").title("Aparato chulo").shortDescription("desc es").build();
+        ProductTranslationEntity es = ProductTranslationEntity.builder().language("es").title("Aparato chulo")
+                .shortDescription("desc es").build();
         es.setProduct(p);
         p.getTranslations().add(es);
 
-        ProductImageEntity mirrored = ProductImageEntity.builder()
-                .position(0).sourceUrl("http://src/img.jpg").cdnUrl("http://cdn/img.jpg").build();
+        ProductImageEntity mirrored = ProductImageEntity.builder().position(0).sourceUrl("http://src/img.jpg")
+                .cdnUrl("http://cdn/img.jpg").build();
         mirrored.setProduct(p);
         p.getImages().add(mirrored);
 
@@ -121,17 +112,12 @@ class ProductIndexerTest {
         assertThat(req.id()).isEqualTo(p.getId().toString());
 
         Map<String, Object> doc = req.document();
-        assertThat(doc).containsEntry("id", p.getId().toString())
-                .containsEntry("slug", "cool-widget")
-                .containsEntry("source", "alibaba")
-                .containsEntry("externalId", "EXT-1")
-                .containsEntry("status", "ACTIVE")
-                .containsEntry("titleZh", "酷小工具")
-                .containsEntry("titleEs", "Aparato chulo")
-                                .containsEntry("monthlySales", 42)
+        assertThat(doc).containsEntry("id", p.getId().toString()).containsEntry("slug", "cool-widget")
+                .containsEntry("source", "alibaba").containsEntry("externalId", "EXT-1")
+                .containsEntry("status", "ACTIVE").containsEntry("titleZh", "酷小工具")
+                .containsEntry("titleEs", "Aparato chulo").containsEntry("monthlySales", 42)
                 .containsEntry("supplierId", p.getSupplier().getId().toString())
-                .containsEntry("categoryId", p.getCategory().getId().toString())
-                .containsEntry("hasImage", true)
+                .containsEntry("categoryId", p.getCategory().getId().toString()).containsEntry("hasImage", true)
                 .containsEntry("mainImage", "http://cdn/img.jpg");
     }
 
@@ -139,8 +125,8 @@ class ProductIndexerTest {
     void indexProduct_marksHasImageFalseWhenNoMirroredImage() throws IOException {
         ProductEntity p = product();
         p.getImages().clear();
-        ProductImageEntity notMirrored = ProductImageEntity.builder()
-                .position(0).sourceUrl("http://src/only.jpg").build(); // cdnUrl null
+        ProductImageEntity notMirrored = ProductImageEntity.builder().position(0).sourceUrl("http://src/only.jpg")
+                .build(); // cdnUrl null
         notMirrored.setProduct(p);
         p.getImages().add(notMirrored);
 
@@ -185,8 +171,8 @@ class ProductIndexerTest {
         indexer.deleteFromIndex(id);
 
         @SuppressWarnings({"unchecked", "rawtypes"})
-        ArgumentCaptor<java.util.function.Function<DeleteRequest.Builder, org.opensearch.client.util.ObjectBuilder<DeleteRequest>>> captor =
-                ArgumentCaptor.forClass((Class) java.util.function.Function.class);
+        ArgumentCaptor<java.util.function.Function<DeleteRequest.Builder, org.opensearch.client.util.ObjectBuilder<DeleteRequest>>> captor = ArgumentCaptor
+                .forClass((Class) java.util.function.Function.class);
         verify(client).delete(captor.capture());
         DeleteRequest req = captor.getValue().apply(new DeleteRequest.Builder()).build();
         assertThat(req.index()).isEqualTo(INDEX);

@@ -12,7 +12,8 @@ import java.util.UUID;
 
 /** Membership of products in groups (composite key). Powers the pricing lookup and the admin UI. */
 public interface ProductGroupMemberRepository
-        extends JpaRepository<ProductGroupMemberEntity, ProductGroupMemberEntity.Id> {
+        extends
+            JpaRepository<ProductGroupMemberEntity, ProductGroupMemberEntity.Id> {
 
     /** Group ids a product belongs to — used by MarginService to resolve PRODUCT_GROUP rules. */
     @Query("SELECT m.id.groupId FROM ProductGroupMemberEntity m WHERE m.id.productId = :productId")

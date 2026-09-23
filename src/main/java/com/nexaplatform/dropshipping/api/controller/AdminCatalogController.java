@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequ
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminPriceTierSurchargeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSubsidyBulkDtoIn;
@@ -71,7 +72,7 @@ public class AdminCatalogController implements AdminCatalogApi {
     private static final int MAX_BATCH = 1000;
     /** Topes anti-DoS de la importación NDJSON (cuerpo crudo por streaming). */
     private static final long MAX_IMPORT_BYTES = 100L * 1024 * 1024; // 100 MB
-    private static final int MAX_IMPORT_LINE_CHARS = 2_000_000;       // ~2 MB por línea
+    private static final int MAX_IMPORT_LINE_CHARS = 2_000_000; // ~2 MB por línea
     private static final long MAX_IMPORT_RECORDS = 1_000_000L;
 
     private final CatalogUseCase catalogUseCase;
@@ -95,8 +96,8 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public PageResponse<ProductSummaryView> list(String status, UUID categoryId, String q, int page, int size,
-            String lang, String sort, Boolean verified, BigDecimal minCost, BigDecimal maxCost,
-            Integer minSales, BigDecimal minTrend) {
+            String lang, String sort, Boolean verified, BigDecimal minCost, BigDecimal maxCost, Integer minSales,
+            BigDecimal minTrend) {
         return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, q, page, size, lang, sort,
                 verified, minCost, maxCost, minSales, minTrend));
     }
@@ -153,8 +154,8 @@ public class AdminCatalogController implements AdminCatalogApi {
         // Reindexado en SEGUNDO PLANO: responde al instante (con miles de productos, hacerlo síncrono
         // superaba el timeout del proxy/edge y el admin veía "No se pudo reindexar").
         CatalogUseCase.ReindexStatus s = catalogUseCase.startReindex();
-        return ResponseEntity.accepted().body(Map.of(
-                "started", s.started(), "running", s.running(), "indexed", s.lastIndexed()));
+        return ResponseEntity.accepted()
+                .body(Map.of("started", s.started(), "running", s.running(), "indexed", s.lastIndexed()));
     }
 
     /**
@@ -170,8 +171,7 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(int limite) {
         ImageMirrorService.ReencoladoParaComprimir r = imageMirrorService.reencolarParaComprimir(limite);
-        return ResponseEntity.accepted().body(Map.of(
-                "reencoladas", r.reencoladas(), "pendientes", r.pendientes()));
+        return ResponseEntity.accepted().body(Map.of("reencoladas", r.reencoladas(), "pendientes", r.pendientes()));
     }
 
     @Override
@@ -244,8 +244,7 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<ProductImageView> addProductImage(
-            UUID productId, AddProductImageDtoIn req) {
+    public ResponseEntity<ProductImageView> addProductImage(UUID productId, AddProductImageDtoIn req) {
         return new ResponseEntity<>(catalogUseCase.addProductImage(productId, req.getUrl(), req.getRole()),
                 HttpStatus.CREATED);
     }
@@ -286,18 +285,24 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public ProductDetailView updatePriceTierSurcharge(UUID id, int minQty, AdminPriceTierSurchargeDtoIn req,
+            String lang) {
+        return catalogUseCase.updatePriceTierSurcharge(id, minQty, req.getSurchargeCny(), lang);
+    }
+
+    @Override
     public ResponseEntity<Map<String, Object>> bulkDeleteProducts(List<UUID> ids) {
         CatalogUseCase.BulkOutcome result = catalogUseCase.bulkDeleteProducts(ids);
-        return ResponseEntity.ok(Map.of("deleted", result.succeeded(), "failed", result.failed(),
-                "errors", result.errors()));
+        return ResponseEntity
+                .ok(Map.of("deleted", result.succeeded(), "failed", result.failed(), "errors", result.errors()));
     }
 
     /** Bulk publish/pause/archive the selected products (sets status: ACTIVE/PAUSED/ARCHIVED). */
     @PutMapping("/products/bulk-status")
     public ResponseEntity<Map<String, Object>> bulkProductStatus(@RequestBody BulkStatusRequest req) {
         CatalogUseCase.BulkOutcome result = catalogUseCase.bulkUpdateStatus(req.ids(), req.status());
-        return ResponseEntity.ok(Map.of("succeeded", result.succeeded(), "failed", result.failed(),
-                "errors", result.errors()));
+        return ResponseEntity
+                .ok(Map.of("succeeded", result.succeeded(), "failed", result.failed(), "errors", result.errors()));
     }
 
     public record BulkStatusRequest(List<UUID> ids, String status) {
@@ -319,11 +324,11 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to, String createdFrom, String createdTo, Boolean verified, String status, UUID categoryId,
-            String q, BigDecimal minCost, BigDecimal maxCost, Integer minSales, BigDecimal minTrend) {
-        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to,
-                filtroDeExportacion(createdFrom, createdTo, verified, status, categoryId, q, minCost, maxCost,
-                        minSales, minTrend)));
+    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to, String createdFrom, String createdTo,
+            Boolean verified, String status, UUID categoryId, String q, BigDecimal minCost, BigDecimal maxCost,
+            Integer minSales, BigDecimal minTrend) {
+        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to, filtroDeExportacion(createdFrom, createdTo,
+                verified, status, categoryId, q, minCost, maxCost, minSales, minTrend)));
     }
 
     /**
@@ -333,18 +338,18 @@ public class AdminCatalogController implements AdminCatalogApi {
     private static CatalogUseCase.ExportFilter filtroDeExportacion(String createdFrom, String createdTo,
             Boolean verified, String status, UUID categoryId, String q, BigDecimal minCost, BigDecimal maxCost,
             Integer minSales, BigDecimal minTrend) {
-        return new CatalogUseCase.ExportFilter(status, categoryId, q, verified, minCost, maxCost, minSales,
-                minTrend, startOfDay(createdFrom), endOfDayExclusive(createdTo));
+        return new CatalogUseCase.ExportFilter(status, categoryId, q, verified, minCost, maxCost, minSales, minTrend,
+                startOfDay(createdFrom), endOfDayExclusive(createdTo));
     }
 
     @Override
-    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo, Boolean verified, String status, UUID categoryId,
-            String q, BigDecimal minCost, BigDecimal maxCost, Integer minSales, BigDecimal minTrend) {
+    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo, Boolean verified,
+            String status, UUID categoryId, String q, BigDecimal minCost, BigDecimal maxCost, Integer minSales,
+            BigDecimal minTrend) {
         // Cuenta con los MISMOS filtros que exporta: los segmentos que ofrece el panel salen de aquí, y si
         // contara de más ofrecería tramos que después vienen vacíos.
-        return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts(
-                filtroDeExportacion(createdFrom, createdTo, verified, status, categoryId, q, minCost, maxCost,
-                        minSales, minTrend))));
+        return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts(filtroDeExportacion(createdFrom,
+                createdTo, verified, status, categoryId, q, minCost, maxCost, minSales, minTrend))));
     }
 
     /** Fecha ISO (yyyy-MM-dd) al inicio del día UTC; null si vacía. Para el límite inferior del rango. */
@@ -377,12 +382,12 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch, String createdFrom,
-            String createdTo, Boolean verified, String status, UUID categoryId, String q, BigDecimal minCost,
-            BigDecimal maxCost, Integer minSales, BigDecimal minTrend) {
+    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch, String createdFrom, String createdTo,
+            Boolean verified, String status, UUID categoryId, String q, BigDecimal minCost, BigDecimal maxCost,
+            Integer minSales, BigDecimal minTrend) {
         int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
-        CatalogUseCase.ExportFilter filtro = filtroDeExportacion(createdFrom, createdTo, verified, status,
-                categoryId, q, minCost, maxCost, minSales, minTrend);
+        CatalogUseCase.ExportFilter filtro = filtroDeExportacion(createdFrom, createdTo, verified, status, categoryId,
+                q, minCost, maxCost, minSales, minTrend);
         // Un producto por línea, vaciando cada página: la memoria queda acotada a una página sea cual sea
         // el tamaño del catálogo. Se pagina por posición y no por clave desde que el filtro es el mismo que
         // el de la lista; el porqué está en `CatalogUseCase.exportPage`.
@@ -400,10 +405,8 @@ public class AdminCatalogController implements AdminCatalogApi {
                 pagina++;
             }
         };
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/x-ndjson"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"products-export.ndjson\"")
-                .body(body);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType("application/x-ndjson"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"products-export.ndjson\"").body(body);
     }
 
     @Override
@@ -426,8 +429,8 @@ public class AdminCatalogController implements AdminCatalogApi {
                     throw new BusinessException("Una línea del NDJSON supera el tamaño máximo permitido");
                 }
                 if (++records > MAX_IMPORT_RECORDS) {
-                    throw new BusinessException("El NDJSON supera el número máximo de registros ("
-                            + MAX_IMPORT_RECORDS + ")");
+                    throw new BusinessException(
+                            "El NDJSON supera el número máximo de registros (" + MAX_IMPORT_RECORDS + ")");
                 }
                 BulkProductDtoIn row = parseNdjsonRow(line, acc);
                 if (row == null) {
@@ -539,8 +542,8 @@ public class AdminCatalogController implements AdminCatalogApi {
         String label = (String) body.get("label");
         boolean required = Boolean.TRUE.equals(body.get("required"));
         int position = body.get("position") instanceof Number n ? n.intValue() : 0;
-        return ResponseEntity.ok(catalogUseCase.upsertCategoryAttributeSchema(categoryId, attrKey, label, required,
-                position));
+        return ResponseEntity
+                .ok(catalogUseCase.upsertCategoryAttributeSchema(categoryId, attrKey, label, required, position));
     }
 
     @DeleteMapping("/category-attribute-schema/{id}")

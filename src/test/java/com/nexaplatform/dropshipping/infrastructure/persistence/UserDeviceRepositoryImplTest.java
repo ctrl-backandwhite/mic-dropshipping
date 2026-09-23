@@ -45,8 +45,8 @@ class UserDeviceRepositoryImplTest {
     private static UserDeviceEntity fila(UUID dueno, String token) {
         UserEntity user = new UserEntity();
         user.setId(dueno);
-        return UserDeviceEntity.builder().id(UUID.randomUUID()).user(user).pushToken(token)
-                .plataforma("android").creadoEl(Instant.now()).ultimaSenal(Instant.now()).build();
+        return UserDeviceEntity.builder().id(UUID.randomUUID()).user(user).pushToken(token).plataforma("android")
+                .creadoEl(Instant.now()).ultimaSenal(Instant.now()).build();
     }
 
     @Test
@@ -100,8 +100,8 @@ class UserDeviceRepositoryImplTest {
     void listaLosDispositivosDeUnaPersona() {
         when(jpa.findByUser_Id(ANA)).thenReturn(List.of(fila(ANA, TOKEN), fila(ANA, "otro")));
 
-        assertThat(repositorio.deUsuario(ANA)).hasSize(2)
-                .extracting(UserDevice::getPushToken).containsExactly(TOKEN, "otro");
+        assertThat(repositorio.deUsuario(ANA)).hasSize(2).extracting(UserDevice::getPushToken).containsExactly(TOKEN,
+                "otro");
     }
 
     @Test

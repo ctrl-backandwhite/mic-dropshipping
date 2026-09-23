@@ -44,8 +44,8 @@ public interface FulfillmentProvider {
      * <p>Se archiva por separado del pedido a propósito: la dirección del pedido puede corregirse
      * después, y entonces ya no diría a dónde se mandó realmente el paquete.
      */
-    record DeclaredReceiver(String firstName, String lastName, String countryCode, String province,
-            String city, List<String> addressLines, String postalCode, String phone, String email) {
+    record DeclaredReceiver(String firstName, String lastName, String countryCode, String province, String city,
+            List<String> addressLines, String postalCode, String phone, String email) {
     }
 
     /**
@@ -53,8 +53,7 @@ public interface FulfillmentProvider {
      * qué partida arancelaria, cuánto y por cuánto.
      */
     record DeclaredLine(String nameEn, String nameLocal, String hsCode, int quantity, BigDecimal unitPrice,
-            String currency, BigDecimal unitWeightKg, String material, String purpose, String sku,
-            String salesUrl) {
+            String currency, BigDecimal unitWeightKg, String material, String purpose, String sku, String salesUrl) {
     }
 
     /**
@@ -67,8 +66,8 @@ public interface FulfillmentProvider {
     }
 
     record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
-            int sequenceNo, int weightGrams, int declaredValueCents, String productCode,
-            List<ParcelContent> contents, ShipmentDeclaration declaration) {
+            int sequenceNo, int weightGrams, int declaredValueCents, String productCode, List<ParcelContent> contents,
+            ShipmentDeclaration declaration) {
 
         /** Bulto único de un pedido que no hizo falta repartir. */
         public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
@@ -78,8 +77,8 @@ public interface FulfillmentProvider {
         /** Bulto del que no se conoce el reparto: el seguimiento no podrá enseñar su contenido. */
         public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
                 int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
-            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, sequenceNo, weightGrams,
-                    declaredValueCents, productCode, List.of(), null);
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, sequenceNo, weightGrams, declaredValueCents,
+                    productCode, List.of(), null);
         }
     }
 

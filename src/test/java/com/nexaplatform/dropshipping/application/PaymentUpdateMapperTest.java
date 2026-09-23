@@ -27,12 +27,12 @@ class PaymentUpdateMapperTest {
         Instant created = Instant.parse("2024-01-01T00:00:00Z");
 
         Payment target = Payment.builder().id(id).status(PaymentStatus.PENDING).method(PaymentMethod.CARD)
-                .amountDisplay(new BigDecimal("10.00")).currencyDisplay("EUR").provider("stripe")
-                .providerRef("ref_old").createdAt(created).createdBy("creator").build();
+                .amountDisplay(new BigDecimal("10.00")).currencyDisplay("EUR").provider("stripe").providerRef("ref_old")
+                .createdAt(created).createdBy("creator").build();
 
         Payment source = Payment.builder().status(PaymentStatus.SUCCEEDED).method(PaymentMethod.PAYPAL)
-                .amountDisplay(new BigDecimal("25.50")).currencyDisplay("USD").provider("paypal")
-                .providerRef("ref_new").build();
+                .amountDisplay(new BigDecimal("25.50")).currencyDisplay("USD").provider("paypal").providerRef("ref_new")
+                .build();
 
         mapper.updateFromModel(source, target);
 

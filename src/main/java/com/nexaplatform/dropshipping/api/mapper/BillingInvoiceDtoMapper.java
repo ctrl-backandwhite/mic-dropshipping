@@ -32,16 +32,10 @@ public class BillingInvoiceDtoMapper {
     }
 
     public BillingInvoiceDtoOut toDtoOut(InvoiceView invoice) {
-        return BillingInvoiceDtoOut.builder()
-                .number(invoice.number())
-                .total(invoice.total())
-                .currency(invoice.currency())
-                .totalFormatted(totalFormatted(invoice.total(), invoice.currency()))
-                .status(invoice.status())
-                .created(invoice.created())
-                .pdfUrl(invoice.pdfUrl())
-                .hostedUrl(invoice.hostedUrl())
-                .build();
+        return BillingInvoiceDtoOut.builder().number(invoice.number()).total(invoice.total())
+                .currency(invoice.currency()).totalFormatted(totalFormatted(invoice.total(), invoice.currency()))
+                .status(invoice.status()).created(invoice.created()).pdfUrl(invoice.pdfUrl())
+                .hostedUrl(invoice.hostedUrl()).build();
     }
 
     /**
@@ -61,8 +55,7 @@ public class BillingInvoiceDtoMapper {
         if (totalMinorUnits == null || currency == null || currency.isBlank()) {
             return null;
         }
-        BigDecimal amount = BigDecimal.valueOf(totalMinorUnits)
-                .movePointLeft(currencyRateService.decimalsOf(currency));
+        BigDecimal amount = BigDecimal.valueOf(totalMinorUnits).movePointLeft(currencyRateService.decimalsOf(currency));
         return currencyRateService.formatDisplay(amount, currency);
     }
 }

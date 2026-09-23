@@ -38,7 +38,13 @@ public final class CatalogDtos {
             String imageSourceUrl, Map<String, String> options) {
     }
 
-    public record IngestPriceTier(@Positive int minQty, Integer maxQty, BigDecimal unitPrice, String currency) {
+    public record IngestPriceTier(@Positive int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
+            BigDecimal surchargeCny) {
+
+        /** Sin recargo propio: el tramo hereda el del producto, que es el caso de siempre. */
+        public IngestPriceTier(int minQty, Integer maxQty, BigDecimal unitPrice, String currency) {
+            this(minQty, maxQty, unitPrice, currency, null);
+        }
     }
 
     public record IngestSupplierRequest(@NotBlank String source, @NotBlank String externalId, String name,
@@ -62,8 +68,8 @@ public final class CatalogDtos {
      * administrador que tiene que corregirlo, y son los mismos nombres que usan el aviso del despacho y
      * el fichero de carga.
      */
-    public record ProductCustomsGapView(UUID id, String slug, String title, String externalId,
-            String status, List<String> missing) {
+    public record ProductCustomsGapView(UUID id, String slug, String title, String externalId, String status,
+            List<String> missing) {
     }
 
     /**
@@ -113,19 +119,37 @@ public final class CatalogDtos {
             // Rebaja de ESTA variante. Tiene que ser suya y no la del producto: cada variante parte de
             // un precio distinto, así que el «antes» del producto junto al «ahora» de la variante da
             // un tachado incoherente — y puede salir MENOR que el precio rebajado.
-            String originalFormatted, Integer discountPercent) {
+            String originalFormatted, Integer discountPercent,
+            // Envío nacional chino de ESTA variante, en CNY. El scraper lo calcula por tramos de peso
+            // (6 / 10 / 16) porque una misma ficha tiene tallas que pesan el doble que otras, y con un
+            // único importe por producto a la pesada se le cobraba el flete de la ligera.
+            // Null = no declara envío propio y manda el del producto; cero = envío gratis.
+            BigDecimal shippingCny) {
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
-                String imageUrl, Map<String, String> options, boolean active, Integer weightGrams,
-                Integer lengthMm, Integer widthMm, Integer heightMm) {
-            this(id, sku, title, price, priceFormatted, stock, imageUrl, options, active, weightGrams,
-                    lengthMm, widthMm, heightMm, null, null);
+                String imageUrl, Map<String, String> options, boolean active, Integer weightGrams, Integer lengthMm,
+                Integer widthMm, Integer heightMm) {
+            this(id, sku, title, price, priceFormatted, stock, imageUrl, options, active, weightGrams, lengthMm,
+                    widthMm, heightMm, null, null, null);
         }
     }
 
+    /**
+     * Un escalon de la tabla de cantidades, ya tarificado.
+     *
+     * <p>{@code surchargeCny} es el recargo fijo de ESTE tramo, en la moneda del proveedor y tal como
+     * lo teclea quien administra (23-sep-2026). Nulo significa dos cosas distintas segun quien mire:
+     * para quien administra, que el tramo no tiene recargo propio y hereda el del producto; para
+     * cualquier otro, que no se publica -es un importe interno, como el resto del desglose-.
+     */
     public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
-            String unitPriceFormatted) {
+            String unitPriceFormatted, BigDecimal surchargeCny) {
+
+        /** Sin el recargo: lo que ve quien no administra. */
+        public PriceTierView sinRecargo() {
+            return new PriceTierView(minQty, maxQty, unitPrice, currency, unitPriceFormatted, null);
+        }
     }
 
     /**
@@ -149,8 +173,7 @@ public final class CatalogDtos {
             // canonical + display
             BigDecimal priceUsd, // retail in USD canon
             BigDecimal displayPrice, // converted to user's currency (X-Currency)
-            String displayCurrency, String displaySymbol,
-            String displayFormatted, // string ya formateado por el backend ("28,26 €") — el front solo lo pinta
+            String displayCurrency, String displaySymbol, String displayFormatted, // string ya formateado por el backend ("28,26 €") — el front solo lo pinta
             // stock: inventoryCount es el rollup del proveedor; availableUnits es
             // la suma del stock por variantes activas (más fiel para fulfillment).
             Integer inventoryCount, Integer availableUnits,
@@ -176,22 +199,21 @@ public final class CatalogDtos {
         /** Sin arancel resuelto: el listado lo decora después, fuera de la caché, porque depende del carrito. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
                 String currency, BigDecimal rating, int reviewCount, int monthlySales, BigDecimal trendScore,
-                String status,
-                BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
-                String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified,
-                String originalFormatted, Integer discountPercent, String promotionName) {
+                String status, BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency,
+                String displaySymbol, String displayFormatted, Integer inventoryCount, Integer availableUnits,
+                boolean verified, String originalFormatted, Integer discountPercent, String promotionName) {
             this(id, slug, title, mainImage, basePrice, currency, rating, reviewCount, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
-                    availableUnits, verified, originalFormatted, discountPercent, promotionName, null, null,
-                    null, false, false);
+                    availableUnits, verified, originalFormatted, discountPercent, promotionName, null, null, null,
+                    false, false);
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
                 String currency, BigDecimal rating, int reviewCount, int monthlySales, BigDecimal trendScore,
-                String status,
-                BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
-                String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
+                String status, BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency,
+                String displaySymbol, String displayFormatted, Integer inventoryCount, Integer availableUnits,
+                boolean verified) {
             this(id, slug, title, mainImage, basePrice, currency, rating, reviewCount, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
                     availableUnits, verified, null, null, null, null, null, null, false, false);
@@ -241,6 +263,10 @@ public final class CatalogDtos {
             // Desglose del total (base×margen + IVA + envío + recargo). SOLO ADMIN (null para usuario
             // final); el displayFormatted ya es el TOTAL que ve todo el mundo.
             String baseFormatted, String ivaFormatted, String shippingFormatted,
+            // IVA chino en CNY, el valor CRUDO que teclea el admin (23-sep-2026). Venia solo formateado,
+            // y sin el crudo no se podia ofrecer para editar: el 13 % es lo habitual, no una ley, y
+            // corregirlo obligaba a reenviar la ficha entera por el importador. SOLO ADMIN.
+            BigDecimal ivaCny,
             // Recargo fijo por producto (surcharge_cny, 30-ago-2026). surchargeCny = valor crudo en CNY
             // (el que edita el admin); surchargeFormatted = ya convertido a la moneda de la petición.
             // SOLO ADMIN (null para usuario final).
@@ -250,8 +276,7 @@ public final class CatalogDtos {
             // arancel. SOLO ADMIN: el cliente ve su efecto en el desglose del checkout, no el importe.
             // Valor CRUDO en CNY (lo que teclea el admin al editar) y el mismo importe ya convertido a la
             // moneda de la petición, que es como se enseña. Mismo par que el recargo.
-            BigDecimal shippingUserCny, BigDecimal dutyUserCny,
-            String shippingUserFormatted, String dutyUserFormatted,
+            BigDecimal shippingUserCny, BigDecimal dutyUserCny, String shippingUserFormatted, String dutyUserFormatted,
             // DROP-679: SEO por idioma (generado al publicar a partir del contenido real)
             String metaTitle, String metaDescription,
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
@@ -280,17 +305,15 @@ public final class CatalogDtos {
         /** La misma ficha con el arancel resuelto; se decora fuera del detalle, que va cacheado. */
         public ProductDetailView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
                 boolean dutyCovered) {
-            return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title,
-                    shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
-                    basePrice, currency, rating, reviewCount, monthlySales, repurchaseRate, trendScore, status,
-                    sourceUrl, ingestedAt, lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd,
-                    retailUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
-                    appliedMarginPercent, baseFormatted, ivaFormatted, shippingFormatted, surchargeCny,
-                    surchargeFormatted, shippingUserCny, dutyUserCny,
-                    shippingUserFormatted, dutyUserFormatted,
-                    metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    originalFormatted, discountPercent, promotionName, compliance,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
+            return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title, shortDescription,
+                    description, titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating,
+                    reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt, lastSyncedAt,
+                    images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice, displayCurrency,
+                    displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, ivaFormatted,
+                    shippingFormatted, ivaCny, surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny,
+                    shippingUserFormatted, dutyUserFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
+                    originalFormatted, discountPercent, promotionName, compliance, extraDutyCents, extraDutyFormatted,
+                    dutyGroupId, dutyCovered, shippingCovered);
         }
 
         /**
@@ -321,16 +344,13 @@ public final class CatalogDtos {
          * por anotaciones se olvida en silencio, que es exactamente como se llegó a esto.
          */
         public ProductDetailView sinDatosInternos() {
-            return new ProductDetailView(id, slug, null, null, null, categoryId, title,
-                    shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
-                    basePrice, currency, rating, reviewCount, monthlySales, null, trendScore, status,
-                    null, null, null, images, variantOptions, variants, priceTiers, null,
-                    null, displayPrice, displayCurrency, displaySymbol, displayFormatted,
-                    null, null, null, null, null,
-                    null, null, null,
-                    null, null,
-                    metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    originalFormatted, discountPercent, promotionName, compliance,
+            return new ProductDetailView(id, slug, null, null, null, categoryId, title, shortDescription, description,
+                    titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating, reviewCount,
+                    monthlySales, null, trendScore, status, null, null, null, images, variantOptions, variants,
+                    tramosSinRecargo(), null, null, displayPrice, displayCurrency, displaySymbol, displayFormatted,
+                    // margen aplicado, base, IVA y envio formateados, el IVA crudo y el recargo
+                    null, null, null, null, null, null, null, null, null, null, null, metaTitle, metaDescription,
+                    verified, videoUrl, hasVideo, originalFormatted, discountPercent, promotionName, compliance,
                     extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
         }
 
@@ -349,17 +369,20 @@ public final class CatalogDtos {
          * añada un campo, el compilador le obliga a pasar por aquí y a decidir de quién es.
          */
         public ProductDetailView sinImportesInternos() {
-            return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title,
-                    shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
-                    basePrice, currency, rating, reviewCount, monthlySales, repurchaseRate, trendScore, status,
-                    sourceUrl, ingestedAt, lastSyncedAt, images, variantOptions, variants, priceTiers, null,
-                    null, displayPrice, displayCurrency, displaySymbol, displayFormatted,
-                    null, null, null, null, null,
-                    null, null, null,
-                    null, null,
-                    metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    originalFormatted, discountPercent, promotionName, compliance,
+            return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title, shortDescription,
+                    description, titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating,
+                    reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt, lastSyncedAt,
+                    images, variantOptions, variants, tramosSinRecargo(), null, null, displayPrice, displayCurrency,
+                    displaySymbol, displayFormatted,
+                    // margen aplicado, base, IVA y envio formateados, el IVA crudo y el recargo
+                    null, null, null, null, null, null, null, null, null, null, null, metaTitle, metaDescription,
+                    verified, videoUrl, hasVideo, originalFormatted, discountPercent, promotionName, compliance,
                     extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
+        }
+
+        /** Los tramos con el recargo fuera: es un importe interno, igual que el resto del desglose. */
+        private List<PriceTierView> tramosSinRecargo() {
+            return priceTiers == null ? null : priceTiers.stream().map(PriceTierView::sinRecargo).toList();
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
@@ -370,17 +393,16 @@ public final class CatalogDtos {
                 BigDecimal trendScore, String status, String sourceUrl, Instant ingestedAt, Instant lastSyncedAt,
                 List<ProductImageView> images, List<VariantOptionView> variantOptions, List<VariantView> variants,
                 List<PriceTierView> priceTiers, BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice,
-                String displayCurrency, String displaySymbol, String displayFormatted,
-                BigDecimal appliedMarginPercent, String baseFormatted, String ivaFormatted,
-                String shippingFormatted, String metaTitle, String metaDescription, boolean verified,
-                String videoUrl, boolean hasVideo) {
-            this(id, slug, source, externalId, supplier, categoryId, title, shortDescription, description,
-                    titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating,
-                    reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt,
-                    lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
-                    displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
-                    ivaFormatted, shippingFormatted, null, null, null, null, null, null, metaTitle, metaDescription,
-                    verified, videoUrl, hasVideo, null, null, null, null, null, null, null, false, false);
+                String displayCurrency, String displaySymbol, String displayFormatted, BigDecimal appliedMarginPercent,
+                String baseFormatted, String ivaFormatted, String shippingFormatted, String metaTitle,
+                String metaDescription, boolean verified, String videoUrl, boolean hasVideo) {
+            this(id, slug, source, externalId, supplier, categoryId, title, shortDescription, description, titleZh,
+                    shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating, reviewCount,
+                    monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt, lastSyncedAt, images,
+                    variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice, displayCurrency,
+                    displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, ivaFormatted,
+                    shippingFormatted, null, null, null, null, null, null, null, metaTitle, metaDescription, verified,
+                    videoUrl, hasVideo, null, null, null, null, null, null, null, false, false);
         }
     }
 

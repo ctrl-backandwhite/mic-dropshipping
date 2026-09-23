@@ -121,8 +121,8 @@ class Cov01OrderSearchServiceTest {
     @Test
     void laUrlDelIndiceSeArmaSinBarraDuplicadaYConElPrimerNodoDeLaLista() throws Exception {
         // La propiedad admite una lista de nodos separada por comas y puede venir con barra final.
-        OrderSearchService multi = new OrderSearchService(objectMapper,
-                " http://a.test:9400/ , http://b.test:9400 ", "pedidos");
+        OrderSearchService multi = new OrderSearchService(objectMapper, " http://a.test:9400/ , http://b.test:9400 ",
+                "pedidos");
         Field f = OrderSearchService.class.getDeclaredField("httpClient");
         f.setAccessible(true);
         f.set(multi, httpClient);
@@ -143,10 +143,8 @@ class Cov01OrderSearchServiceTest {
 
         // El orden es la garantía de la pantalla: el admin espera ver arriba lo que acaba de entrar.
         // Y sin track_total_hits OpenSearch corta el conteo en 10.000, con lo que el paginador mentiría.
-        assertThat(sentBody())
-                .contains("\"query\":{\"match_all\":{}}")
-                .contains("\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]")
-                .contains("\"track_total_hits\":true");
+        assertThat(sentBody()).contains("\"query\":{\"match_all\":{}}")
+                .contains("\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]").contains("\"track_total_hits\":true");
     }
 
     @Test
@@ -186,8 +184,7 @@ class Cov01OrderSearchServiceTest {
 
         service.pageIds(null, "NX-100", 0, 20);
 
-        assertThat(sentBody())
-                .contains("\"fields\":[\"orderNumber\",\"externalOrderId\",\"shippingName\"]");
+        assertThat(sentBody()).contains("\"fields\":[\"orderNumber\",\"externalOrderId\",\"shippingName\"]");
     }
 
     @Test

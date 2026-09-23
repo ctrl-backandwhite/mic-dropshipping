@@ -72,8 +72,8 @@ class Cov06EmailImageThumbnailerTest {
     /** Una foto apaisada se recorta por los lados, no se encoge: el resultado sigue siendo cuadrado. */
     @Test
     void unaFotoApaisadaSeRecortaACuadrado() throws IOException {
-        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(
-                EmailImageThumbnailer.thumbnail(png(1200, 400, Color.BLUE))));
+        BufferedImage leida = ImageIO
+                .read(new ByteArrayInputStream(EmailImageThumbnailer.thumbnail(png(1200, 400, Color.BLUE))));
 
         assertThat(leida.getWidth()).isEqualTo(leida.getHeight());
     }
@@ -81,8 +81,8 @@ class Cov06EmailImageThumbnailerTest {
     /** Y una vertical, por arriba y por abajo. Es el caso de la ropa de 694x925. */
     @Test
     void unaFotoVerticalTambienSaleCuadrada() throws IOException {
-        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(
-                EmailImageThumbnailer.thumbnail(png(694, 925, Color.GREEN))));
+        BufferedImage leida = ImageIO
+                .read(new ByteArrayInputStream(EmailImageThumbnailer.thumbnail(png(694, 925, Color.GREEN))));
 
         assertThat(leida.getWidth()).isEqualTo(leida.getHeight());
     }
@@ -93,8 +93,8 @@ class Cov06EmailImageThumbnailerTest {
      */
     @Test
     void unaFotoPequenaNoSeAmplia() throws IOException {
-        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(
-                EmailImageThumbnailer.thumbnail(png(120, 90, Color.RED))));
+        BufferedImage leida = ImageIO
+                .read(new ByteArrayInputStream(EmailImageThumbnailer.thumbnail(png(120, 90, Color.RED))));
 
         assertThat(leida.getWidth()).isEqualTo(90);
         assertThat(leida.getHeight()).isEqualTo(90);

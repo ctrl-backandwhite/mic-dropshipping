@@ -22,13 +22,13 @@ class WebhookSubscriptionUpdateMapperTest {
     @Test
     void updateFromModel_copiesEditableFieldsAndPreservesSecretAndIdentity() {
         UUID id = UUID.randomUUID();
-        WebhookSubscription target = WebhookSubscription.builder().id(id).secret("whsec_keepme")
-                .name("Old").targetUrl("https://old").events(new ArrayList<>(List.of("order.created"))).active(false)
+        WebhookSubscription target = WebhookSubscription.builder().id(id).secret("whsec_keepme").name("Old")
+                .targetUrl("https://old").events(new ArrayList<>(List.of("order.created"))).active(false)
                 .description("old").createdBy("creator").build();
 
-        WebhookSubscription source = WebhookSubscription.builder().secret("whsec_attacker")
-                .name("New").targetUrl("https://new").events(List.of("order.shipped", "order.delivered"))
-                .active(true).description("new").build();
+        WebhookSubscription source = WebhookSubscription.builder().secret("whsec_attacker").name("New")
+                .targetUrl("https://new").events(List.of("order.shipped", "order.delivered")).active(true)
+                .description("new").build();
 
         mapper.updateFromModel(source, target);
 

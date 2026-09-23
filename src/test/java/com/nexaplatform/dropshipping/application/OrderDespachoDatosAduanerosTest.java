@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,9 @@ class OrderDespachoDatosAduanerosTest {
     WebhookDispatcherService webhooks;
     @Mock
     OrderIndexer orderIndexer;
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
 
     @InjectMocks
     OrderUseCaseImpl orderUseCase;
@@ -121,8 +125,7 @@ class OrderDespachoDatosAduanerosTest {
         p.setHsCode(null);
         Order pedido = pedidoPagado();
 
-        assertThatThrownBy(() -> orderUseCase.forwardOrder(pedido.getId()))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> orderUseCase.forwardOrder(pedido.getId())).isInstanceOf(BusinessException.class);
 
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(pedido.getForwardedAt()).isNull();
@@ -135,15 +138,13 @@ class OrderDespachoDatosAduanerosTest {
         ProductEntity p = producto();
         p.setHsCode(null);
         p.setWeightGrams(null);
-        p.setTitleZh("Reloj de pulsera");           // sin ideogramas: para YunExpress es como no tenerlo
+        p.setTitleZh("Reloj de pulsera"); // sin ideogramas: para YunExpress es como no tenerlo
         p.setTranslations(List.of(traduccion("zh", "Reloj de pulsera")));
         Order pedido = pedidoPagado();
 
         assertThatThrownBy(() -> orderUseCase.forwardOrder(pedido.getId()))
-                .hasMessageContaining("partida arancelaria (HSCode)")
-                .hasMessageContaining("peso unitario (UnitWeight)")
-                .hasMessageContaining("nombre en chino (CName)")
-                .hasMessageContaining("nombre en inglés (EName)");
+                .hasMessageContaining("partida arancelaria (HSCode)").hasMessageContaining("peso unitario (UnitWeight)")
+                .hasMessageContaining("nombre en chino (CName)").hasMessageContaining("nombre en inglés (EName)");
     }
 
     @Test

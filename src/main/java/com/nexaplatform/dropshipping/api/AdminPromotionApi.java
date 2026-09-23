@@ -35,8 +35,7 @@ public interface AdminPromotionApi {
     @Operation(summary = "Editar una promoción")
     @ApiResponse(responseCode = "200", description = "Promoción actualizada")
     @PutMapping("/{id}")
-    ResponseEntity<AdminPromotionDtoOut> update(@PathVariable UUID id,
-            @Valid @RequestBody AdminPromotionDtoIn body);
+    ResponseEntity<AdminPromotionDtoOut> update(@PathVariable UUID id, @Valid @RequestBody AdminPromotionDtoIn body);
 
     @Operation(summary = "Activar o pausar una promoción")
     @ApiResponse(responseCode = "200", description = "Estado cambiado")

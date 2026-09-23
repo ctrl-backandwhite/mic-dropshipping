@@ -33,6 +33,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEn
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -129,9 +130,8 @@ class OrderLineSnapshotTest {
     @Mock
     OrderTrackingEventRepository trackingRepository;
 
-    private final com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService
-            declarationGroups =
-            mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class);
+    private final com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups = mock(
+            com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class);
 
     private final UUID productId = UUID.randomUUID();
 
@@ -139,11 +139,12 @@ class OrderLineSnapshotTest {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher,
-                mock(com.nexaplatform.dropshipping.application.usecase.NotificationUseCase.class),
-                pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, router, checkoutTotalsService, subvenciones(), new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class), operatorCommissionService, promotionService, supplierPurchaseService, declarationGroups,
-                trackingRepository, orderIndexer,
-                orderSearchService, mock(CartService.class));
+                mock(com.nexaplatform.dropshipping.application.usecase.NotificationUseCase.class), pricingService,
+                tramos, affiliateProgramService, stockService, paymentUseCase, orderEmailService, fulfillment, router,
+                checkoutTotalsService, subvenciones(), new CustomsDutyLinesService(null),
+                mock(UnserviceableZoneService.class), operatorCommissionService, promotionService,
+                supplierPurchaseService, declarationGroups, trackingRepository, orderIndexer, orderSearchService,
+                mock(CartService.class));
     }
 
     private ProductEntity product() {
@@ -165,13 +166,14 @@ class OrderLineSnapshotTest {
 
     private void pricedAt(String retailUsd) {
         PricingService.PricedAmount priced = new PricingService.PricedAmount(new BigDecimal("10.00"),
-                retailUsd == null ? null : new BigDecimal(retailUsd), null, "USD", "$", null, null, null,
-                null, null, null, null, null, null);
-        when(pricingService.priceFor(any(), any())).thenReturn(priced);
+                retailUsd == null ? null : new BigDecimal(retailUsd), null, "USD", "$", null, null, null, null, null,
+                null, null, null, null);
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(priced);
     }
 
     private void happyTotals() {
-        when(router.cotizar(anyString(), any(), anyList())).thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
+        when(router.cotizar(anyString(), any(), anyList()))
+                .thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);
         when(totals.blocked()).thenReturn(false);
@@ -187,8 +189,8 @@ class OrderLineSnapshotTest {
     }
 
     private static AddressInput address() {
-        return new AddressInput("Nombre Apellido", "+34600000000", "cliente@example.com", "Calle 1", null,
-                "Madrid", "Madrid", "28001", "ES");
+        return new AddressInput("Nombre Apellido", "+34600000000", "cliente@example.com", "Calle 1", null, "Madrid",
+                "Madrid", "28001", "ES");
     }
 
     private OrderItem firstLine(UUID variantId, int qty) {
@@ -198,7 +200,6 @@ class OrderLineSnapshotTest {
         return useCase().createOrder(null, null, req).getItems().get(0);
     }
 
-
     /**
      * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
      * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
@@ -207,6 +208,9 @@ class OrderLineSnapshotTest {
      * puede venir del método bajo prueba.
      */
     private OrderUseCaseImpl subject;
+
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    private final ProductPriceTierRepository tramos = mock(ProductPriceTierRepository.class);
 
     @BeforeEach
     void buildSubject() {
@@ -289,8 +293,8 @@ class OrderLineSnapshotTest {
 
         OrderItem line = firstLine(null, 3);
 
-        assertThat(line.getUnitPriceCents()).isEqualTo(1491);        // 14,905 -> 14,91
-        assertThat(line.getLineTotalCents()).isEqualTo(4473);        // × 3
+        assertThat(line.getUnitPriceCents()).isEqualTo(1491); // 14,905 -> 14,91
+        assertThat(line.getLineTotalCents()).isEqualTo(4473); // × 3
     }
 
     @Test
@@ -330,8 +334,7 @@ class OrderLineSnapshotTest {
         product();
         pricedAt("100.00");
 
-        assertThatThrownBy(() -> firstLine(null, qty))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> firstLine(null, qty)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("entre 1 y 100000");
     }
 
@@ -340,8 +343,7 @@ class OrderLineSnapshotTest {
         product();
         pricedAt(null);
 
-        assertThatThrownBy(() -> firstLine(null, 1))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> firstLine(null, 1)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("has no price");
     }
 
@@ -349,8 +351,7 @@ class OrderLineSnapshotTest {
     void unCarritoVacioNoCreaPedido() {
         CreateOrderRequest sinLineas = new CreateOrderRequest("EXT-1", address(), null, List.of(), null);
 
-        assertThatThrownBy(() -> subject.createOrder(null, null, sinLineas))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.createOrder(null, null, sinLineas)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("at least one item");
     }
 
@@ -359,8 +360,8 @@ class OrderLineSnapshotTest {
         // El cliente ve DOS cosas: la barra de estado y el detalle del seguimiento. Marcar solo el
         // estado dejaba la barra en «Entregado» y el detalle parado en «Envío registrado».
         UUID id = UUID.randomUUID();
-        Order o = Order.builder().id(id).orderNumber("NX-1").status(OrderStatus.FORWARDED)
-                .shippingCountry("ES").build();
+        Order o = Order.builder().id(id).orderNumber("NX-1").status(OrderStatus.FORWARDED).shippingCountry("ES")
+                .build();
         when(orderRepository.findById(id)).thenReturn(Optional.of(o));
         when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -377,8 +378,8 @@ class OrderLineSnapshotTest {
     void siFallaElApunteDelSeguimientoElPedidoAvanzaIgual() {
         // Perder una línea del seguimiento es un incordio; tumbar la transición sería peor.
         UUID id = UUID.randomUUID();
-        Order o = Order.builder().id(id).orderNumber("NX-2").status(OrderStatus.FORWARDED)
-                .shippingCountry("ES").build();
+        Order o = Order.builder().id(id).orderNumber("NX-2").status(OrderStatus.FORWARDED).shippingCountry("ES")
+                .build();
         when(orderRepository.findById(id)).thenReturn(Optional.of(o));
         when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(trackingRepository.save(any())).thenThrow(new IllegalStateException("timeline caído"));
@@ -395,8 +396,7 @@ class OrderLineSnapshotTest {
         pricedAt("100.00");
         when(declarationGroups.describeFor(any(), any())).thenReturn("Men's woven cotton trousers");
 
-        assertThat(firstLine(null, 1).getDeclaredDescription())
-                .isEqualTo("Men's woven cotton trousers");
+        assertThat(firstLine(null, 1).getDeclaredDescription()).isEqualTo("Men's woven cotton trousers");
     }
 
     @Test
@@ -415,10 +415,11 @@ class OrderLineSnapshotTest {
 
     /** La bolsa de subvención del envío, real y con su suelo puesto (mide importes, no puede ser un cero). */
     private static com.nexaplatform.dropshipping.application.service.ProductSubsidyService subvenciones() {
-        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
-        org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
+        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa = org.mockito.Mockito
+                .mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
+        org.mockito.Mockito.lenient()
+                .when(divisa.toUsd(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new java.math.BigDecimal("5.85"));
         return new com.nexaplatform.dropshipping.application.service.ProductSubsidyService(divisa);
     }
 }

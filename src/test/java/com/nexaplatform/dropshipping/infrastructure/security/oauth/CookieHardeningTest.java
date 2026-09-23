@@ -97,10 +97,8 @@ class CookieHardeningTest {
      */
     @Test
     void laCookieDeSesionEstaEndurecidaEnLaConfiguracion() {
-        assertThat(propiedad("application.yml", "server.servlet.session.cookie.same-site"))
-                .isEqualTo("lax");
-        assertThat(propiedad("application.yml", "server.servlet.session.cookie.http-only"))
-                .isEqualTo(true);
+        assertThat(propiedad("application.yml", "server.servlet.session.cookie.same-site")).isEqualTo("lax");
+        assertThat(propiedad("application.yml", "server.servlet.session.cookie.http-only")).isEqualTo(true);
 
         for (String perfil : List.of("application-dev.yml", "application-pre.yml", "application-pro.yml")) {
             assertThat(propiedad(perfil, "server.servlet.session.cookie.secure"))
@@ -113,8 +111,8 @@ class CookieHardeningTest {
     /** Lee una propiedad de un YAML del classpath sin arrancar el contexto. */
     private Object propiedad(String fichero, String clave) {
         try {
-            List<PropertySource<?>> fuentes = new YamlPropertySourceLoader()
-                    .load(fichero, new ClassPathResource(fichero));
+            List<PropertySource<?>> fuentes = new YamlPropertySourceLoader().load(fichero,
+                    new ClassPathResource(fichero));
             for (PropertySource<?> fuente : fuentes) {
                 Object valor = fuente.getProperty(clave);
                 if (valor != null) {

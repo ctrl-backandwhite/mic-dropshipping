@@ -112,14 +112,13 @@ class Cov02StripeServiceTest {
         try (MockedStatic<Session> s = mockStatic(Session.class)) {
             s.when(() -> Session.create(any(SessionCreateParams.class))).thenReturn(sesion);
 
-            Session resultado = service.createCheckoutSession("cliente@nx.com", "price_1",
-                    "https://nx036.com/ok", "https://nx036.com/ko");
+            Session resultado = service.createCheckoutSession("cliente@nx.com", "price_1", "https://nx036.com/ok",
+                    "https://nx036.com/ko");
 
             assertThat(resultado).isSameAs(sesion);
             s.verify(() -> Session.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw).containsEntry("mode", "subscription")
-                    .containsEntry("customer_email", "cliente@nx.com")
+            assertThat(raw).containsEntry("mode", "subscription").containsEntry("customer_email", "cliente@nx.com")
                     .containsEntry("cancel_url", "https://nx036.com/ko");
             // Sin el marcador de sesión la vuelta del pago no podría confirmarse contra Stripe.
             assertThat(raw.get("success_url")).asString().endsWith("?session_id={CHECKOUT_SESSION_ID}");

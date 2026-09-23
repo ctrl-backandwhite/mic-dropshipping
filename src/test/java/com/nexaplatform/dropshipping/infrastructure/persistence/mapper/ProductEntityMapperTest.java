@@ -45,44 +45,16 @@ class ProductEntityMapperTest {
         UUID supplierId = UUID.randomUUID();
         UUID categoryId = UUID.randomUUID();
 
-        Product model = Product.builder()
-                .id(id)
-                .slug("widget-pro")
-                .source("1688")
-                .externalId("EXT-1")
-                .supplierId(supplierId)
-                .categoryId(categoryId)
-                .titleZh("小部件")
-                .shortDescriptionZh("短")
-                .descriptionZh("描述")
-                .brand("ACME")
-                .moq(5)
-                .basePrice(new BigDecimal("12.3400"))
-                .currency("CNY")
-                .weightGrams(250)
-                .packageWeightGrams(300)
-                .shipFrom("CN")
-                .freeShipping(true)
-                .selfPickup(false)
-                .hasVideo(true)
-                .videoUrl("http://v/1.mp4")
-                .inventoryCount(99)
-                .certifications(new ArrayList<>(List.of("CE", "RoHS")))
-                .status(ProductStatus.ACTIVE)
-                .rating(new BigDecimal("4.50"))
-                .reviewCount(120)
-                .monthlySales(33)
-                .repurchaseRate(new BigDecimal("0.20"))
-                .trendScore(new BigDecimal("7.1234"))
-                .sourceUrl("http://src/p")
-                .ingestedAt(Instant.now())
-                .lastSyncedAt(Instant.now())
-                .supplierName("ACME Co")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .createdBy("seed")
-                .updatedBy("editor")
-                .build();
+        Product model = Product.builder().id(id).slug("widget-pro").source("1688").externalId("EXT-1")
+                .supplierId(supplierId).categoryId(categoryId).titleZh("小部件").shortDescriptionZh("短")
+                .descriptionZh("描述").brand("ACME").moq(5).basePrice(new BigDecimal("12.3400")).currency("CNY")
+                .weightGrams(250).packageWeightGrams(300).shipFrom("CN").freeShipping(true).selfPickup(false)
+                .hasVideo(true).videoUrl("http://v/1.mp4").inventoryCount(99)
+                .certifications(new ArrayList<>(List.of("CE", "RoHS"))).status(ProductStatus.ACTIVE)
+                .rating(new BigDecimal("4.50")).reviewCount(120).monthlySales(33).repurchaseRate(new BigDecimal("0.20"))
+                .trendScore(new BigDecimal("7.1234")).sourceUrl("http://src/p").ingestedAt(Instant.now())
+                .lastSyncedAt(Instant.now()).supplierName("ACME Co").createdAt(Instant.now()).updatedAt(Instant.now())
+                .createdBy("seed").updatedBy("editor").build();
 
         ProductEntity entity = mapper.toEntity(model);
 
@@ -105,9 +77,8 @@ class ProductEntityMapperTest {
         // (sin SupplierEntity/CategoryEntity gestionado en este camino); las colecciones anidadas
         // y priceTiers (los resuelve el repositorio, toEntity los descarta).
         assertThat(back).usingRecursiveComparison()
-                .ignoringFields("createdAt", "updatedAt", "createdBy", "updatedBy",
-                        "supplierName", "supplierId", "categoryId",
-                        "images", "variants", "variantOptions", "translations", "priceTiers")
+                .ignoringFields("createdAt", "updatedAt", "createdBy", "updatedBy", "supplierName", "supplierId",
+                        "categoryId", "images", "variants", "variantOptions", "translations", "priceTiers")
                 .isEqualTo(model);
     }
 
@@ -118,75 +89,34 @@ class ProductEntityMapperTest {
         supplier.setId(supplierId);
         supplier.setName("ACME Co");
 
-        ProductImageEntity image = ProductImageEntity.builder()
-                .position(0)
-                .role("cover")
-                .sourceUrl("http://src/img.jpg")
-                .cdnUrl("http://cdn/img.jpg")
-                .width(800)
-                .height(600)
-                .bytes(12345L)
-                .hash("abc")
-                .mirrorStatus(MirrorStatus.MIRRORED)
-                .mirroredAt(Instant.now())
-                .build();
+        ProductImageEntity image = ProductImageEntity.builder().position(0).role("cover")
+                .sourceUrl("http://src/img.jpg").cdnUrl("http://cdn/img.jpg").width(800).height(600).bytes(12345L)
+                .hash("abc").mirrorStatus(MirrorStatus.MIRRORED).mirroredAt(Instant.now()).build();
         image.setId(UUID.randomUUID());
 
-        ProductVariantEntity variant = ProductVariantEntity.builder()
-                .externalId("V-1")
-                .sku("SKU-1")
-                .title("Rojo / L")
-                .price(new BigDecimal("15.0000"))
-                .stock(7)
-                .weightGrams(260)
-                .barcode("BC-1")
-                .imageSourceUrl("http://src/v.jpg")
-                .imageCdnUrl("http://cdn/v.jpg")
-                .options(Map.of("color", "rojo"))
-                .active(true)
-                .build();
+        ProductVariantEntity variant = ProductVariantEntity.builder().externalId("V-1").sku("SKU-1").title("Rojo / L")
+                .price(new BigDecimal("15.0000")).stock(7).weightGrams(260).barcode("BC-1")
+                .imageSourceUrl("http://src/v.jpg").imageCdnUrl("http://cdn/v.jpg").options(Map.of("color", "rojo"))
+                .active(true).build();
         variant.setId(UUID.randomUUID());
 
-        VariantValueEntity value = VariantValueEntity.builder()
-                .valueZh("红")
-                .value("Rojo")
-                .imageSourceUrl("http://src/red.jpg")
-                .imageCdnUrl("http://cdn/red.jpg")
-                .position(0)
-                .build();
+        VariantValueEntity value = VariantValueEntity.builder().valueZh("红").value("Rojo")
+                .imageSourceUrl("http://src/red.jpg").imageCdnUrl("http://cdn/red.jpg").position(0).build();
         value.setId(UUID.randomUUID());
 
-        VariantOptionEntity option = VariantOptionEntity.builder()
-                .nameZh("颜色")
-                .name("Color")
-                .position(0)
-                .values(new ArrayList<>(List.of(value)))
-                .build();
+        VariantOptionEntity option = VariantOptionEntity.builder().nameZh("颜色").name("Color").position(0)
+                .values(new ArrayList<>(List.of(value))).build();
         option.setId(UUID.randomUUID());
 
-        ProductTranslationEntity translation = ProductTranslationEntity.builder()
-                .language("es")
-                .title("Widget")
-                .shortDescription("corto")
-                .description("largo")
-                .metaTitle("MT")
-                .metaDescription("MD")
-                .provider("deepl")
+        ProductTranslationEntity translation = ProductTranslationEntity.builder().language("es").title("Widget")
+                .shortDescription("corto").description("largo").metaTitle("MT").metaDescription("MD").provider("deepl")
                 .build();
         translation.setId(UUID.randomUUID());
 
-        ProductEntity entity = ProductEntity.builder()
-                .slug("widget-pro")
-                .source("1688")
-                .externalId("EXT-1")
-                .supplier(supplier)
-                .titleZh("小部件")
-                .moq(1)
-                .status(ProductStatus.ACTIVE)
-                .images(new ArrayList<>(List.of(image)))
-                .variants(new ArrayList<>(List.of(variant)))
-                .variantOptions(new ArrayList<>(List.of(option)))
-                .translations(new ArrayList<>(List.of(translation)))
+        ProductEntity entity = ProductEntity.builder().slug("widget-pro").source("1688").externalId("EXT-1")
+                .supplier(supplier).titleZh("小部件").moq(1).status(ProductStatus.ACTIVE)
+                .images(new ArrayList<>(List.of(image))).variants(new ArrayList<>(List.of(variant)))
+                .variantOptions(new ArrayList<>(List.of(option))).translations(new ArrayList<>(List.of(translation)))
                 .build();
         entity.setId(UUID.randomUUID());
 

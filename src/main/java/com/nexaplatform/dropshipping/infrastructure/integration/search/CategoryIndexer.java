@@ -51,17 +51,18 @@ public class CategoryIndexer {
             if (client.indices().exists(b -> b.index(index)).value()) {
                 return;
             }
-            client.indices().create(CreateIndexRequest.of(b -> b.index(index)
-                    .mappings(TypeMapping.of(tm -> tm.properties("slug", Property.of(p -> p.keyword(k -> k)))
-                            .properties("parentId", Property.of(p -> p.keyword(k -> k)))
-                            .properties("parentSlug", Property.of(p -> p.keyword(k -> k)))
-                            .properties("active", Property.of(p -> p.boolean_(bo -> bo)))
-                            .properties("level", Property.of(p -> p.integer(i -> i)))
-                            .properties("position", Property.of(p -> p.integer(i -> i)))
-                            .properties("nameEs", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
-                            .properties("nameEn", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
-                            .properties("namePt", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
-                            .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
+            client.indices()
+                    .create(CreateIndexRequest.of(b -> b.index(index)
+                            .mappings(TypeMapping.of(tm -> tm.properties("slug", Property.of(p -> p.keyword(k -> k)))
+                                    .properties("parentId", Property.of(p -> p.keyword(k -> k)))
+                                    .properties("parentSlug", Property.of(p -> p.keyword(k -> k)))
+                                    .properties("active", Property.of(p -> p.boolean_(bo -> bo)))
+                                    .properties("level", Property.of(p -> p.integer(i -> i)))
+                                    .properties("position", Property.of(p -> p.integer(i -> i)))
+                                    .properties("nameEs", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                                    .properties("nameEn", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                                    .properties("namePt", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                                    .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (RuntimeException | IOException e) {
             // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
@@ -113,7 +114,7 @@ public class CategoryIndexer {
      * Spring y su {@code @Transactional} nunca llegaba a aplicarse (java:S6809).
      */
     private int doReindexAll() {
-        int[] n = { 0 };
+        int[] n = {0};
         categoryRepository.findAll().forEach(c -> {
             indexEntity(c);
             n[0]++;

@@ -85,8 +85,8 @@ public class PromotionService {
      *                    enseña, porque anunciar el −50% nominal cuando el suelo dejó un −30% sería
      *                    mentir en el escaparate
      */
-    public record Discounted(BigDecimal original, BigDecimal finalAmount, BigDecimal percentOff,
-                             String promotionName, UUID promotionId) {
+    public record Discounted(BigDecimal original, BigDecimal finalAmount, BigDecimal percentOff, String promotionName,
+            UUID promotionId) {
 
         /** ¿Hay rebaja de verdad? Un descuento que el suelo dejó en nada no se enseña. */
         public boolean applies() {
@@ -119,7 +119,7 @@ public class PromotionService {
      */
     @Transactional(readOnly = true)
     public Discounted applyWithCoupon(ProductEntity product, BigDecimal price, BigDecimal floor,
-                                      PromotionEntity coupon) {
+            PromotionEntity coupon) {
         List<PromotionEntity> candidates = new ArrayList<>(automaticasVivas());
         if (coupon != null) {
             candidates.add(coupon);
@@ -133,8 +133,7 @@ public class PromotionService {
         if (code == null || code.isBlank()) {
             return Optional.empty();
         }
-        return promotionRepository.findByCodeIgnoreCase(code.trim())
-                .filter(p -> p.isLiveAt(Instant.now()));
+        return promotionRepository.findByCodeIgnoreCase(code.trim()).filter(p -> p.isLiveAt(Instant.now()));
     }
 
     /** Por qué un cupón no se puede usar, en un texto que el cliente entienda. */
@@ -149,8 +148,7 @@ public class PromotionService {
      */
     @Transactional(readOnly = true)
     public CouponCheck checkCoupon(String code, UUID userId, int subtotalCents) {
-        Optional<PromotionEntity> found = promotionRepository.findByCodeIgnoreCase(
-                code == null ? "" : code.trim());
+        Optional<PromotionEntity> found = promotionRepository.findByCodeIgnoreCase(code == null ? "" : code.trim());
         if (found.isEmpty()) {
             return new CouponCheck(false, "Ese código no existe", null);
         }
@@ -193,27 +191,24 @@ public class PromotionService {
     public void recordUse(UUID promotionId, UUID userId, UUID orderId, int amountCents) {
         promotionRepository.findById(promotionId).ifPresent(p -> {
             if (orderId != null && redemptionRepository.existsByPromotionIdAndOrderId(promotionId, orderId)) {
-                return;   // reintento de pago: el descuento ya estaba anotado
+                return; // reintento de pago: el descuento ya estaba anotado
             }
             p.setUsedCount(p.getUsedCount() + 1);
             p.setUpdatedAt(Instant.now());
             promotionRepository.save(p);
             if (userId != null) {
-                redemptionRepository.save(PromotionRedemptionEntity.builder()
-                        .promotionId(promotionId).userId(userId).orderId(orderId)
-                        .amountCents(amountCents).redeemedAt(Instant.now()).build());
+                redemptionRepository.save(PromotionRedemptionEntity.builder().promotionId(promotionId).userId(userId)
+                        .orderId(orderId).amountCents(amountCents).redeemedAt(Instant.now()).build());
             }
         });
     }
 
     private Discounted applyBest(ProductEntity product, BigDecimal price, BigDecimal floor,
-                                 List<PromotionEntity> candidates) {
+            List<PromotionEntity> candidates) {
         if (price == null || price.signum() <= 0 || candidates.isEmpty()) {
             return none(price);
         }
-        List<PromotionEntity> aplicables = candidates.stream()
-                .filter(p -> reaches(p, product))
-                .toList();
+        List<PromotionEntity> aplicables = candidates.stream().filter(p -> reaches(p, product)).toList();
         if (aplicables.isEmpty()) {
             return none(price);
         }
@@ -240,7 +235,7 @@ public class PromotionService {
             recortada = true;
         }
         if (bestPrice.compareTo(price) >= 0) {
-            return none(price);   // el suelo se comió la rebaja entera
+            return none(price); // el suelo se comió la rebaja entera
         }
         // El porcentaje que se ANUNCIA es el de la regla —el «-30%» que configuró el admin—, no el que
         // sale de dividir importes ya redondeados al céntimo: con precios pequeños ese cálculo daba
@@ -252,8 +247,7 @@ public class PromotionService {
         // sería mentir en el escaparate.
         BigDecimal percent;
         if (recortada || best.getPercentOff() == null) {
-            percent = price.subtract(bestPrice).multiply(BigDecimal.valueOf(100))
-                    .divide(price, 0, RoundingMode.DOWN);
+            percent = price.subtract(bestPrice).multiply(BigDecimal.valueOf(100)).divide(price, 0, RoundingMode.DOWN);
         } else {
             percent = best.getPercentOff().setScale(0, RoundingMode.DOWN);
         }
@@ -263,8 +257,8 @@ public class PromotionService {
     /** Precio tras aplicar UNA promoción, sin tocar el suelo todavía. */
     private BigDecimal priceAfter(BigDecimal price, PromotionEntity p) {
         if (p.getPercentOff() != null) {
-            BigDecimal factor = BigDecimal.ONE.subtract(
-                    p.getPercentOff().divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
+            BigDecimal factor = BigDecimal.ONE
+                    .subtract(p.getPercentOff().divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
             return price.multiply(factor).setScale(2, RoundingMode.HALF_UP);
         }
         if (p.getAmountOffCents() != null) {
@@ -290,8 +284,8 @@ public class PromotionService {
         if (p.getScope() == PromotionScope.PRODUCT) {
             return targets.stream().anyMatch(t -> product.getId().equals(t.getProductId()));
         }
-        Set<UUID> wanted = targets.stream().map(PromotionTargetEntity::getCategoryId)
-                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<UUID> wanted = targets.stream().map(PromotionTargetEntity::getCategoryId).filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
         if (wanted.isEmpty() || product.getCategory() == null) {
             return false;
         }
@@ -343,21 +337,20 @@ public class PromotionService {
         if (found.isEmpty() || found.get().getScope() == PromotionScope.ALL) {
             return Optional.empty();
         }
-        return found
-                .map(p -> {
-                    List<PromotionTargetEntity> targets = targetRepository.findByPromotionId(p.getId());
-                    if (p.getScope() == PromotionScope.PRODUCT) {
-                        Set<UUID> ids = targets.stream().map(PromotionTargetEntity::getProductId)
-                                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
-                        return product -> ids.contains(product.getId());
-                    }
-                    Set<UUID> wanted = targets.stream().map(PromotionTargetEntity::getCategoryId)
-                            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
-                    Map<UUID, Set<UUID>> ancestorCache = new java.util.HashMap<>();
-                    return product -> product.getCategory() != null && ancestorCache
-                            .computeIfAbsent(product.getCategory().getId(), this::ancestorsOf).stream()
+        return found.map(p -> {
+            List<PromotionTargetEntity> targets = targetRepository.findByPromotionId(p.getId());
+            if (p.getScope() == PromotionScope.PRODUCT) {
+                Set<UUID> ids = targets.stream().map(PromotionTargetEntity::getProductId)
+                        .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+                return product -> ids.contains(product.getId());
+            }
+            Set<UUID> wanted = targets.stream().map(PromotionTargetEntity::getCategoryId)
+                    .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+            Map<UUID, Set<UUID>> ancestorCache = new java.util.HashMap<>();
+            return product -> product.getCategory() != null
+                    && ancestorCache.computeIfAbsent(product.getCategory().getId(), this::ancestorsOf).stream()
                             .anyMatch(wanted::contains);
-                });
+        });
     }
 
     /** La categoría del producto y todas sus ascendientes hasta la raíz. */
@@ -372,8 +365,8 @@ public class PromotionService {
         UUID current = categoryId;
         // Tope de profundidad: una jerarquía con un ciclo por un dato mal metido colgaría el listado.
         for (int depth = 0; current != null && depth < 12 && chain.add(current); depth++) {
-            current = categoryRepository.findById(current)
-                    .map(CategoryEntity::getParent).map(CategoryEntity::getId).orElse(null);
+            current = categoryRepository.findById(current).map(CategoryEntity::getParent).map(CategoryEntity::getId)
+                    .orElse(null);
         }
         return chain;
     }
@@ -404,16 +397,14 @@ public class PromotionService {
     }
 
     private List<PromotionEntity> consultaAutomaticasVivas() {
-        return promotionRepository.findLive(Instant.now()).stream()
-                .filter(p -> p.getKind().isAutomatic())
-                .toList();
+        return promotionRepository.findLive(Instant.now()).stream().filter(p -> p.getKind().isAutomatic()).toList();
     }
 
     /** Los destinos de una promoción (productos o categorías), preguntados una vez por petición. */
     @SuppressWarnings("unchecked")
     private List<PromotionTargetEntity> destinosDe(UUID promotionId) {
-        Map<UUID, List<PromotionTargetEntity>> memo =
-                (Map<UUID, List<PromotionTargetEntity>>) recordar(MEMO_DESTINOS, HashMap::new);
+        Map<UUID, List<PromotionTargetEntity>> memo = (Map<UUID, List<PromotionTargetEntity>>) recordar(MEMO_DESTINOS,
+                HashMap::new);
         return memo.computeIfAbsent(promotionId, targetRepository::findByPromotionId);
     }
 

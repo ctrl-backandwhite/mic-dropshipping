@@ -33,8 +33,7 @@ public class AffiliateUseCaseImpl implements AffiliateUseCase {
     @Transactional
     public Affiliate getOrCreate(UUID userId) {
         return affiliateRepository.findByUserId(userId).orElseGet(() -> {
-            UserEntity user = userRepository.findById(userId)
-                    .orElseThrow(() -> new NotFoundException("User"));
+            UserEntity user = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User"));
             return affiliateRepository
                     .save(Affiliate.builder().userId(userId).code(generateCode(user)).active(true).build());
         });

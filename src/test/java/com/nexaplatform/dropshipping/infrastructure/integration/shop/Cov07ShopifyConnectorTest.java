@@ -85,17 +85,14 @@ class Cov07ShopifyConnectorTest {
     void unHandleDeTiendaVacioSeRechazaAntesDeLlamar() throws Exception {
         assertThat(connector.push(shop(null), "tok", product()).ok()).isFalse();
         assertThat(connector.push(shop("  "), "tok", product()).ok()).isFalse();
-        assertThat(connector.push(shop("https://"), "tok", product()).error())
-                .contains("Handle de tienda inválido");
+        assertThat(connector.push(shop("https://"), "tok", product()).error()).contains("Handle de tienda inválido");
         verify(httpClient, never()).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "mi-tienda.myshopify.com,mi-tienda.myshopify.com",
-            "mi-tienda,mi-tienda.myshopify.com",
+    @CsvSource({"mi-tienda.myshopify.com,mi-tienda.myshopify.com", "mi-tienda,mi-tienda.myshopify.com",
             "https://mi-tienda.myshopify.com,mi-tienda.myshopify.com",
-            "http://mi-tienda.myshopify.com/admin/api,mi-tienda.myshopify.com" })
+            "http://mi-tienda.myshopify.com/admin/api,mi-tienda.myshopify.com"})
     void elHandleSeNormalizaAlHostDeLaTienda(String handle, String host) throws Exception {
         respond(201, "{\"product\":{\"id\":1}}");
 
@@ -179,8 +176,8 @@ class Cov07ShopifyConnectorTest {
         assertThat(request.headers().firstValue("X-Shopify-Access-Token")).contains("shpat_secreto");
         assertThat(request.headers().firstValue("Content-Type")).contains("application/json");
         String body = bodyOf(request);
-        assertThat(body).contains("\"title\":\"衬衫\"").contains("\"price\":\"19.90\"")
-                .contains("\"vendor\":\"NX\"").contains("\"status\":\"active\"");
+        assertThat(body).contains("\"title\":\"衬衫\"").contains("\"price\":\"19.90\"").contains("\"vendor\":\"NX\"")
+                .contains("\"status\":\"active\"");
     }
 
     @Test
@@ -192,8 +189,8 @@ class Cov07ShopifyConnectorTest {
 
         String body = bodyOf(sentRequest());
         // Shopify rechaza un producto sin título: el slug es el último recurso para no perder la publicación.
-        assertThat(body).contains("\"title\":\"camisa-lino\"").contains("\"price\":\"0\"")
-                .contains("\"vendor\":\"\"").contains("\"body_html\":\"\"");
+        assertThat(body).contains("\"title\":\"camisa-lino\"").contains("\"price\":\"0\"").contains("\"vendor\":\"\"")
+                .contains("\"body_html\":\"\"");
     }
 
     /* ==================== helpers ==================== */
@@ -203,8 +200,8 @@ class Cov07ShopifyConnectorTest {
     }
 
     private static ProductEntity product() {
-        return ProductEntity.builder().slug("camisa-lino").titleZh("衬衫").descriptionZh("descripción")
-                .brand("NX").basePrice(new BigDecimal("19.90")).build();
+        return ProductEntity.builder().slug("camisa-lino").titleZh("衬衫").descriptionZh("descripción").brand("NX")
+                .basePrice(new BigDecimal("19.90")).build();
     }
 
     @SuppressWarnings("unchecked")

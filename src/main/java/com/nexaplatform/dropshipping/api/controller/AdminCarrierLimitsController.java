@@ -40,9 +40,9 @@ public class AdminCarrierLimitsController {
     private final CarrierChannelLimitService carrierChannelLimitService;
 
     /** Vista de salida del límite de un (canal, país). */
-    public record CarrierLimitDtoOut(String channelCode, String countryCode, int maxWeightGrams,
-            int volumetricDivisor, int minBillableGrams, int maxLengthMm, int maxWidthMm, int maxHeightMm,
-            boolean singleParcelOnly, String notes, boolean active) {
+    public record CarrierLimitDtoOut(String channelCode, String countryCode, int maxWeightGrams, int volumetricDivisor,
+            int minBillableGrams, int maxLengthMm, int maxWidthMm, int maxHeightMm, boolean singleParcelOnly,
+            String notes, boolean active) {
 
         static CarrierLimitDtoOut from(CarrierChannelLimitEntity e) {
             return new CarrierLimitDtoOut(e.getChannelCode(), e.getCountryCode(), e.getMaxWeightGrams(),
@@ -58,29 +58,25 @@ public class AdminCarrierLimitsController {
      * inventado que impida despachar.
      */
     public record UpsertCarrierLimitDtoIn(@Min(0) int maxWeightGrams, @Min(0) int volumetricDivisor,
-            @Min(0) int minBillableGrams, @Min(0) int maxLengthMm, @Min(0) int maxWidthMm,
-            @Min(0) int maxHeightMm, boolean singleParcelOnly, @Size(max = 200) String notes,
-            boolean active) {
+            @Min(0) int minBillableGrams, @Min(0) int maxLengthMm, @Min(0) int maxWidthMm, @Min(0) int maxHeightMm,
+            boolean singleParcelOnly, @Size(max = 200) String notes, boolean active) {
     }
 
     @Operation(summary = "Listar los límites de bulto por canal y país")
     @GetMapping
     public ResponseEntity<List<CarrierLimitDtoOut>> list() {
-        return ResponseEntity.ok(carrierChannelLimitService.listAll().stream()
-                .map(CarrierLimitDtoOut::from).toList());
+        return ResponseEntity.ok(carrierChannelLimitService.listAll().stream().map(CarrierLimitDtoOut::from).toList());
     }
 
     @Operation(summary = "Crear o actualizar el límite de un canal en un país")
     @PutMapping("/{channel}/{country}")
-    public ResponseEntity<CarrierLimitDtoOut> upsert(@PathVariable String channel,
-            @PathVariable String country, @Valid @RequestBody UpsertCarrierLimitDtoIn req) {
-        CarrierChannelLimitEntity input = CarrierChannelLimitEntity.builder()
-                .channelCode(channel).countryCode(country)
+    public ResponseEntity<CarrierLimitDtoOut> upsert(@PathVariable String channel, @PathVariable String country,
+            @Valid @RequestBody UpsertCarrierLimitDtoIn req) {
+        CarrierChannelLimitEntity input = CarrierChannelLimitEntity.builder().channelCode(channel).countryCode(country)
                 .maxWeightGrams(req.maxWeightGrams()).volumetricDivisor(req.volumetricDivisor())
-                .minBillableGrams(req.minBillableGrams()).maxLengthMm(req.maxLengthMm())
-                .maxWidthMm(req.maxWidthMm()).maxHeightMm(req.maxHeightMm())
-                .singleParcelOnly(req.singleParcelOnly()).notes(req.notes()).active(req.active())
-                .build();
+                .minBillableGrams(req.minBillableGrams()).maxLengthMm(req.maxLengthMm()).maxWidthMm(req.maxWidthMm())
+                .maxHeightMm(req.maxHeightMm()).singleParcelOnly(req.singleParcelOnly()).notes(req.notes())
+                .active(req.active()).build();
         return ResponseEntity.ok(CarrierLimitDtoOut.from(carrierChannelLimitService.upsert(input)));
     }
 

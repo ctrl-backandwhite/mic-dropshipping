@@ -46,12 +46,8 @@ class AuditLoggerTest {
 
         assertThat(appender.list).hasSize(1);
         String msg = appender.list.get(0).getFormattedMessage();
-        assertThat(msg)
-                .contains("event=auth.login_ok")
-                .contains("principal=alice@example.com")
-                .contains("userId=abc")
-                .doesNotContain("S3cret!")
-                .doesNotContain("Bearer xyz")
+        assertThat(msg).contains("event=auth.login_ok").contains("principal=alice@example.com").contains("userId=abc")
+                .doesNotContain("S3cret!").doesNotContain("Bearer xyz")
                 // los saltos de línea se sustituyen por espacios
                 .contains("note=ok with");
     }

@@ -59,13 +59,11 @@ class Cov02GithubOAuth2UserServiceTest {
     }
 
     private static ClientRegistration registro(String registrationId, String userNameAttribute) {
-        ClientRegistration.Builder b = ClientRegistration.withRegistrationId(registrationId)
-                .clientId("cid").clientSecret("secreto")
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+        ClientRegistration.Builder b = ClientRegistration.withRegistrationId(registrationId).clientId("cid")
+                .clientSecret("secreto").authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .redirectUri("http://localhost/login/oauth2/code/" + registrationId)
                 .authorizationUri("https://github.com/login/oauth/authorize")
-                .tokenUri("https://github.com/login/oauth/access_token")
-                .userInfoUri("https://api.github.com/user");
+                .tokenUri("https://github.com/login/oauth/access_token").userInfoUri("https://api.github.com/user");
         if (userNameAttribute != null) {
             b.userNameAttributeName(userNameAttribute);
         }
@@ -84,8 +82,7 @@ class Cov02GithubOAuth2UserServiceTest {
     }
 
     private void githubResponde(String json) {
-        github.expect(requestTo(EMAILS_URL))
-                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+        github.expect(requestTo(EMAILS_URL)).andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
                 .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
     }
 

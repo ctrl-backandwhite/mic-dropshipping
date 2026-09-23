@@ -70,9 +70,8 @@ class PricingCountryFilterTest {
 
     /** Deja al usuario autenticado con el país que tenga grabado en su ficha. */
     private void usuarioAutenticadoCon(String pais) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(USER_ID.toString(), null,
-                        AuthorityUtils.createAuthorityList("ROLE_USER")));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(USER_ID.toString(),
+                null, AuthorityUtils.createAuthorityList("ROLE_USER")));
         UserEntity u = new UserEntity();
         u.setId(USER_ID);
         u.setCountry(pais);
@@ -173,9 +172,8 @@ class PricingCountryFilterTest {
     /** Un token con un subject que no es un UUID no puede tumbar la petición entera. */
     @Test
     void unSubjectQueNoEsUnIdentificadorNoRevienta() throws Exception {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("no-es-un-uuid", null,
-                        AuthorityUtils.createAuthorityList("ROLE_USER")));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("no-es-un-uuid",
+                null, AuthorityUtils.createAuthorityList("ROLE_USER")));
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader("CF-IPCountry", "NL");
 

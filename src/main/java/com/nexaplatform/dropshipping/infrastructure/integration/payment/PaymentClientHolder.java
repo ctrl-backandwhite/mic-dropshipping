@@ -16,8 +16,8 @@ import com.nexaplatform.dropshipping.domain.enums.PaymentClientTarget;
  */
 public final class PaymentClientHolder {
 
-    private static final ThreadLocal<PaymentClientTarget> CURRENT =
-            ThreadLocal.withInitial(() -> PaymentClientTarget.WEB);
+    private static final ThreadLocal<PaymentClientTarget> CURRENT = ThreadLocal
+            .withInitial(() -> PaymentClientTarget.WEB);
 
     private PaymentClientHolder() {
     }

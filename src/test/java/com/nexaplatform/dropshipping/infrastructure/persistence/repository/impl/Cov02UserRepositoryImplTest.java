@@ -50,8 +50,8 @@ class Cov02UserRepositoryImplTest {
     }
 
     private static User model(UUID id, String email) {
-        return User.builder().id(id).email(email).role(UserRole.USER).active(true)
-                .passwordHash("$2a$10$hash").displayName("Ana").build();
+        return User.builder().id(id).email(email).role(UserRole.USER).active(true).passwordHash("$2a$10$hash")
+                .displayName("Ana").build();
     }
 
     @Test
@@ -108,8 +108,7 @@ class Cov02UserRepositoryImplTest {
         when(userJpaRepository.findById(id)).thenReturn(Optional.of(gestionada));
         when(userJpaRepository.save(any(UserEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        User promocionado = model(id, "admin@nx.com").withRole(UserRole.ADMIN)
-                .withPasswordHash("hash-nuevo");
+        User promocionado = model(id, "admin@nx.com").withRole(UserRole.ADMIN).withPasswordHash("hash-nuevo");
         repository.save(promocionado);
 
         assertThat(gestionada.getRole()).isEqualTo(UserRole.ADMIN);
@@ -147,8 +146,7 @@ class Cov02UserRepositoryImplTest {
 
         List<User> todos = repository.findAll();
 
-        assertThat(todos).extracting(User::getEmail)
-                .containsExactly("nuevo@nx.com", "viejo@nx.com", "sinfecha@nx.com");
+        assertThat(todos).extracting(User::getEmail).containsExactly("nuevo@nx.com", "viejo@nx.com", "sinfecha@nx.com");
     }
 
     @Test

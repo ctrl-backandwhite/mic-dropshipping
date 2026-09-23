@@ -71,10 +71,9 @@ public class MeOrderDetailDtoOut {
                 .externalOrderId(o.getExternalOrderId()).status(o.getStatus().name())
                 // `shipping_cents` lleva el arancel dentro; se resta para poder enseñarlos separados sin
                 // mover el total, igual que hace el desglose de OrderAmounts.
-                .subtotal(cents(o.getSubtotalCents()))
-                .shipping(cents(o.getShippingCents() - o.getCustomsDutyCents()))
-                .customsDuty(cents(o.getCustomsDutyCents())).tax(cents(o.getTaxCents()))
-                .total(cents(o.getTotalCents())).discount(cents(o.getDiscountCents())).currency(o.getCurrency())
+                .subtotal(cents(o.getSubtotalCents())).shipping(cents(o.getShippingCents() - o.getCustomsDutyCents()))
+                .customsDuty(cents(o.getCustomsDutyCents())).tax(cents(o.getTaxCents())).total(cents(o.getTotalCents()))
+                .discount(cents(o.getDiscountCents())).currency(o.getCurrency())
                 .shippingAddress(MeOrderAddressDtoOut.from(o.getShippingAddress()))
                 .billingAddress(MeOrderAddressDtoOut.from(o.getBillingAddress())).notes(o.getNotes())
                 .trackingCarrier(null).trackingNumber(null).placedAt(o.getPlacedAt()).shippedAt(o.getShippedAt())

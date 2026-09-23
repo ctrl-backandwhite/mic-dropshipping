@@ -123,8 +123,11 @@ class Cov09PaymentGatewayFlowsTest {
 
     private PaymentUseCaseImpl useCase(List<PaymentGateway> gateways) {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
-                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
                 stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
     }
 
@@ -162,8 +165,7 @@ class Cov09PaymentGatewayFlowsTest {
     void soloSeCapturaEnPaypalUnPagoQueSeAbrioEnPaypal() {
         payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_1", false);
 
-        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Not a PayPal payment");
     }
 
@@ -175,8 +177,7 @@ class Cov09PaymentGatewayFlowsTest {
         when(impostor.supports(PaymentMethod.PAYPAL)).thenReturn(true);
         PaymentUseCaseImpl sinPaypal = useCase(List.of(impostor));
 
-        assertThatThrownBy(() -> sinPaypal.capturePayPal(userId, paymentId))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> sinPaypal.capturePayPal(userId, paymentId)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PayPal gateway not configured");
     }
 
@@ -237,7 +238,8 @@ class Cov09PaymentGatewayFlowsTest {
         order(OrderStatus.AWAITING_PAYMENT);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED"));
 
-        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus())
+                .isEqualTo(PaymentStatus.SUCCEEDED);
 
         verify(paypal).capture("PAYID-1");
     }
@@ -246,7 +248,8 @@ class Cov09PaymentGatewayFlowsTest {
     void confirmarUnPedidoYaCobradoNoVuelveATocarLaPasarela() {
         payment(PaymentMethod.CARD, PaymentStatus.SUCCEEDED, "cs_test_real", true);
 
-        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus())
+                .isEqualTo(PaymentStatus.SUCCEEDED);
 
         verify(stripe, never()).retrieveCheckoutSession(anyString());
     }
@@ -256,8 +259,7 @@ class Cov09PaymentGatewayFlowsTest {
         payment(PaymentMethod.USDT, PaymentStatus.REQUIRES_ACTION, "usdt-tx", true);
 
         assertThatThrownBy(() -> subject.confirmOrderPayment(userId, orderId, paymentId))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Confirm not supported");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Confirm not supported");
     }
 
     // ---------------------------------------------------------------- confirmar una recarga real
@@ -278,8 +280,7 @@ class Cov09PaymentGatewayFlowsTest {
         payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_real", false);
         when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "open"));
 
-        assertThatThrownBy(() -> subject.confirmRecharge(userId, paymentId))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.confirmRecharge(userId, paymentId)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Payment not completed");
 
         verify(walletUseCase, never()).deposit(any(), anyLong(), any(), anyString(), anyString());
@@ -289,8 +290,7 @@ class Cov09PaymentGatewayFlowsTest {
     void unaRecargaEnCriptoNoSeConfirmaAMano() {
         payment(PaymentMethod.USDT, PaymentStatus.REQUIRES_ACTION, "usdt-tx", false);
 
-        assertThatThrownBy(() -> subject.confirmRecharge(userId, paymentId))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.confirmRecharge(userId, paymentId)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Unsupported method for recharge confirm");
     }
 
@@ -329,8 +329,7 @@ class Cov09PaymentGatewayFlowsTest {
         when(paypal.refund(anyString(), anyLong())).thenReturn(Map.of("status", status));
 
         assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 500L))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PayPal refund failed");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("PayPal refund failed");
 
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
     }
@@ -355,8 +354,7 @@ class Cov09PaymentGatewayFlowsTest {
         p.setProviderResponse(Map.of());
         when(stripe.refund("pi_3Abc", 500L)).thenReturn(Map.of("status", "pending"));
 
-        assertThat(subject.refundOrderPayment(orderId, paymentId, 500L).getStatus())
-                .isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(subject.refundOrderPayment(orderId, paymentId, 500L).getStatus()).isEqualTo(PaymentStatus.REFUNDED);
     }
 
     @Test
@@ -366,8 +364,7 @@ class Cov09PaymentGatewayFlowsTest {
         when(stripe.refund(anyString(), anyLong())).thenReturn(Map.of("status", "failed"));
 
         assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 500L))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Stripe refund failed");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Stripe refund failed");
 
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
     }
@@ -517,8 +514,7 @@ class Cov09PaymentGatewayFlowsTest {
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED", "mock", true));
 
-        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId)).isInstanceOf(BusinessException.class);
 
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.REQUIRES_ACTION);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.AWAITING_PAYMENT);
@@ -545,7 +541,6 @@ class Cov09PaymentGatewayFlowsTest {
         ReflectionTestUtils.setField(subject, "activeProfiles", "pro,kibana");
         payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_mock_x", false);
 
-        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId)).isInstanceOf(BusinessException.class);
     }
 }

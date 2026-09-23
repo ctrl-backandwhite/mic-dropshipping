@@ -135,8 +135,7 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
 
     @Override
     public ResponseEntity<AdminSupplierPurchaseDtoOut> packed(UUID id, AdminPurchasePackedDtoIn body) {
-        return ResponseEntity.ok(reload(purchaseService.markPacked(id, body.getPackOrderNo(),
-                body.getServiceType())));
+        return ResponseEntity.ok(reload(purchaseService.markPacked(id, body.getPackOrderNo(), body.getServiceType())));
     }
 
     @Override
@@ -164,12 +163,10 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
         purchaseService.markExported(plan.orderIds());
         // Nombre con fecha y hora para distinguir descargas y saber cuál es la última. El front pone su
         // propia hora (la del navegador); este es el respaldo para quien llame la API directamente.
-        String filename = "yunfulfillment-packorder_"
-                + FILE_STAMP.format(Instant.now().atZone(ZoneId.systemDefault())) + ".xls";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(xls);
+        String filename = "yunfulfillment-packorder_" + FILE_STAMP.format(Instant.now().atZone(ZoneId.systemDefault()))
+                + ".xls";
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM).body(xls);
     }
 
     @Override
@@ -210,10 +207,9 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
     /** Proyección tras una acción suelta: recarga la vista para devolver la fila completa, no un trozo. */
     private AdminSupplierPurchaseDtoOut reload(SupplierPurchaseEntity p) {
         return purchaseService.viewsForOrder(p.getOrderId()).stream()
-                .filter(v -> v.purchase().getId().equals(p.getId()))
-                .findFirst().map(this::toDto)
-                .orElseGet(() -> AdminSupplierPurchaseDtoOut.builder().id(p.getId())
-                        .orderId(p.getOrderId()).status(p.getStatus().name()).build());
+                .filter(v -> v.purchase().getId().equals(p.getId())).findFirst().map(this::toDto)
+                .orElseGet(() -> AdminSupplierPurchaseDtoOut.builder().id(p.getId()).orderId(p.getOrderId())
+                        .status(p.getStatus().name()).build());
     }
 
     /**
@@ -228,59 +224,36 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
         List<AdminSupplierPurchaseDtoOut.Line> lines = new ArrayList<>();
         for (int i = 0; i < view.lines().size(); i++) {
             OrderItem item = view.lines().get(i);
-            lines.add(AdminSupplierPurchaseDtoOut.Line.builder()
-                    .orderItemId(item.getId())
-                    .title(item.getTitleSnapshot())
-                    .titleZh(item.getProductTitleZh())
-                    .variantName(item.getVariantName())
-                    .imageUrl(item.getVariantImageUrl() != null ? item.getVariantImageUrl()
-                            : item.getProductImageUrl())
-                    .sourceUrl(item.getProductSourceUrl())
-                    .quantity(view.quantities().get(i))
-                    .build());
+            lines.add(AdminSupplierPurchaseDtoOut.Line.builder().orderItemId(item.getId())
+                    .title(item.getTitleSnapshot()).titleZh(item.getProductTitleZh()).variantName(item.getVariantName())
+                    .imageUrl(item.getVariantImageUrl() != null ? item.getVariantImageUrl() : item.getProductImageUrl())
+                    .sourceUrl(item.getProductSourceUrl()).quantity(view.quantities().get(i)).build());
         }
         PackWarehouse warehouse = PackWarehouse.fromCode(p.getWarehouseCode());
         int parcels = Math.max(1, view.parcelsInOrder());
         String supplierName = view.supplierName();
         // Lo que el catálogo decía frente a lo que costó. Sin esto, el coste y el envío que el admin
         // teclea al comprar se guardaban y no los leía nadie.
-        PurchaseEconomics economics = PurchaseEconomics.of(view.lines(), view.quantities(),
-                p.getCostCnyCents(), p.getShippingCnyCents());
+        PurchaseEconomics economics = PurchaseEconomics.of(view.lines(), view.quantities(), p.getCostCnyCents(),
+                p.getShippingCnyCents());
         String currency = view.orderCurrency();
-        return AdminSupplierPurchaseDtoOut.builder()
-                .id(p.getId())
-                .orderId(p.getOrderId())
-                .orderNumber(view.orderNumber())
-                .status(p.getStatus().name())
-                .supplierId(p.getSupplierId())
-                .supplierName(supplierName)
-                .warehouseCode(p.getWarehouseCode())
-                .warehouseAddress(warehouse.fullAddress(customerCode))
-                .purchaseRef(p.getPurchaseRef())
-                .costCny(fromCents(p.getCostCnyCents()))
-                .shippingCny(fromCents(p.getShippingCnyCents()))
+        return AdminSupplierPurchaseDtoOut.builder().id(p.getId()).orderId(p.getOrderId())
+                .orderNumber(view.orderNumber()).status(p.getStatus().name()).supplierId(p.getSupplierId())
+                .supplierName(supplierName).warehouseCode(p.getWarehouseCode())
+                .warehouseAddress(warehouse.fullAddress(customerCode)).purchaseRef(p.getPurchaseRef())
+                .costCny(fromCents(p.getCostCnyCents())).shippingCny(fromCents(p.getShippingCnyCents()))
                 .expectedCostCnyFormatted(cny(economics.expectedCostCnyCents()))
                 .realCostCnyFormatted(cny(economics.realCostCnyCents()))
-                .costVarianceCnyFormatted(signed(economics.varianceCnyCents(), CNY))
-                .overBudget(economics.overBudget())
+                .costVarianceCnyFormatted(signed(economics.varianceCnyCents(), CNY)).overBudget(economics.overBudget())
                 .expectedMarginFormatted(money(economics.expectedMarginCents(), currency))
                 .realMarginFormatted(money(economics.realMarginCents(), currency))
-                .realMarginPct(economics.realMarginPct())
-                .purchasedAt(p.getPurchasedAt())
-                .domesticTracking(p.getDomesticTracking())
-                .domesticCarrier(p.getDomesticCarrier())
-                .shippedAt(p.getShippedAt())
-                .receivedAt(p.getReceivedAt())
-                .packOrderNo(p.getPackOrderNo())
-                .packServiceType(p.getPackServiceType())
-                .packSubmittedAt(p.getPackSubmittedAt())
-                .exportedAt(p.getExportedAt())
-                .daysInWarehouse(daysInWarehouse(p.getReceivedAt()))
-                .suggestedServiceType(PackServiceType.forIncomingParcels(parcels).name())
-                .notes(p.getNotes())
-                .createdAt(p.getCreatedAt())
-                .items(lines)
-                .build();
+                .realMarginPct(economics.realMarginPct()).purchasedAt(p.getPurchasedAt())
+                .domesticTracking(p.getDomesticTracking()).domesticCarrier(p.getDomesticCarrier())
+                .shippedAt(p.getShippedAt()).receivedAt(p.getReceivedAt()).packOrderNo(p.getPackOrderNo())
+                .packServiceType(p.getPackServiceType()).packSubmittedAt(p.getPackSubmittedAt())
+                .exportedAt(p.getExportedAt()).daysInWarehouse(daysInWarehouse(p.getReceivedAt()))
+                .suggestedServiceType(PackServiceType.forIncomingParcels(parcels).name()).notes(p.getNotes())
+                .createdAt(p.getCreatedAt()).items(lines).build();
     }
 
     /** Días que el bulto lleva en el almacén; a los 30 se destruye sin compensación. */
@@ -316,8 +289,7 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
 
     /** El dinero se guarda en céntimos para no arrastrar errores de coma flotante. */
     private static Long toCents(BigDecimal amount) {
-        return amount == null ? null : amount.movePointRight(2).setScale(0, RoundingMode.HALF_UP)
-                .longValueExact();
+        return amount == null ? null : amount.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
     }
 
     private static BigDecimal fromCents(Long cents) {

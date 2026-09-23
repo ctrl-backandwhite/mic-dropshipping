@@ -57,8 +57,8 @@ public class OrderAmounts {
      * 9,74 €» donde el checkout decía «Envío 6,25 € · Aranceles 3,49 €»— hace dudar de lo cobrado, y
      * el arancel en régimen DDP es además un concepto con nombre propio.
      */
-    public record Breakdown(BigDecimal subtotal, BigDecimal discount, BigDecimal shipping,
-            BigDecimal customsDuty, BigDecimal tax, BigDecimal total, String currency) {
+    public record Breakdown(BigDecimal subtotal, BigDecimal discount, BigDecimal shipping, BigDecimal customsDuty,
+            BigDecimal tax, BigDecimal total, String currency) {
     }
 
     /**
@@ -125,8 +125,8 @@ public class OrderAmounts {
         if (unitPriceUsd == null) {
             return null;
         }
-        return lineSubtotal(unitPriceUsd.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact(),
-                quantity, currency);
+        return lineSubtotal(unitPriceUsd.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact(), quantity,
+                currency);
     }
 
     /**
@@ -135,8 +135,7 @@ public class OrderAmounts {
      * comportamiento de la conversión, y ningún componente arrastra decimales que la moneda no tiene.
      */
     private BigDecimal convert(long cents, String currency) {
-        return redondear(currencyRateService.usdTo(BigDecimal.valueOf(cents).movePointLeft(2), currency),
-                currency);
+        return redondear(currencyRateService.usdTo(BigDecimal.valueOf(cents).movePointLeft(2), currency), currency);
     }
 
     private BigDecimal redondear(BigDecimal amount, String currency) {

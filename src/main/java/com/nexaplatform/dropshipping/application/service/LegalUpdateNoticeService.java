@@ -93,15 +93,15 @@ public class LegalUpdateNoticeService {
                 encolados++;
             }
         }
-        log.info("::> [LEGAL] textos legales en versión {} — aviso encolado a {} de {} cuentas activas",
-                version, encolados, audiencia.size());
+        log.info("::> [LEGAL] textos legales en versión {} — aviso encolado a {} de {} cuentas activas", version,
+                encolados, audiencia.size());
         return encolados;
     }
 
     /** ¿Ya se avisó de esta versión? La tabla es lo único que distingue un cambio real de un reinicio. */
     private boolean yaAvisada(String version) {
-        Integer n = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM legal_version_notice WHERE version = ?", Integer.class, version);
+        Integer n = jdbcTemplate.queryForObject("SELECT count(*) FROM legal_version_notice WHERE version = ?",
+                Integer.class, version);
         return n != null && n > 0;
     }
 
@@ -115,7 +115,8 @@ public class LegalUpdateNoticeService {
             return false;
         }
         String lang = user.getLanguage() == null || user.getLanguage().isBlank()
-                ? "es" : user.getLanguage().trim().toLowerCase();
+                ? "es"
+                : user.getLanguage().trim().toLowerCase();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", LegalUpdateEmailLabel.TITLE.of(lang));
         vars.put("intro", LegalUpdateEmailLabel.INTRO.of(lang));

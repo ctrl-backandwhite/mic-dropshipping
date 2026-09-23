@@ -119,12 +119,9 @@ class Cov07OperatorActionIndexerTest {
         assertThat(req.id()).isEqualTo(action.getId().toString());
         assertThat(req.document()).containsEntry("operatorSubject", "op-1")
                 .containsEntry("operatorEmail", "op@example.com")
-                .containsEntry("orderId", action.getOrderId().toString())
-                .containsEntry("orderNumber", "NX-100")
-                .containsEntry("action", "DELIVERED")
-                .containsEntry("commissionCnyCents", 1500L)
-                .containsEntry("itemCount", 3)
-                .containsEntry("processedAt", action.getProcessedAt().toString());
+                .containsEntry("orderId", action.getOrderId().toString()).containsEntry("orderNumber", "NX-100")
+                .containsEntry("action", "DELIVERED").containsEntry("commissionCnyCents", 1500L)
+                .containsEntry("itemCount", 3).containsEntry("processedAt", action.getProcessedAt().toString());
     }
 
     @Test
@@ -238,7 +235,7 @@ class Cov07OperatorActionIndexerTest {
     }
 
     /** Prepara la respuesta de OpenSearch con los documentos y el total indicados ({@code null} = sin total). */
-    @SuppressWarnings({ "unchecked", "rawtypes" })
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void stubSearch(List<Map<String, Object>> sources, Long total) throws IOException {
         SearchResponse<Map> response = mock(SearchResponse.class);
         HitsMetadata<Map> hitsMetadata = mock(HitsMetadata.class);

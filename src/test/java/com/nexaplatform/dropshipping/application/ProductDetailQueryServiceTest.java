@@ -63,8 +63,7 @@ class ProductDetailQueryServiceTest {
         products = mock(ProductRepository.class);
         specs = mock(ProductSpecificationRepository.class);
         attributes = mock(ProductAttributeRepository.class);
-        service = new ProductDetailQueryService(products, specs, attributes,
-                mock(ProductTagRepository.class));
+        service = new ProductDetailQueryService(products, specs, attributes, mock(ProductTagRepository.class));
         base = product(categoryId, 1.0);
         lenient().when(products.findById(base.getId())).thenReturn(Optional.of(base));
     }
@@ -121,17 +120,15 @@ class ProductDetailQueryServiceTest {
         ProductSpecificationEntity en2 = spec("en", "Material", "Cotton", 2);
         ProductSpecificationEntity es3 = spec("es", "Origen", "China", 3);
         ProductSpecificationEntity en3 = spec("en", "Origin", "China", 3);
-        when(specs.findByProduct_IdOrderByPositionAsc(id))
-                .thenReturn(List.of(es1, en1, en2, es3, en3));
+        when(specs.findByProduct_IdOrderByPositionAsc(id)).thenReturn(List.of(es1, en1, en2, es3, en3));
 
         // El idioma en tiene 3 filas y el es 2: la ficha en "en" debe salir completa en inglés,
         // sin huecos que el escaparate luego rellenase con español.
         List<ProductSpecificationEntity> result = service.specifications(id, "en");
 
-        assertThat(result).extracting(ProductSpecificationEntity::getLocale)
-                .containsExactly("en", "en", "en");
-        assertThat(result).extracting(ProductSpecificationEntity::getSpecKey)
-                .containsExactly("Style type", "Material", "Origin");
+        assertThat(result).extracting(ProductSpecificationEntity::getLocale).containsExactly("en", "en", "en");
+        assertThat(result).extracting(ProductSpecificationEntity::getSpecKey).containsExactly("Style type", "Material",
+                "Origin");
     }
 
     @Test
@@ -146,8 +143,7 @@ class ProductDetailQueryServiceTest {
         // está, el hueco que falta se completa con el idioma base.
         List<ProductSpecificationEntity> result = service.specifications(id, "de");
 
-        assertThat(result).extracting(ProductSpecificationEntity::getSpecKey)
-                .containsExactly("Style type", "Material");
+        assertThat(result).extracting(ProductSpecificationEntity::getSpecKey).containsExactly("Style type", "Material");
     }
 
     private static ProductSpecificationEntity spec(String locale, String key, String value, int position) {
@@ -163,11 +159,17 @@ class ProductDetailQueryServiceTest {
     void elAtributoTraducidoPisaAlNeutralPeroNoSePierdenLosQueSoloSonNeutrales() {
         UUID id = base.getId();
         ProductAttributeEntity color = new ProductAttributeEntity();
-        color.setAttrKey("color"); color.setAttrValue("Rojo"); color.setLocale(null);
+        color.setAttrKey("color");
+        color.setAttrValue("Rojo");
+        color.setLocale(null);
         ProductAttributeEntity colorEn = new ProductAttributeEntity();
-        colorEn.setAttrKey("color"); colorEn.setAttrValue("Red"); colorEn.setLocale("en");
+        colorEn.setAttrKey("color");
+        colorEn.setAttrValue("Red");
+        colorEn.setLocale("en");
         ProductAttributeEntity soloNeutral = new ProductAttributeEntity();
-        soloNeutral.setAttrKey("peso"); soloNeutral.setAttrValue("300 g"); soloNeutral.setLocale(null);
+        soloNeutral.setAttrKey("peso");
+        soloNeutral.setAttrValue("300 g");
+        soloNeutral.setLocale(null);
         when(attributes.findByProduct_Id(id)).thenReturn(List.of(color, colorEn, soloNeutral));
 
         Map<String, String> result = service.attributes(id, "en");

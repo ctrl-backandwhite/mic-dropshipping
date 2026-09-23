@@ -54,18 +54,11 @@ public class AdminComplianceController {
      * comprobaciones de fondo —si la dirección está completa— las hace el servicio y viajan en
      * {@code complete}, porque un dato incompleto debe poder guardarse como borrador sin publicarse.
      */
-    public record ResponsiblePersonDtoIn(
-            @NotNull Boolean enabled,
-            @NotBlank @Size(max = 200) String name,
-            @NotBlank @Size(max = 300) String addressLine,
-            @Size(max = 20) String postalCode,
-            @NotBlank @Size(max = 120) String city,
-            @Size(max = 120) String region,
-            @NotBlank @Pattern(regexp = "^[A-Za-z]{2}$", message = "country must be an ISO 3166-1 alpha-2 code")
-            String country,
-            @NotBlank @Email @Size(max = 200) String email,
-            @Size(max = 40) String phone,
-            @NotBlank String role) {
+    public record ResponsiblePersonDtoIn(@NotNull Boolean enabled, @NotBlank @Size(max = 200) String name,
+            @NotBlank @Size(max = 300) String addressLine, @Size(max = 20) String postalCode,
+            @NotBlank @Size(max = 120) String city, @Size(max = 120) String region,
+            @NotBlank @Pattern(regexp = "^[A-Za-z]{2}$", message = "country must be an ISO 3166-1 alpha-2 code") String country,
+            @NotBlank @Email @Size(max = 200) String email, @Size(max = 40) String phone, @NotBlank String role) {
     }
 
     /** Una figura del art. 4.2, con su etiqueta ya traducida, para poblar el desplegable del panel. */
@@ -75,8 +68,7 @@ public class AdminComplianceController {
     @Operation(summary = "Get the EU responsible economic operator (admin view, includes incomplete data)")
     @GetMapping("/responsible-person")
     public ResponseEntity<ResponsiblePersonView> get(@RequestParam(defaultValue = "es") String lang) {
-        return complianceService.responsible(lang)
-                .map(ResponseEntity::ok)
+        return complianceService.responsible(lang).map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
@@ -84,19 +76,17 @@ public class AdminComplianceController {
     @PutMapping("/responsible-person")
     public ResponseEntity<ResponsiblePersonView> update(@Valid @RequestBody ResponsiblePersonDtoIn req,
             @RequestParam(defaultValue = "es") String lang) {
-        ResponsiblePersonView datos = new ResponsiblePersonView(req.name(), req.addressLine(),
-                req.postalCode(), req.city(), req.region(), req.country(), req.email(), req.phone(),
-                req.role(), null, Boolean.TRUE.equals(req.enabled()), false);
-        return ResponseEntity.ok(complianceService.updateResponsible(datos, SecurityUtils.currentSubject(),
-                lang));
+        ResponsiblePersonView datos = new ResponsiblePersonView(req.name(), req.addressLine(), req.postalCode(),
+                req.city(), req.region(), req.country(), req.email(), req.phone(), req.role(), null,
+                Boolean.TRUE.equals(req.enabled()), false);
+        return ResponseEntity.ok(complianceService.updateResponsible(datos, SecurityUtils.currentSubject(), lang));
     }
 
     @Operation(summary = "List the four economic operator roles of Reg. (EU) 2019/1020 art. 4(2)")
     @GetMapping("/operator-roles")
     public ResponseEntity<List<OperatorRoleView>> roles(@RequestParam(defaultValue = "es") String lang) {
         return ResponseEntity.ok(Arrays.stream(EuOperatorRole.values())
-                .map(r -> new OperatorRoleView(r.name(), r.label(lang)))
-                .toList());
+                .map(r -> new OperatorRoleView(r.name(), r.label(lang))).toList());
     }
 
     /**
@@ -106,17 +96,14 @@ public class AdminComplianceController {
      * @param activeProducts         referencias activas, para leer el hueco como proporción
      * @param missingManufacturer    activas a las que les falta algún dato del fabricante (art. 19.a)
      */
-    public record ComplianceStatusView(boolean responsiblePersonReady, long activeProducts,
-            long missingManufacturer) {
+    public record ComplianceStatusView(boolean responsiblePersonReady, long activeProducts, long missingManufacturer) {
     }
 
     @Operation(summary = "Catalog compliance status: responsible operator + products missing manufacturer")
     @GetMapping("/status")
     public ResponseEntity<ComplianceStatusView> status(@RequestParam(defaultValue = "es") String lang) {
-        return ResponseEntity.ok(new ComplianceStatusView(
-                complianceService.publishedResponsible(lang).isPresent(),
-                productComplianceRepository.contarActivas(),
-                productComplianceRepository.contarActivasSinFabricante()));
+        return ResponseEntity.ok(new ComplianceStatusView(complianceService.publishedResponsible(lang).isPresent(),
+                productComplianceRepository.contarActivas(), productComplianceRepository.contarActivasSinFabricante()));
     }
 
     /** Una referencia activa sin la identidad completa del fabricante, para listarla en el panel. */
@@ -126,23 +113,18 @@ public class AdminComplianceController {
 
     @Operation(summary = "Active products missing the manufacturer identity required by art. 19(a)")
     @GetMapping("/products/missing-manufacturer")
-    public ResponseEntity<Page<MissingManufacturerView>> missingManufacturer(
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "es") String lang) {
-        Page<ProductoSinFabricante> encontrados = productComplianceRepository.buscarActivasSinFabricante(
-                lang, PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 200)));
-        return ResponseEntity.ok(encontrados.map(p -> new MissingManufacturerView(p.getId(), p.getSlug(),
-                p.getTitle(), p.getManufacturerName(), p.getManufacturerAddress(),
-                p.getManufacturerEmail())));
+    public ResponseEntity<Page<MissingManufacturerView>> missingManufacturer(@RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "es") String lang) {
+        Page<ProductoSinFabricante> encontrados = productComplianceRepository.buscarActivasSinFabricante(lang,
+                PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 200)));
+        return ResponseEntity.ok(encontrados.map(p -> new MissingManufacturerView(p.getId(), p.getSlug(), p.getTitle(),
+                p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail())));
     }
 
     /** Alta o corrección de una advertencia de seguridad de una categoría (art. 19.d). */
     public record SafetyWarningDtoIn(
-            @NotBlank @Size(max = 60) @Pattern(regexp = "^[A-Za-z0-9_]+$",
-                    message = "code must be alphanumeric with underscores") String code,
-            Integer position,
-            Boolean active,
-            @NotNull Map<String, String> texts) {
+            @NotBlank @Size(max = 60) @Pattern(regexp = "^[A-Za-z0-9_]+$", message = "code must be alphanumeric with underscores") String code,
+            Integer position, Boolean active, @NotNull Map<String, String> texts) {
     }
 
     @Operation(summary = "Safety warnings declared on a category (not inherited)")
@@ -155,8 +137,8 @@ public class AdminComplianceController {
     @PutMapping("/categories/{categoryId}/warnings")
     public ResponseEntity<SafetyWarningView> upsertWarning(@PathVariable UUID categoryId,
             @Valid @RequestBody SafetyWarningDtoIn req) {
-        return ResponseEntity.ok(complianceService.upsertWarning(categoryId, req.code(), req.position(),
-                req.active(), req.texts(), SecurityUtils.currentSubject()));
+        return ResponseEntity.ok(complianceService.upsertWarning(categoryId, req.code(), req.position(), req.active(),
+                req.texts(), SecurityUtils.currentSubject()));
     }
 
     @Operation(summary = "Delete a safety warning")

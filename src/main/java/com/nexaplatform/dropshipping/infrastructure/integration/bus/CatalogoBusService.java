@@ -75,15 +75,15 @@ public class CatalogoBusService {
         // La clave de partición es el identificador de ORIGEN, no el de la base: es lo único que
         // significa lo mismo en los dos entornos, y garantiza que todos los cambios de un mismo
         // producto se procesen en orden.
-        publicador.publish(EventoBus.PRODUCTO_CERTIFICADO, AGREGADO, ficha.getExternalId(),
-                ficha.getExternalId(), ProductoCertificado.de(ficha), AL_BUS);
+        publicador.publish(EventoBus.PRODUCTO_CERTIFICADO, AGREGADO, ficha.getExternalId(), ficha.getExternalId(),
+                ProductoCertificado.de(ficha), AL_BUS);
         log.info("Bus <- producto certificado {} ({})", ficha.getExternalId(), ficha.getTitleEs());
     }
 
     /** Encola la retirada de un producto que deja de estar certificado. */
     public void publicarRetirado(ProductEntity p, String motivo) {
-        publicador.publish(EventoBus.PRODUCTO_RETIRADO, AGREGADO, p.getExternalId(),
-                p.getExternalId(), ProductoRetirado.de(p.getExternalId(), p.getSlug(), motivo), AL_BUS);
+        publicador.publish(EventoBus.PRODUCTO_RETIRADO, AGREGADO, p.getExternalId(), p.getExternalId(),
+                ProductoRetirado.de(p.getExternalId(), p.getSlug(), motivo), AL_BUS);
         log.info("Bus <- producto retirado {} ({}): {}", p.getExternalId(), p.getSlug(), motivo);
     }
 

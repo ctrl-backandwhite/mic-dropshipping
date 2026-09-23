@@ -54,19 +54,15 @@ public class ProductDetailQueryService {
      */
     @Transactional(readOnly = true)
     public List<ProductEntity> relatedProducts(UUID id, int limit) {
-        ProductEntity product = productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product"));
+        ProductEntity product = productRepository.findById(id).orElseThrow(() -> new NotFoundException("Product"));
         UUID categoryId = product.getCategory() != null ? product.getCategory().getId() : null;
         List<ProductEntity> candidates = categoryId != null
                 ? productRepository.findByCategoryIdAndStatus(categoryId, ProductStatus.ACTIVE,
                         PageRequest.of(0, RELATED_CANDIDATE_POOL)).getContent()
-                : productRepository.findVisibleByStatus(ProductStatus.ACTIVE,
-                        PageRequest.of(0, RELATED_CANDIDATE_POOL)).getContent();
-        return candidates.stream()
-                .filter(x -> !x.getId().equals(id))
-                .sorted(Comparator.comparing(ProductDetailQueryService::trendScore).reversed())
-                .limit(limit)
-                .toList();
+                : productRepository.findVisibleByStatus(ProductStatus.ACTIVE, PageRequest.of(0, RELATED_CANDIDATE_POOL))
+                        .getContent();
+        return candidates.stream().filter(x -> !x.getId().equals(id))
+                .sorted(Comparator.comparing(ProductDetailQueryService::trendScore).reversed()).limit(limit).toList();
     }
 
     private static BigDecimal trendScore(ProductEntity p) {
@@ -87,8 +83,7 @@ public class ProductDetailQueryService {
     @Transactional(readOnly = true)
     public List<ProductSpecificationEntity> specifications(UUID id, String lang) {
         String pedido = (lang == null || lang.isBlank()) ? "es" : lang.trim().toLowerCase(Locale.ROOT);
-        List<ProductSpecificationEntity> todas =
-                specRepository.findByProduct_IdOrderByPositionAsc(id);
+        List<ProductSpecificationEntity> todas = specRepository.findByProduct_IdOrderByPositionAsc(id);
         if (todas.isEmpty()) {
             return todas;
         }
@@ -128,6 +123,7 @@ public class ProductDetailQueryService {
         // Resultado ordenado por posición (el mapa ya lo mantiene: se inserta en orden).
         return new ArrayList<>(porPosicion.values());
     }
+
     @Transactional(readOnly = true)
     public Map<String, String> attributes(UUID id, String lang) {
         List<ProductAttributeEntity> all = attributeRepository.findByProduct_Id(id);

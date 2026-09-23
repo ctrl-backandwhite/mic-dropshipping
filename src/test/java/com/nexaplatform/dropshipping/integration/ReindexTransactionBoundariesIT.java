@@ -77,8 +77,7 @@ class ReindexTransactionBoundariesIT extends BaseIntegration {
     void noSostieneLaTransaccionMientrasHablaConOpenSearch() {
         productIndexer.reindexAll();
 
-        assertThat(transaccionVivaAlIndexar)
-                .as("se esperaban tres llamadas a OpenSearch, una por producto sembrado")
+        assertThat(transaccionVivaAlIndexar).as("se esperaban tres llamadas a OpenSearch, una por producto sembrado")
                 .hasSize(3);
         assertThat(transaccionVivaAlIndexar)
                 .as("cada llamada a OpenSearch bloquea la conexión de Postgres mientras dura; si ocurre "
@@ -89,11 +88,11 @@ class ReindexTransactionBoundariesIT extends BaseIntegration {
 
     private void siembraProductos(int cuantos) {
         UUID proveedor = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO supplier (id, external_id, source, name) VALUES (?, ?, '1688', ?)",
-                proveedor, "SUP-TX", "Proveedor de prueba");
+        jdbcTemplate.update("INSERT INTO supplier (id, external_id, source, name) VALUES (?, ?, '1688', ?)", proveedor,
+                "SUP-TX", "Proveedor de prueba");
         UUID categoria = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO category (id, slug, name_zh, active) VALUES (?, ?, ?, true)",
-                categoria, "tx-pruebas", "测试分类");
+        jdbcTemplate.update("INSERT INTO category (id, slug, name_zh, active) VALUES (?, ?, ?, true)", categoria,
+                "tx-pruebas", "测试分类");
 
         List<UUID> ids = new ArrayList<>();
         for (int i = 0; i < cuantos; i++) {
@@ -104,15 +103,16 @@ class ReindexTransactionBoundariesIT extends BaseIntegration {
                     + "ship_from, free_shipping, self_pickup, has_video, inventory_count, moq, shipping_cny, "
                     + "iva_cny, created_at, updated_at, ingested_at) "
                     + "VALUES (?, ?, ?, '1688', ?, ?, ?, 'ACTIVE', ?, 'CNY', 4.5, 0, 10, 1, 'CN', false, false, "
-                    + "false, 1, 1, 5, 1, ?, ?, ?)",
-                    id, "tx-producto-" + i, "EXT-TX-" + i, proveedor, categoria, "产品 " + i,
-                    new BigDecimal("10.00"), Timestamp.from(ahora), Timestamp.from(ahora), Timestamp.from(ahora));
+                    + "false, 1, 1, 5, 1, ?, ?, ?)", id, "tx-producto-" + i, "EXT-TX-" + i, proveedor, categoria,
+                    "产品 " + i, new BigDecimal("10.00"), Timestamp.from(ahora), Timestamp.from(ahora),
+                    Timestamp.from(ahora));
             // Colección perezosa: es justo lo que obligaba a mantener la sesión abierta durante el barrido.
             jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, description) "
                     + "VALUES (gen_random_uuid(), ?, 'es', ?, ?)", id, "Producto " + i, "Descripción " + i);
-            jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
-                    + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)", id,
-                    "https://origen.test/" + id + ".jpg", "https://cdn.test/" + id + ".jpg");
+            jdbcTemplate.update(
+                    "INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
+                            + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)",
+                    id, "https://origen.test/" + id + ".jpg", "https://cdn.test/" + id + ".jpg");
             jdbcTemplate.update("INSERT INTO product_attribute (id, product_id, attr_key, attr_value) "
                     + "VALUES (gen_random_uuid(), ?, ?, ?)", id, "material", "algodón");
             ids.add(id);

@@ -135,8 +135,7 @@ public class FulfillmentService {
         // golpe: guías reales para mercancía que todavía no se había comprado en 1688. Ahora se exige
         // que TODOS los bultos del pedido vayan camino del almacén chino.
         if (!supplierPurchaseService.readyForInternationalShipment(orderId)) {
-            log.debug("Fulfillment: pedido {} aún sin mercancía en camino; no se crea la guía",
-                    o.getOrderNumber());
+            log.debug("Fulfillment: pedido {} aún sin mercancía en camino; no se crea la guía", o.getOrderNumber());
             return;
         }
         if (!readyForAttempt(o)) {
@@ -147,10 +146,11 @@ public class FulfillmentService {
         // enviar por quien el cliente no eligió. Se deja en la bandeja para que alguien lo mire.
         FulfillmentProvider transportista = transportistas.para(o).orElse(null);
         if (transportista == null) {
-            recordFailure(o, new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
-                    "El pedido " + o.getOrderNumber() + " se cobró por el transportista "
-                            + o.getShippingCarrier() + ", que ahora mismo no está disponible. No se despacha"
-                            + " por otro: habría que cobrar de nuevo. Actívalo o corrige el pedido."));
+            recordFailure(o,
+                    new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
+                            "El pedido " + o.getOrderNumber() + " se cobró por el transportista "
+                                    + o.getShippingCarrier() + ", que ahora mismo no está disponible. No se despacha"
+                                    + " por otro: habría que cobrar de nuevo. Actívalo o corrige el pedido."));
             return;
         }
         // Lo que solo el transportista sabe: no puede emitir la guía mientras no tenga la mercancía
@@ -226,25 +226,21 @@ public class FulfillmentService {
                         shipment.getSequenceNo(), content.lineIndex(), o.getOrderNumber());
                 continue;
             }
-            shipmentItemRepository.save(OrderShipmentItemEntity.builder()
-                    .shipmentId(shipment.getId())
-                    .orderItemId(items.get(content.lineIndex()).getId())
-                    .quantity(content.quantity())
-                    .build());
+            shipmentItemRepository.save(OrderShipmentItemEntity.builder().shipmentId(shipment.getId())
+                    .orderItemId(items.get(content.lineIndex()).getId()).quantity(content.quantity()).build());
         }
     }
 
     /** Da de alta en {@code order_shipment} cada bulto creado en el transportista, con su contenido. */
     private void persistShipments(Order o, List<FulfillmentResult> results) {
         for (FulfillmentResult r : results) {
-            OrderShipmentEntity shipment = shipmentRepository.save(OrderShipmentEntity.builder()
-                    .orderId(o.getId()).sequenceNo(r.sequenceNo()).carrier(r.carrier())
-                    .productCode(r.productCode()).waybillNumber(r.fulfillmentRef())
-                    .trackingNumber(r.trackingNumber()).status(OrderStatus.FORWARDED.name())
-                    .weightGrams(r.weightGrams()).declaredValueCents(r.declaredValueCents())
-                    .declaration(declarationJson(r))
-                    .estimatedDeliveryAt(Instant.now().plus(Duration.ofDays(r.etaMaxDays())))
-                    .createdAt(Instant.now()).build());
+            OrderShipmentEntity shipment = shipmentRepository.save(OrderShipmentEntity.builder().orderId(o.getId())
+                    .sequenceNo(r.sequenceNo()).carrier(r.carrier()).productCode(r.productCode())
+                    .waybillNumber(r.fulfillmentRef()).trackingNumber(r.trackingNumber())
+                    .status(OrderStatus.FORWARDED.name()).weightGrams(r.weightGrams())
+                    .declaredValueCents(r.declaredValueCents()).declaration(declarationJson(r))
+                    .estimatedDeliveryAt(Instant.now().plus(Duration.ofDays(r.etaMaxDays()))).createdAt(Instant.now())
+                    .build());
             persistShipmentContents(o, shipment, r);
         }
         if (results.size() > 1) {
@@ -266,7 +262,8 @@ public class FulfillmentService {
             return null;
         }
         try {
-            return objectMapper.convertValue(r.declaration(), new TypeReference<Map<String, Object>>() { });
+            return objectMapper.convertValue(r.declaration(), new TypeReference<Map<String, Object>>() {
+            });
         } catch (IllegalArgumentException e) {
             log.warn("Fulfillment: no se pudo archivar la declaración del bulto {}: {}", r.sequenceNo(),
                     e.getMessage());
@@ -302,14 +299,13 @@ public class FulfillmentService {
         if (giveUp) {
             o.setFulfillmentFailedAt(Instant.now());
             o.setFulfillmentNextAttemptAt(null);
-            log.error("::> [FULFILLMENT] Envío abandonado pedido={} intentos={} motivo={} causa={}",
-                    o.getOrderNumber(), attempts, failure.kind(), failure.getMessage());
+            log.error("::> [FULFILLMENT] Envío abandonado pedido={} intentos={} motivo={} causa={}", o.getOrderNumber(),
+                    attempts, failure.kind(), failure.getMessage());
             alertFulfillmentGiveUp(o, attempts, failure);
         } else {
             o.setFulfillmentNextAttemptAt(Instant.now().plus(Duration.ofMinutes(RETRY_DELAY_MINUTES)));
             log.warn("::> [FULFILLMENT] Envío falló pedido={} intento={}/{} reintento en {} min causa={}",
-                    o.getOrderNumber(), attempts, MAX_FULFILLMENT_ATTEMPTS, RETRY_DELAY_MINUTES,
-                    failure.getMessage());
+                    o.getOrderNumber(), attempts, MAX_FULFILLMENT_ATTEMPTS, RETRY_DELAY_MINUTES, failure.getMessage());
         }
         orderRepository.save(o);
     }
@@ -322,15 +318,13 @@ public class FulfillmentService {
         try {
             opsAlertService.fulfillmentFailed(o.getOrderNumber(), o.getShippingCountry(), attempts,
                     failure.getMessage());
-            notificationUseCase.sendAdminNotification(null,
-                    "Envío no creado: pedido " + o.getOrderNumber(),
+            notificationUseCase.sendAdminNotification(null, "Envío no creado: pedido " + o.getOrderNumber(),
                     "Tras " + attempts + " intento(s) el transportista sigue rechazando el envío a "
-                            + o.getShippingCountry() + ". "
-                            + CarrierErrorMessage.humanize(failure.getMessage())
+                            + o.getShippingCountry() + ". " + CarrierErrorMessage.humanize(failure.getMessage())
                             + " Revisa la incidencia y reintenta cuando esté corregido.");
         } catch (RuntimeException e) {
-            log.error("::> [FULFILLMENT] No se pudo avisar del envío abandonado pedido={} causa={}",
-                    o.getOrderNumber(), e.getMessage());
+            log.error("::> [FULFILLMENT] No se pudo avisar del envío abandonado pedido={} causa={}", o.getOrderNumber(),
+                    e.getMessage());
         }
     }
 
@@ -339,8 +333,7 @@ public class FulfillmentService {
     public List<Order> failedFulfillments() {
         return orderRepository.findAll().stream()
                 .filter(o -> o.getFulfillmentFailedAt() != null && o.getTrackingNumber() == null)
-                .sorted((a, b) -> b.getFulfillmentFailedAt().compareTo(a.getFulfillmentFailedAt()))
-                .toList();
+                .sorted((a, b) -> b.getFulfillmentFailedAt().compareTo(a.getFulfillmentFailedAt())).toList();
     }
 
     /**
@@ -419,8 +412,8 @@ public class FulfillmentService {
                 continue;
             }
             if (!alreadyPersisted) {
-                appendEvent(o.getId(), step.status().name(), step.description(), step.location(),
-                        CARRIER_SOURCE, step.occurredAt());
+                appendEvent(o.getId(), step.status().name(), step.description(), step.location(), CARRIER_SOURCE,
+                        step.occurredAt());
             }
             if (step.status() == OrderStatus.SHIPPED) {
                 if (shippedSeen) {
@@ -450,8 +443,8 @@ public class FulfillmentService {
      *
      * <p>Un fallo al avisar no interrumpe el sondeo del resto de bultos.
      */
-    private void avisarBultoEntregado(Order o, OrderShipmentEntity shipment, String anterior,
-            OrderStatus ahora, int totalBultos) {
+    private void avisarBultoEntregado(Order o, OrderShipmentEntity shipment, String anterior, OrderStatus ahora,
+            int totalBultos) {
         if (totalBultos <= 1 || ahora != OrderStatus.DELIVERED || o.getUserId() == null
                 || OrderStatus.DELIVERED.name().equals(anterior)) {
             return;
@@ -462,15 +455,13 @@ public class FulfillmentService {
                 return;
             }
             notificationsPublisher.dispatch("ORDER_PARCEL_DELIVERED", o.getUserId(), u.getEmail(),
-                    Map.of("orderNumber", o.getOrderNumber(),
-                            "parcel", shipment.getSequenceNo(),
-                            "parcels", totalBultos,
-                            "trackingNumber", shipment.getTrackingNumber() != null
-                                    ? shipment.getTrackingNumber() : ""),
+                    Map.of("orderNumber", o.getOrderNumber(), "parcel", shipment.getSequenceNo(), "parcels",
+                            totalBultos, "trackingNumber",
+                            shipment.getTrackingNumber() != null ? shipment.getTrackingNumber() : ""),
                     u.getLanguage());
         } catch (RuntimeException e) {
-            log.warn("No se pudo avisar de la entrega del bulto {} del pedido {}: {}",
-                    shipment.getSequenceNo(), o.getOrderNumber(), e.getMessage());
+            log.warn("No se pudo avisar de la entrega del bulto {} del pedido {}: {}", shipment.getSequenceNo(),
+                    o.getOrderNumber(), e.getMessage());
         }
     }
 
@@ -492,7 +483,8 @@ public class FulfillmentService {
         OrderStatus aggregated = OrderStatus.DELIVERED;
         for (OrderShipmentEntity shipment : shipments) {
             String reference = shipment.getWaybillNumber() != null
-                    ? shipment.getWaybillNumber() : shipment.getTrackingNumber();
+                    ? shipment.getWaybillNumber()
+                    : shipment.getTrackingNumber();
             if (reference == null) {
                 continue;
             }
@@ -524,9 +516,9 @@ public class FulfillmentService {
         }
         for (TrackingStep step : snap.steps()) {
             if (seen.add(step.status().name() + "|" + step.description())) {
-                trackingRepository.save(OrderTrackingEventEntity.builder()
-                        .orderId(o.getId()).shipmentId(shipment.getId()).status(step.status().name())
-                        .description(step.description()).location(step.location()).source(CARRIER_SOURCE)
+                trackingRepository.save(OrderTrackingEventEntity.builder().orderId(o.getId())
+                        .shipmentId(shipment.getId()).status(step.status().name()).description(step.description())
+                        .location(step.location()).source(CARRIER_SOURCE)
                         .occurredAt(step.occurredAt() != null ? step.occurredAt() : Instant.now())
                         .createdAt(Instant.now()).build());
             }
@@ -542,8 +534,8 @@ public class FulfillmentService {
         if (u == null) {
             return;
         }
-        steps.forEach(s -> orderEmailService.trackingUpdate(o, u.getEmail(), u.getLanguage(), s.description(),
-                s.location()));
+        steps.forEach(
+                s -> orderEmailService.trackingUpdate(o, u.getEmail(), u.getLanguage(), s.description(), s.location()));
     }
 
     /** Timeline de eventos de un pedido (orden cronológico). */
@@ -564,8 +556,7 @@ public class FulfillmentService {
      * en reparto—, así que el seguimiento se enseña por paquete y no todo mezclado en una sola lista.
      */
     public record ShipmentTrackingView(int sequenceNo, String carrier, String trackingNumber, String status,
-            int weightGrams, Instant estimatedDeliveryAt, List<TrackingEventView> events,
-            List<ParcelItemView> items) {
+            int weightGrams, Instant estimatedDeliveryAt, List<TrackingEventView> events, List<ParcelItemView> items) {
     }
 
     /**
@@ -658,8 +649,8 @@ public class FulfillmentService {
         try {
             return objectMapper.convertValue(stored, FulfillmentProvider.ShipmentDeclaration.class);
         } catch (IllegalArgumentException e) {
-            log.warn("Fulfillment: declaración archivada ilegible en el bulto {}: {}",
-                    shipment.getSequenceNo(), e.getMessage());
+            log.warn("Fulfillment: declaración archivada ilegible en el bulto {}: {}", shipment.getSequenceNo(),
+                    e.getMessage());
             return null;
         }
     }
@@ -684,8 +675,8 @@ public class FulfillmentService {
         }
         List<ShipmentTrackingView> views = new ArrayList<>();
         for (OrderShipmentEntity shipment : shipments) {
-            List<TrackingEventView> own = trackingViewMapper.toEventViews(allEvents.stream()
-                    .filter(e -> shipment.getId().equals(e.getShipmentId())).toList());
+            List<TrackingEventView> own = trackingViewMapper
+                    .toEventViews(allEvents.stream().filter(e -> shipment.getId().equals(e.getShipmentId())).toList());
             views.add(trackingViewMapper.toShipmentView(shipment, own,
                     parcelItems(contenidos.getOrDefault(shipment.getId(), List.of()), lineas)));
         }
@@ -698,16 +689,15 @@ public class FulfillmentService {
      * <p>Los envíos creados antes de que esto existiera no tienen contenido registrado: devuelven lista
      * vacía y el seguimiento se pinta como siempre, sin fotos, en vez de fallar.
      */
-    private List<ParcelItemView> parcelItems(List<OrderShipmentItemEntity> contenido,
-            Map<UUID, OrderItem> lineas) {
+    private List<ParcelItemView> parcelItems(List<OrderShipmentItemEntity> contenido, Map<UUID, OrderItem> lineas) {
         List<ParcelItemView> out = new ArrayList<>();
         for (OrderShipmentItemEntity item : contenido) {
             OrderItem linea = lineas.get(item.getOrderItemId());
             if (linea == null) {
                 continue;
             }
-            out.add(new ParcelItemView(linea.getTitleSnapshot(), linea.getImageUrlSnapshot(),
-                    linea.getVariantName(), item.getQuantity()));
+            out.add(new ParcelItemView(linea.getTitleSnapshot(), linea.getImageUrlSnapshot(), linea.getVariantName(),
+                    item.getQuantity()));
         }
         return out;
     }
@@ -766,8 +756,8 @@ public class FulfillmentService {
         boolean shippedSeen = known.stream().anyMatch(k -> k.startsWith(OrderStatus.SHIPPED.name() + "|"));
         List<TrackingStep> toNotify = new ArrayList<>();
         for (TrackingStep step : snap.steps()) {
-            boolean added = appendIfNew(o, known, step.status(), step.description(), step.location(),
-                    step.occurredAt(), CARRIER_SOURCE);
+            boolean added = appendIfNew(o, known, step.status(), step.description(), step.location(), step.occurredAt(),
+                    CARRIER_SOURCE);
             changed |= added;
             if (added && step.status() == OrderStatus.SHIPPED) {
                 if (shippedSeen) {
@@ -784,8 +774,8 @@ public class FulfillmentService {
             log.info("YunExpress push: timeline actualizado para pedido {}", o.getOrderNumber());
         } else if (!snap.steps().isEmpty()) {
             // Todos los pasos venían repetidos: normal, el transportista reenvía.
-            log.debug("YunExpress push: pedido {} sin novedades ({} pasos ya conocidos)",
-                    o.getOrderNumber(), snap.steps().size());
+            log.debug("YunExpress push: pedido {} sin novedades ({} pasos ya conocidos)", o.getOrderNumber(),
+                    snap.steps().size());
         } else if (events.isArray() && !events.isEmpty()) {
             // Esto NO es normal: el push trae eventos y no hemos sacado ni un paso de ellos. Pasa cuando
             // el transportista cambia el nombre de un campo o manda códigos que no reconocemos. Sin este
@@ -816,7 +806,7 @@ public class FulfillmentService {
     /** Resuelve el pedido del push por guía, tracking o nuestro número de pedido. */
     private Order resolveYunExpressOrder(JsonNode payload) {
         JsonNode info = payload.path("track_Info");
-        for (String key : new String[] { "waybill_number", "order_number", "shipment_number", "tracking_number" }) {
+        for (String key : new String[]{"waybill_number", "order_number", "shipment_number", "tracking_number"}) {
             String value = firstNodeText(payload, key);
             if (value == null) {
                 value = firstNodeText(info, key);

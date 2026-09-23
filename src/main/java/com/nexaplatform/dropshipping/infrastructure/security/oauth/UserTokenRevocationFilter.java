@@ -55,17 +55,15 @@ public class UserTokenRevocationFilter extends OncePerRequestFilter {
             // Nimbus expone el claim "iat" como java.util.Date y no ofrece accesor java.time; se convierte
             // en el acto para que el resto del filtro trabaje solo con java.time (java:S2143).
             Instant iat = claims.getIssueTime() == null ? null : claims.getIssueTime().toInstant();
-            if (sub != null && iat != null
-                    && !revocationService.isStillValid(sub, iat.getEpochSecond())) {
+            if (sub != null && iat != null && !revocationService.isStillValid(sub, iat.getEpochSecond())) {
                 res.setStatus(401);
                 res.setCharacterEncoding("UTF-8");
                 res.setHeader("WWW-Authenticate",
                         "Bearer error=\"invalid_token\", error_description=\"Token revoked (role or account "
                                 + "changed). Refresh via /api/auth/refresh.\"");
                 res.setContentType("application/json;charset=UTF-8");
-                res.getWriter().write(
-                        "{\"code\":\"TOKEN_REVOKED\",\"message\":\"Tu sesión se ha actualizado. Vuelve a "
-                                + "iniciar sesión para continuar.\"}");
+                res.getWriter().write("{\"code\":\"TOKEN_REVOKED\",\"message\":\"Tu sesión se ha actualizado. Vuelve a "
+                        + "iniciar sesión para continuar.\"}");
                 return;
             }
         } catch (Exception e) {

@@ -130,9 +130,8 @@ class Cov10AffiliateSearchServiceTest {
     void elIdSaleDeSourceYSiElIndiceNoLoGuardoDelIdentificadorDelDocumento() {
         UUID conSource = UUID.randomUUID();
         UUID soloDocId = UUID.randomUUID();
-        respuesta.set("{\"hits\":{\"total\":{\"value\":2},\"hits\":["
-                + "{\"_id\":\"otro\",\"_source\":{\"id\":\"" + conSource + "\"}},"
-                + "{\"_id\":\"" + soloDocId + "\",\"_source\":{}}]}}");
+        respuesta.set("{\"hits\":{\"total\":{\"value\":2},\"hits\":[" + "{\"_id\":\"otro\",\"_source\":{\"id\":\""
+                + conSource + "\"}}," + "{\"_id\":\"" + soloDocId + "\",\"_source\":{}}]}}");
 
         Optional<IdPage> page = service.pageIds(null, null, 0, 25);
 
@@ -144,10 +143,9 @@ class Cov10AffiliateSearchServiceTest {
     @Test
     void unIdCorruptoSeDescartaSinTirarLaPaginaEntera() {
         UUID bueno = UUID.randomUUID();
-        respuesta.set("{\"hits\":{\"total\":{\"value\":3},\"hits\":["
-                + "{\"_id\":\"no-es-un-uuid\",\"_source\":{}},"
-                + "{\"_id\":\"x\",\"_source\":{\"id\":\"\"}},"
-                + "{\"_id\":\"x\",\"_source\":{\"id\":\"" + bueno + "\"}}]}}");
+        respuesta.set("{\"hits\":{\"total\":{\"value\":3},\"hits\":[" + "{\"_id\":\"no-es-un-uuid\",\"_source\":{}},"
+                + "{\"_id\":\"x\",\"_source\":{\"id\":\"\"}}," + "{\"_id\":\"x\",\"_source\":{\"id\":\"" + bueno
+                + "\"}}]}}");
 
         Optional<IdPage> page = service.pageIds(null, null, 0, 25);
 
@@ -164,17 +162,16 @@ class Cov10AffiliateSearchServiceTest {
         // consulta a base de datos que tampoco iba a encontrar nada.
         respuesta.set("{\"hits\":{\"total\":{\"value\":0},\"hits\":[]}}");
 
-        assertThat(service.pageIds(null, null, 0, 25))
-                .hasValueSatisfying(p -> {
-                    assertThat(p.ids()).isEmpty();
-                    assertThat(p.total()).isZero();
-                });
+        assertThat(service.pageIds(null, null, 0, 25)).hasValueSatisfying(p -> {
+            assertThat(p.ids()).isEmpty();
+            assertThat(p.total()).isZero();
+        });
     }
 
     @Test
     void unaPaginaSinNingunIdValidoTambienCaeALaBaseDeDatos() {
-        respuesta.set("{\"hits\":{\"total\":{\"value\":5},\"hits\":["
-                + "{\"_id\":\"no-es-un-uuid\",\"_source\":{}}]}}");
+        respuesta
+                .set("{\"hits\":{\"total\":{\"value\":5},\"hits\":[" + "{\"_id\":\"no-es-un-uuid\",\"_source\":{}}]}}");
 
         assertThat(service.pageIds(null, null, 0, 25)).isEmpty();
     }

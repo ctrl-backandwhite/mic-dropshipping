@@ -126,9 +126,8 @@ class Cov05AffiliateLifecycleTest {
     }
 
     private AffiliateProgramConfigEntity storedConfig() {
-        return AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
-                .attributionWindowDays(30).returnPeriodDays(14).minPayoutCents(5000).currency("EUR")
-                .attributionModel("LAST_CLICK").build();
+        return AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30)
+                .returnPeriodDays(14).minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build();
     }
 
     /* ===================== quién puede ser afiliado ===================== */
@@ -141,8 +140,7 @@ class Cov05AffiliateLifecycleTest {
         staff.setRole(UserRole.valueOf(role));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(staff));
 
-        assertThatThrownBy(() -> service.getOrCreateForUser(USER_ID))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> service.getOrCreateForUser(USER_ID)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("administración");
         // Si esto fallara, un admin podría cobrarse comisiones a sí mismo desde su propio panel.
         verify(affiliateRepo, never()).save(any());
@@ -305,8 +303,8 @@ class Cov05AffiliateLifecycleTest {
         NotificationEntity staffAlert = saved.getAllValues().stream()
                 .filter(n -> "AFFILIATE_JOIN".equals(n.getEventType())).findFirst().orElseThrow();
         assertThat(staffAlert.getUser()).isSameAs(admin);
-        assertThat(staffAlert.getBody()).contains("Ana Gómez Ruiz").contains("ana@example.com")
-                .contains("País: ES").contains("Empresa: ACME").contains(USER_ID.toString());
+        assertThat(staffAlert.getBody()).contains("Ana Gómez Ruiz").contains("ana@example.com").contains("País: ES")
+                .contains("Empresa: ACME").contains(USER_ID.toString());
         Map<String, Object> payload = staffAlert.getPayload();
         assertThat(payload).containsEntry("name", "Ana Gómez Ruiz").containsEntry("email", "ana@example.com")
                 .containsEntry("country", "ES").containsEntry("company", "ACME");
@@ -395,8 +393,7 @@ class Cov05AffiliateLifecycleTest {
     void anadirCodigoAUnAfiliadoInexistenteFalla() {
         when(affiliateRepo.findById(AFFILIATE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.addCode(AFFILIATE_ID, "Instagram"))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.addCode(AFFILIATE_ID, "Instagram")).isInstanceOf(NotFoundException.class);
         verify(codeRepo, never()).save(any());
     }
 
@@ -418,8 +415,7 @@ class Cov05AffiliateLifecycleTest {
         UUID codeId = UUID.randomUUID();
         when(codeRepo.findById(codeId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.setCodeActive(USER_ID, codeId, false))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.setCodeActive(USER_ID, codeId, false)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -427,8 +423,8 @@ class Cov05AffiliateLifecycleTest {
     void desactivarUnCodigoPropioLoPersiste() {
         UUID codeId = UUID.randomUUID();
         AffiliateEntity mine = existingAffiliate(customer());
-        AffiliateReferralCodeEntity c = AffiliateReferralCodeEntity.builder().affiliate(mine).code("ref-1")
-                .active(true).build();
+        AffiliateReferralCodeEntity c = AffiliateReferralCodeEntity.builder().affiliate(mine).code("ref-1").active(true)
+                .build();
         when(codeRepo.findById(codeId)).thenReturn(Optional.of(c));
         when(affiliateRepo.findByUser_Id(USER_ID)).thenReturn(Optional.of(mine));
 
@@ -452,8 +448,7 @@ class Cov05AffiliateLifecycleTest {
     @Test
     @DisplayName("un estado nulo se rechaza igual que uno inválido")
     void unEstadoNuloSeRechaza() {
-        assertThatThrownBy(() -> service.setAffiliateStatus(AFFILIATE_ID, null))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.setAffiliateStatus(AFFILIATE_ID, null)).isInstanceOf(BusinessException.class);
     }
 
     @ParameterizedTest

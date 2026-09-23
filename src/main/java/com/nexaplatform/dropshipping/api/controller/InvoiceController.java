@@ -70,8 +70,7 @@ public class InvoiceController {
         String resolved = resolveLang(lang, userId);
         byte[] bytes = customerSubscriptionUseCase.renderInvoicePdf(userId, number, resolved);
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"factura-" + number + ".pdf\"")
-                .body(bytes);
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"factura-" + number + ".pdf\"").body(bytes);
     }
 
     /** Idioma efectivo: el pedido por query, o el del usuario, o español por defecto. */
@@ -97,9 +96,8 @@ public class InvoiceController {
         // Reutiliza el mismo email de factura (mismo diseño/idioma/moneda) enviándolo a la dirección de prueba.
         // Usamos el método de pago REAL del pedido (traducido en el email); si no hay pago registrado
         // (p. ej. pago con wallet o pedido de prueba), mostramos CARD como método representativo.
-        String method = paymentRepository.findByOrderIdOrderByCreatedAtDesc(id).stream()
-                .map(p -> p.getMethod()).filter(m -> m != null).map(m -> m.name())
-                .findFirst().orElse("CARD");
+        String method = paymentRepository.findByOrderIdOrderByCreatedAtDesc(id).stream().map(p -> p.getMethod())
+                .filter(m -> m != null).map(m -> m.name()).findFirst().orElse("CARD");
         orderEmailService.paymentConfirmed(o, email, resolved, method, invoiceCurrency(o));
         return ResponseEntity.ok(Map.of("sent", true, "to", email, "order", o.getOrderNumber()));
     }

@@ -5,8 +5,10 @@ import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Vista previa del checkout: lo que verá el comprador antes de pagar (subtotal, descuento de referido,
@@ -81,9 +84,9 @@ public class CheckoutPreviewService {
                 int taxUsdCents, int taxRateBps, BigDecimal subtotalDisplay, BigDecimal discountDisplay,
                 BigDecimal shippingDisplay, BigDecimal taxDisplay, BigDecimal totalDisplay,
                 CheckoutTotalsService.CheckoutTotals totals) {
-            this(quote, subtotalUsdCents, discountUsdCents, shippingUsdCents, taxUsdCents, taxRateBps,
-                    subtotalDisplay, discountDisplay, shippingDisplay, taxDisplay, totalDisplay, totals,
-                    null, null, null, List.of(), null);
+            this(quote, subtotalUsdCents, discountUsdCents, shippingUsdCents, taxUsdCents, taxRateBps, subtotalDisplay,
+                    discountDisplay, shippingDisplay, taxDisplay, totalDisplay, totals, null, null, null, List.of(),
+                    null);
         }
     }
 
@@ -93,6 +96,8 @@ public class CheckoutPreviewService {
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
+    /** Los tramos por cantidad: la vista previa tiene que anunciar el precio que se va a cobrar. */
+    private final ProductPriceTierRepository priceTierRepository;
     private final CustomsDutyLinesService customsDutyLinesService;
     private final AffiliateProgramService affiliateProgramService;
     private final PromotionService promotionService;
@@ -152,15 +157,29 @@ public class CheckoutPreviewService {
         // (igual que en el cobro real, para que preview y cargo coincidan).
         Map<UUID, Integer> grossByProduct = new HashMap<>();
         BigDecimal subDispAcc = BigDecimal.ZERO;
+        // Unidades de cada producto en TODA la compra, para resolver el tramo por cantidad igual que lo
+        // resuelven la cesta y el cobro. Contar por línea daría un precio distinto en cada pantalla.
+        Map<UUID, Integer> unidadesPorProducto = new HashMap<>();
+        for (Line it : lines) {
+            if (it != null && it.productId() != null) {
+                unidadesPorProducto.merge(it.productId(), Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY),
+                        Integer::sum);
+            }
+        }
+        // Las escaleras de todos los productos de golpe: una consulta en vez de una por línea.
+        Map<UUID, List<ProductPriceTierEntity>> escaleras = unidadesPorProducto.isEmpty()
+                ? Map.of()
+                : priceTierRepository.findByProductIdInOrderByMinQtyAsc(unidadesPorProducto.keySet()).stream()
+                        .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
         List<PreviewLine> previewLines = new ArrayList<>();
         for (Line it : lines) {
-            Integer unitCents = unitPriceUsdCents(it);
+            Integer unitCents = unitPriceUsdCents(it, unidadesPorProducto, escaleras);
             if (unitCents == null) {
                 continue;
             }
             int qty = Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY);
             subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
-            Integer originalCents = unitOriginalUsdCents(it);
+            Integer originalCents = unitOriginalUsdCents(it, unidadesPorProducto, escaleras);
             int lineGross = Math.multiplyExact(originalCents != null ? originalCents : unitCents, qty);
             grossSubtotalUsdCents = Math.addExact(grossSubtotalUsdCents, lineGross);
             if (it.productId() != null) {
@@ -182,7 +201,7 @@ public class CheckoutPreviewService {
             subDispAcc = subDispAcc.add(lineSubtotal);
             // El unitario que se PINTA sigue saliendo del precio de la ficha (displayAmount): es el que el
             // cliente ha visto en el catálogo y en el carrito, y cambiarlo aquí sería enseñarle otro.
-            BigDecimal unitDisplay = unitPriceDisplay(it);
+            BigDecimal unitDisplay = unitPriceDisplay(it, unidadesPorProducto, escaleras);
             previewLines.add(new PreviewLine(it.productId(), it.variantId(), qty, unitDisplay,
                     currencyService.formatDisplay(unitDisplay, displayCode), lineSubtotal,
                     currencyService.formatDisplay(lineSubtotal, displayCode)));
@@ -198,8 +217,7 @@ public class CheckoutPreviewService {
         String couponError = null;
         UUID couponId = null;
         if (couponCode != null && !couponCode.isBlank()) {
-            PromotionService.CouponCheck check = promotionService.checkCoupon(couponCode, userId,
-                    subtotalUsdCents);
+            PromotionService.CouponCheck check = promotionService.checkCoupon(couponCode, userId, subtotalUsdCents);
             if (!check.valid()) {
                 couponError = check.reason();
             } else {
@@ -235,8 +253,7 @@ public class CheckoutPreviewService {
         // que la vista previa tiene que repartir igual que después el despacho o el derecho por partida
         // mostrado y el liquidado contarían bultos distintos.
         List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(
-                customsLines(items, country), shippingOption != null ? shippingOption.code() : null,
-                country);
+                customsLines(items, country), shippingOption != null ? shippingOption.code() : null, country);
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
         ProductSubsidyService.Bags bolsas = productSubsidyService.bagsFor(productosDeLasLineas(items));
@@ -251,14 +268,15 @@ public class CheckoutPreviewService {
         // escala; no vuelve a redondear nada.
         BigDecimal subDisp = subDispAcc.setScale(2, RoundingMode.HALF_UP);
         BigDecimal discDisp = currencyService.usdToDisplay(usd(discountUsdCents)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal shipDisp = currencyService.usdToDisplay(usd(totals.shippingCents())).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal shipDisp = currencyService.usdToDisplay(usd(totals.shippingCents())).setScale(2,
+                RoundingMode.HALF_UP);
         BigDecimal taxDisp = currencyService.usdToDisplay(usd(totals.taxCents())).setScale(2, RoundingMode.HALF_UP);
         BigDecimal totalDisp = subDisp.subtract(discDisp).add(shipDisp).add(taxDisp);
 
         return new Preview(quote, subtotalUsdCents, discountUsdCents, totals.shippingCents(), totals.taxCents(),
                 totals.taxRateBps(), subDisp, discDisp, shipDisp, taxDisp, totalDisp, totals,
-                couponId != null ? couponCode.trim().toUpperCase(Locale.ROOT) : null,
-                couponError, couponId, List.copyOf(previewLines), shippingOption);
+                couponId != null ? couponCode.trim().toUpperCase(Locale.ROOT) : null, couponError, couponId,
+                List.copyOf(previewLines), shippingOption);
     }
 
     /**
@@ -287,7 +305,8 @@ public class CheckoutPreviewService {
      * cupón se aplicaría ENCIMA del precio rebajado y los dos descuentos se acumularían, que es justo
      * lo que la regla prohíbe.
      */
-    private Integer unitOriginalUsdCents(Line it) {
+    private Integer unitOriginalUsdCents(Line it, Map<UUID, Integer> unidadesPorProducto,
+            Map<UUID, List<ProductPriceTierEntity>> escaleras) {
         if (it == null || it.productId() == null) {
             return null;
         }
@@ -295,12 +314,12 @@ public class CheckoutPreviewService {
         if (p == null) {
             return null;
         }
-        ProductVariantEntity v = it.variantId() == null ? null
+        ProductVariantEntity v = it.variantId() == null
+                ? null
                 : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-        PricingService.PricedAmount priced = pricingService.priceFor(p, v);
+        PricingService.PricedAmount priced = conTramo(p, v, it, unidadesPorProducto, escaleras);
         BigDecimal original = priced.originalRetailUsd() != null ? priced.originalRetailUsd() : priced.retailUsd();
-        return original == null ? null
-                : original.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+        return original == null ? null : original.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
     }
 
     /**
@@ -329,7 +348,8 @@ public class CheckoutPreviewService {
         return usd == null ? 0 : usd.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
     }
 
-    private Integer unitPriceUsdCents(Line it) {
+    private Integer unitPriceUsdCents(Line it, Map<UUID, Integer> unidadesPorProducto,
+            Map<UUID, List<ProductPriceTierEntity>> escaleras) {
         if (it == null || it.productId() == null) {
             return null;
         }
@@ -337,9 +357,10 @@ public class CheckoutPreviewService {
         if (p == null) {
             return null;
         }
-        ProductVariantEntity v = it.variantId() == null ? null
+        ProductVariantEntity v = it.variantId() == null
+                ? null
                 : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-        BigDecimal retail = pricingService.priceFor(p, v).retailUsd();
+        BigDecimal retail = conTramo(p, v, it, unidadesPorProducto, escaleras).retailUsd();
         if (retail == null) {
             return null;
         }
@@ -353,7 +374,8 @@ public class CheckoutPreviewService {
      * {@code PricingService} en lugar de convertir el canónico para que el resumen del checkout sume
      * exactamente lo que el cliente tiene delante.
      */
-    private BigDecimal unitPriceDisplay(Line it) {
+    private BigDecimal unitPriceDisplay(Line it, Map<UUID, Integer> unidadesPorProducto,
+            Map<UUID, List<ProductPriceTierEntity>> escaleras) {
         if (it == null || it.productId() == null) {
             return null;
         }
@@ -361,9 +383,23 @@ public class CheckoutPreviewService {
         if (p == null) {
             return null;
         }
-        ProductVariantEntity v = it.variantId() == null ? null
+        ProductVariantEntity v = it.variantId() == null
+                ? null
                 : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-        return pricingService.priceFor(p, v).displayAmount();
+        return conTramo(p, v, it, unidadesPorProducto, escaleras).displayAmount();
+    }
+
+    /**
+     * El precio con el tramo por cantidad que le toca a este producto en esta compra.
+     *
+     * <p>Los tres ayudantes de arriba lo piden por aquí para que la vista previa tarifique EXACTAMENTE
+     * igual que la cesta y que el cobro. Cuando cada pantalla resolvía el tramo por su cuenta —o no lo
+     * resolvía— el resumen del checkout anunciaba un total y la pasarela cobraba otro.
+     */
+    private PricingService.PricedAmount conTramo(ProductEntity p, ProductVariantEntity v, Line it,
+            Map<UUID, Integer> unidadesPorProducto, Map<UUID, List<ProductPriceTierEntity>> escaleras) {
+        int unidades = unidadesPorProducto.getOrDefault(p.getId(), Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY));
+        return pricingService.priceFor(p, v, unidades, escaleras.getOrDefault(p.getId(), List.of()));
     }
 
     private static BigDecimal usd(int cents) {
@@ -376,6 +412,16 @@ public class CheckoutPreviewService {
      */
     List<CustomsDutyLinesService.Line> customsLines(List<Line> items, String country) {
         List<CustomsDutyLinesService.Line> out = new ArrayList<>();
+        // El valor que se DECLARA en aduana es el que se cobra, así que lleva el tramo por cantidad
+        // igual que el resto: declarar el precio de una unidad en un pedido de mil sobrevalora la
+        // mercancía y hace pagar de más en el derecho de aduana.
+        Map<UUID, Integer> unidadesPorProducto = new HashMap<>();
+        for (Line it : items) {
+            if (it != null && it.productId() != null) {
+                unidadesPorProducto.merge(it.productId(), Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY),
+                        Integer::sum);
+            }
+        }
         for (Line it : items) {
             if (it == null || it.productId() == null) {
                 continue;
@@ -384,13 +430,16 @@ public class CheckoutPreviewService {
             if (p == null) {
                 continue;
             }
-            ProductVariantEntity v = it.variantId() == null ? null
-                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
-                            .orElse(null);
-            Integer unit = unitPriceUsdCents(it);
+            ProductVariantEntity v = it.variantId() == null
+                    ? null
+                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
+            Integer unit = unitPriceUsdCents(it, unidadesPorProducto,
+                    unidadesPorProducto.isEmpty()
+                            ? Map.of()
+                            : priceTierRepository.findByProductIdInOrderByMinQtyAsc(unidadesPorProducto.keySet())
+                                    .stream().collect(Collectors.groupingBy(x -> x.getProduct().getId())));
             out.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
-                    declarationGroups.describeFor(p, country), p.getCountryOfOrigin(),
-                    Math.max(1, it.quantity()),
+                    declarationGroups.describeFor(p, country), p.getCountryOfOrigin(), Math.max(1, it.quantity()),
                     unit == null ? 0 : unit, ParcelAggregator.unitWeightGrams(p, v), dimension(p, v, 0),
                     dimension(p, v, 1), dimension(p, v, 2), ParcelAggregator.hasBattery(p)));
         }

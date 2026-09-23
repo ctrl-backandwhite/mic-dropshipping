@@ -74,14 +74,12 @@ class WalletConcurrencyIT extends PersistenceITBase {
         }
         pool.shutdown();
 
-        Long saldoFinal = jdbc.queryForObject(
-                "SELECT balance_usd_cents FROM wallet WHERE id = ?", Long.class, walletId);
+        Long saldoFinal = jdbc.queryForObject("SELECT balance_usd_cents FROM wallet WHERE id = ?", Long.class,
+                walletId);
 
-        assertThat(prosperaron)
-                .as("con %d de saldo y débitos de %d, solo puede prosperar uno", SALDO_INICIAL, IMPORTE)
+        assertThat(prosperaron).as("con %d de saldo y débitos de %d, solo puede prosperar uno", SALDO_INICIAL, IMPORTE)
                 .isEqualTo(1);
-        assertThat(saldoFinal)
-                .as("el saldo tiene que reflejar exactamente el único débito aplicado")
+        assertThat(saldoFinal).as("el saldo tiene que reflejar exactamente el único débito aplicado")
                 .isEqualTo(SALDO_INICIAL - IMPORTE);
     }
 
@@ -100,8 +98,8 @@ class WalletConcurrencyIT extends PersistenceITBase {
         pool.invokeAll(intentos);
         pool.shutdown();
 
-        Long saldoFinal = jdbc.queryForObject(
-                "SELECT balance_usd_cents FROM wallet WHERE id = ?", Long.class, walletId);
+        Long saldoFinal = jdbc.queryForObject("SELECT balance_usd_cents FROM wallet WHERE id = ?", Long.class,
+                walletId);
         assertThat(saldoFinal).as("el saldo no puede bajar de cero en ningún caso").isGreaterThanOrEqualTo(0L);
     }
 
@@ -121,10 +119,12 @@ class WalletConcurrencyIT extends PersistenceITBase {
     private UUID[] prepararWalletConSaldo() {
         UUID userId = UUID.randomUUID();
         UUID walletId = UUID.randomUUID();
-        jdbc.update("INSERT INTO users (id, email, role, active, created_at, updated_at)"
+        jdbc.update(
+                "INSERT INTO users (id, email, role, active, created_at, updated_at)"
                         + " VALUES (?, ?, 'USER', true, now(), now())",
                 userId, "concurrencia-" + userId + "@example.com");
-        jdbc.update("INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
+        jdbc.update(
+                "INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
                         + " status, created_at, updated_at) VALUES (?, ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
                 walletId, userId, SALDO_INICIAL);
         return new UUID[]{userId, walletId};

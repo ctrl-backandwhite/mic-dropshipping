@@ -126,7 +126,7 @@ class MoneyTest {
         @Test
         void divide_by_zero_throws() {
             Money diez = Money.of("10.00", "EUR");
-        assertThatThrownBy(() -> diez.divide(0)).isInstanceOf(ArithmeticException.class);
+            assertThatThrownBy(() -> diez.divide(0)).isInstanceOf(ArithmeticException.class);
         }
 
         @Test
@@ -183,9 +183,8 @@ class MoneyTest {
         @Test
         void comparison_different_currency_throws() {
             Money euros = Money.of("10.00", "EUR");
-        Money dolares = Money.of("10.00", "USD");
-        assertThatThrownBy(() -> euros.compareTo(dolares))
-                    .isInstanceOf(CurrencyMismatchException.class);
+            Money dolares = Money.of("10.00", "USD");
+            assertThatThrownBy(() -> euros.compareTo(dolares)).isInstanceOf(CurrencyMismatchException.class);
         }
     }
 

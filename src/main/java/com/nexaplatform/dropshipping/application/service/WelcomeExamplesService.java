@@ -94,8 +94,9 @@ public class WelcomeExamplesService {
         }
         // Stream.of y no List.of: el admin puede haber fijado solo uno o dos, y List.of no admite nulos
         // —revienta con NullPointerException antes de llegar a filtrarlos—.
-        List<UUID> ids = Stream.of(ajuste.get().getProductId1(), ajuste.get().getProductId2(),
-                ajuste.get().getProductId3()).filter(Objects::nonNull).toList();
+        List<UUID> ids = Stream
+                .of(ajuste.get().getProductId1(), ajuste.get().getProductId2(), ajuste.get().getProductId3())
+                .filter(Objects::nonNull).toList();
         if (ids.isEmpty()) {
             return List.of();
         }
@@ -107,8 +108,8 @@ public class WelcomeExamplesService {
             return List.of();
         }
         // Se devuelven en el orden en que el admin los grabó, no en el que los saque la consulta.
-        return ids.stream().map(id -> encontrados.stream().filter(p -> id.equals(p.getId())).findFirst()
-                .orElse(null)).filter(Objects::nonNull).toList();
+        return ids.stream().map(id -> encontrados.stream().filter(p -> id.equals(p.getId())).findFirst().orElse(null))
+                .filter(Objects::nonNull).toList();
     }
 
     /**
@@ -119,8 +120,8 @@ public class WelcomeExamplesService {
      * le va a tocar.
      */
     private List<ProductEntity> elegirAutomaticamente() {
-        List<ProductEntity> candidatos = productRepository
-                .findWelcomeExampleCandidates(ProductStatus.ACTIVE, PageRequest.of(0, CANDIDATOS));
+        List<ProductEntity> candidatos = productRepository.findWelcomeExampleCandidates(ProductStatus.ACTIVE,
+                PageRequest.of(0, CANDIDATOS));
         if (candidatos.isEmpty()) {
             return List.of();
         }
@@ -128,26 +129,24 @@ public class WelcomeExamplesService {
         for (ProductEntity p : candidatos) {
             porPartida.computeIfAbsent(dutyGroupOf(p), k -> new ArrayList<>()).add(p);
         }
-        String masPoblada = porPartida.entrySet().stream()
-                .max(Comparator.comparingInt(e -> e.getValue().size()))
+        String masPoblada = porPartida.entrySet().stream().max(Comparator.comparingInt(e -> e.getValue().size()))
                 .map(Map.Entry::getKey).orElse(null);
         List<ProductEntity> pareja = porPartida.getOrDefault(masPoblada, List.of());
 
         List<ProductEntity> elegidos = new ArrayList<>(pareja.stream().limit(2).toList());
-        porPartida.entrySet().stream().filter(e -> !e.getKey().equals(masPoblada))
-                .map(e -> e.getValue().get(0)).findFirst().ifPresent(elegidos::add);
+        porPartida.entrySet().stream().filter(e -> !e.getKey().equals(masPoblada)).map(e -> e.getValue().get(0))
+                .findFirst().ifPresent(elegidos::add);
         return elegidos.stream().limit(CUANTOS).toList();
     }
 
     /** Fija a mano los tres ejemplos. Con la lista vacía se vuelve a la elección automática. */
     @Transactional
     public void fijar(List<UUID> productIds, String quien) {
-        WelcomeExampleSettingEntity ajuste = settingRepository.findById((short) 1)
-                .orElseGet(() -> {
-                    WelcomeExampleSettingEntity nuevo = new WelcomeExampleSettingEntity();
-                    nuevo.setId((short) 1);
-                    return nuevo;
-                });
+        WelcomeExampleSettingEntity ajuste = settingRepository.findById((short) 1).orElseGet(() -> {
+            WelcomeExampleSettingEntity nuevo = new WelcomeExampleSettingEntity();
+            nuevo.setId((short) 1);
+            return nuevo;
+        });
         List<UUID> ids = productIds == null ? List.of() : productIds;
         ajuste.setProductId1(ids.size() > 0 ? ids.get(0) : null);
         ajuste.setProductId2(ids.size() > 1 ? ids.get(1) : null);

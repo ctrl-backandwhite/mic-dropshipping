@@ -44,13 +44,12 @@ class CustomsDeclarationGroupSyncTest {
     @Test
     void creaLosGruposQueFaltanYNoTocaLosAprobados() {
         // Reaprobar o reescribir un grupo ya firmado cambiaría en silencio lo que se declara en aduana.
-        CustomsDeclarationGroupEntity aprobado = CustomsDeclarationGroupEntity.builder()
-                .hs6("620443").material("COTTON").usageCode("CASUAL WEAR")
-                .ename("Men's woven cotton trousers").cname("男式棉制机织长裤")
+        CustomsDeclarationGroupEntity aprobado = CustomsDeclarationGroupEntity.builder().hs6("620443")
+                .material("COTTON").usageCode("CASUAL WEAR").ename("Men's woven cotton trousers").cname("男式棉制机织长裤")
                 .approvedAt(Instant.now()).approvedBy("admin@nexadrop.com").productCount(1).build();
-        when(productRepository.customsTernas()).thenReturn(List.of(
-                new CustomsTernaRow("620443", "Cotton", "Casual wear", 728L),
-                new CustomsTernaRow("610990", "Cotton", "Casual wear", 622L)));
+        when(productRepository.customsTernas())
+                .thenReturn(List.of(new CustomsTernaRow("620443", "Cotton", "Casual wear", 728L),
+                        new CustomsTernaRow("610990", "Cotton", "Casual wear", 622L)));
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
                 .thenReturn(Optional.of(aprobado));
         when(groupRepository.findByHs6AndMaterialAndUsageCode("610990", "COTTON", "CASUAL WEAR"))
@@ -83,9 +82,9 @@ class CustomsDeclarationGroupSyncTest {
     void refrescaElNumeroDeProductosTambienEnLosAprobados() {
         // El panel ordena por tamaño para empezar por las partidas grandes: con la cuenta congelada en el
         // día de la siembra, quien aprueba elige mal por dónde empezar.
-        CustomsDeclarationGroupEntity aprobado = CustomsDeclarationGroupEntity.builder()
-                .hs6("620443").material("COTTON").usageCode("CASUAL WEAR").ename("Dresses")
-                .approvedAt(Instant.now()).productCount(12).build();
+        CustomsDeclarationGroupEntity aprobado = CustomsDeclarationGroupEntity.builder().hs6("620443")
+                .material("COTTON").usageCode("CASUAL WEAR").ename("Dresses").approvedAt(Instant.now()).productCount(12)
+                .build();
         when(productRepository.customsTernas())
                 .thenReturn(List.of(new CustomsTernaRow("620443", "Cotton", "Casual wear", 728L)));
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
@@ -99,9 +98,9 @@ class CustomsDeclarationGroupSyncTest {
     void sinPartidaUtilizableNoHayGrupo() {
         // Sin código HS nadie ha verificado la clasificación, y de ella responde el declarante ante la
         // aduana. Ese producto sigue siendo su propia línea: se cobra de más, nunca de menos.
-        when(productRepository.customsTernas()).thenReturn(List.of(
-                new CustomsTernaRow(null, "Cotton", "Casual wear", 40L),
-                new CustomsTernaRow("6204", "Cotton", "Casual wear", 20L)));
+        when(productRepository.customsTernas())
+                .thenReturn(List.of(new CustomsTernaRow(null, "Cotton", "Casual wear", 40L),
+                        new CustomsTernaRow("6204", "Cotton", "Casual wear", 20L)));
 
         assertThat(sync.sync()).isZero();
         verify(groupRepository, never()).save(any());
@@ -111,9 +110,9 @@ class CustomsDeclarationGroupSyncTest {
     void dosGrafiasDelMismoMaterialSonUnSoloGrupo() {
         // «Cotton» y «  cotton » son el mismo material tecleado por dos personas. Tratarlos como grupos
         // distintos partiría en dos un grupo que la aduana cuenta como uno, y se cobrarían 3 EUR de más.
-        when(productRepository.customsTernas()).thenReturn(List.of(
-                new CustomsTernaRow("620443", "Cotton", "Casual wear", 700L),
-                new CustomsTernaRow("6204.43", "  cotton ", "CASUAL  WEAR", 28L)));
+        when(productRepository.customsTernas())
+                .thenReturn(List.of(new CustomsTernaRow("620443", "Cotton", "Casual wear", 700L),
+                        new CustomsTernaRow("6204.43", "  cotton ", "CASUAL  WEAR", 28L)));
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
                 .thenReturn(Optional.empty());
 
@@ -125,9 +124,8 @@ class CustomsDeclarationGroupSyncTest {
     void noPisaElBorradorQueAlguienYaEstabaEditando() {
         // Un grupo sin aprobar puede estar a medio redactar. La siembra no es quién para deshacerlo: solo
         // rellena huecos y refresca la cuenta.
-        CustomsDeclarationGroupEntity aMedias = CustomsDeclarationGroupEntity.builder()
-                .hs6("620443").material("COTTON").usageCode("CASUAL WEAR")
-                .ename("Ladies dresses, woven").cname("女式连衣裙").productCount(1).build();
+        CustomsDeclarationGroupEntity aMedias = CustomsDeclarationGroupEntity.builder().hs6("620443").material("COTTON")
+                .usageCode("CASUAL WEAR").ename("Ladies dresses, woven").cname("女式连衣裙").productCount(1).build();
         when(productRepository.customsTernas())
                 .thenReturn(List.of(new CustomsTernaRow("620443", "Cotton", "Casual wear", 728L)));
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
@@ -153,8 +151,8 @@ class CustomsDeclarationGroupSyncTest {
     }
 
     private CustomsDeclarationGroupEntity guardado() {
-        ArgumentCaptor<CustomsDeclarationGroupEntity> captor =
-                ArgumentCaptor.forClass(CustomsDeclarationGroupEntity.class);
+        ArgumentCaptor<CustomsDeclarationGroupEntity> captor = ArgumentCaptor
+                .forClass(CustomsDeclarationGroupEntity.class);
         verify(groupRepository).save(captor.capture());
         return captor.getValue();
     }

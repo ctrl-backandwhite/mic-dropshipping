@@ -66,8 +66,7 @@ public class CatalogFillWriter {
     @SuppressWarnings("java:S107") // firma heredada: la corta con ProductTexts es la buena
     @Transactional
     public UUID write(IngestProductRequest req, String esTitle, String enTitle, String ptTitle, String zhTitle,
-            String descEs, String descEn, String descPt, String descZh,
-            Consumer<ProductEntity> enrich) {
+            String descEs, String descEn, String descPt, String descZh, Consumer<ProductEntity> enrich) {
         return persist(req, new ProductTexts(new LocalizedText(esTitle, descEs), new LocalizedText(enTitle, descEn),
                 new LocalizedText(ptTitle, descPt), new LocalizedText(zhTitle, descZh)), enrich);
     }

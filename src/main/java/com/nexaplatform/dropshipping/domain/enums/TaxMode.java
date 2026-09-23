@@ -13,8 +13,7 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum TaxMode {
 
-    DDP,
-    DDU;
+    DDP, DDU;
 
     /** Convierte el texto persistido/configurado; cualquier valor desconocido o nulo cae a {@link #DDP}. */
     public static TaxMode from(String value) {

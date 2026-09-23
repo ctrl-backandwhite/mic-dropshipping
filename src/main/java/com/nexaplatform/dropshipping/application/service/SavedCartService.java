@@ -73,10 +73,9 @@ public class SavedCartService {
             throw new NotFoundException("Product");
         }
         int qty = Math.max(1, dto.quantity());
-        SavedCartItemEntity entity = repo
-                .findByUserIdAndProductIdAndVariantId(userId, dto.productId(), dto.variantId())
-                .orElseGet(() -> SavedCartItemEntity.builder()
-                        .userId(userId).productId(dto.productId()).variantId(dto.variantId()).quantity(0).build());
+        SavedCartItemEntity entity = repo.findByUserIdAndProductIdAndVariantId(userId, dto.productId(), dto.variantId())
+                .orElseGet(() -> SavedCartItemEntity.builder().userId(userId).productId(dto.productId())
+                        .variantId(dto.variantId()).quantity(0).build());
         entity.setQuantity(Math.min(MAX_QTY, entity.getQuantity() + qty));
         applySnapshot(entity, dto);
         repo.save(entity);

@@ -56,6 +56,15 @@ public class ProductPriceTierEntity {
     @Column(length = 8)
     private String currency;
 
+    /**
+     * El recargo fijo de ESTE tramo, en la moneda del proveedor. Nulo = usa el del producto.
+     *
+     * <p>Nulo y cero no son lo mismo: cero es «este tramo no lleva recargo», nulo es «no tiene uno
+     * propio». Esa distincion es la que permite que los tramos ya cargados sigan cobrando lo mismo.
+     */
+    @Column(name = "surcharge_cny", precision = 12, scale = 4)
+    private BigDecimal surchargeCny;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

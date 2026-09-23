@@ -278,6 +278,14 @@ public class BulkProductDtoIn {
         private Integer maxQty;
         private BigDecimal unitPrice;
         private String currency;
+        /**
+         * El recargo fijo de ESTE tramo (23-sep-2026). Vacio = hereda el del producto.
+         *
+         * <p>Viaja en el bulk porque el bulk RECREA los tramos: sin este campo, reenviar la ficha
+         * borraria en silencio los recargos por tramo que alguien acababa de fijar a mano, y el
+         * export-import los perderia al cruzar de un entorno a otro.
+         */
+        private BigDecimal surchargeCny;
     }
 
     /**
@@ -310,6 +318,15 @@ public class BulkProductDtoIn {
         // DROP-675: peso/dimensiones reales POR VARIANTE (para envío). Si faltan, se usa el del producto.
         private Integer weightGrams;
         private Integer packageWeightGrams;
+
+        /**
+         * Envío nacional chino de esta variante, en CNY. Lo manda el scraper por tramos de peso.
+         *
+         * <p>Sin este campo el importe llegaba en el JSON y se perdía en silencio: Spring ignora
+         * lo que el DTO no declara, así que el ecommerce cobraba el envío del producto para todas
+         * las tallas, incluida la que pesa el doble.
+         */
+        private BigDecimal shippingCny;
         private Integer lengthMm;
         private Integer widthMm;
         private Integer heightMm;

@@ -205,7 +205,8 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
         if (connector.isEmpty()) {
             // DROP-701: honest failure instead of a fake "remote-xxxx" id.
             listing.setStatus(ERROR);
-            listing.setErrorMessage("La integración con '" + s.getPlatform() + "' aún no está disponible (Próximamente).");
+            listing.setErrorMessage(
+                    "La integración con '" + s.getPlatform() + "' aún no está disponible (Próximamente).");
         } else if (product == null) {
             listing.setStatus(ERROR);
             listing.setErrorMessage("Producto no encontrado: " + productId);

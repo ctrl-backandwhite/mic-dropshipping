@@ -64,16 +64,15 @@ public class CaptchaService {
 
     @PostConstruct
     void init() {
-        this.consumed = Caffeine.newBuilder()
-                .expireAfterWrite(Duration.ofSeconds(expirySeconds + 60))
-                .maximumSize(100_000)
-                .build();
+        this.consumed = Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(expirySeconds + 60))
+                .maximumSize(100_000).build();
         if (configuredKey != null && !configuredKey.isBlank()) {
             this.hmacKey = configuredKey.getBytes(StandardCharsets.UTF_8);
         } else {
             this.hmacKey = new byte[32];
             secureRandom.nextBytes(this.hmacKey);
-            log.info("CAPTCHA: sin nexadrop.captcha.hmac-key; se usa una clave aleatoria por arranque (OK en local/PRE)");
+            log.info(
+                    "CAPTCHA: sin nexadrop.captcha.hmac-key; se usa una clave aleatoria por arranque (OK en local/PRE)");
         }
     }
 
@@ -95,8 +94,8 @@ public class CaptchaService {
         long secretNumber = secureRandom.nextLong(maxNumber + 1);
         String challenge = sha256Hex(salt + secretNumber);
         String signature = hmacHex(challenge);
-        return CaptchaChallengeDtoOut.builder().algorithm(ALGORITHM).challenge(challenge)
-                .maxnumber(maxNumber).salt(salt).signature(signature).build();
+        return CaptchaChallengeDtoOut.builder().algorithm(ALGORITHM).challenge(challenge).maxnumber(maxNumber)
+                .salt(salt).signature(signature).build();
     }
 
     /**
@@ -171,14 +170,13 @@ public class CaptchaService {
     }
 
     private static String jsonString(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"")
+                .matcher(json);
         return m.find() ? m.group(1) : null;
     }
 
     private static String jsonNumber(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\"\\s*:\\s*(\\d+)").matcher(json);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"" + key + "\"\\s*:\\s*(\\d+)").matcher(json);
         return m.find() ? m.group(1) : null;
     }
 

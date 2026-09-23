@@ -10,15 +10,18 @@ import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel.Translations;
  */
 public enum SubscriptionPlanLabel {
 
-    NAME_FREE(new Translations("Gratis", "Free", "Grátis", "免费版", "Gratuit", "Kostenlos", "Gratis", "Gratis")),
-    NAME_STARTER(new Translations("Inicial", "Starter", "Inicial", "入门版", "Initial", "Starter", "Starter", "Starter")),
-    NAME_PRO(new Translations("Pro", "Pro", "Pro", "专业版", "Pro", "Pro", "Pro", "Pro")),
-    NAME_ENTERPRISE(new Translations("Empresa", "Enterprise", "Empresa", "企业版", "Entreprise", "Enterprise",
-            "Enterprise", "Enterprise")),
+    NAME_FREE(new Translations("Gratis", "Free", "Grátis", "免费版", "Gratuit", "Kostenlos", "Gratis",
+            "Gratis")), NAME_STARTER(
+                    new Translations("Inicial", "Starter", "Inicial", "入门版", "Initial", "Starter", "Starter",
+                            "Starter")), NAME_PRO(
+                                    new Translations("Pro", "Pro", "Pro", "专业版", "Pro", "Pro", "Pro",
+                                            "Pro")), NAME_ENTERPRISE(
+                                                    new Translations("Empresa", "Enterprise", "Empresa", "企业版",
+                                                            "Entreprise", "Enterprise", "Enterprise", "Enterprise")),
 
     PERIOD_MONTHLY(new Translations("Mensual", "Monthly", "Mensal", "按月", "Mensuel", "Monatlich", "Mensile",
-            "Maandelijks")),
-    PERIOD_YEARLY(new Translations("Anual", "Yearly", "Anual", "按年", "Annuel", "Jährlich", "Annuale", "Jaarlijks"));
+            "Maandelijks")), PERIOD_YEARLY(
+                    new Translations("Anual", "Yearly", "Anual", "按年", "Annuel", "Jährlich", "Annuale", "Jaarlijks"));
 
     private final Translations translations;
 

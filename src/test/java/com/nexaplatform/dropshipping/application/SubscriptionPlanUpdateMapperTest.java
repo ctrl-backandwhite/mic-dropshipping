@@ -22,18 +22,13 @@ class SubscriptionPlanUpdateMapperTest {
     void updateFromModel_copiesEditableFieldsAndPreservesIdentityAndAudit() {
         UUID id = UUID.randomUUID();
         Instant createdAt = Instant.parse("2020-01-01T00:00:00Z");
-        SubscriptionPlan target = SubscriptionPlan.builder()
-                .id(id).code("OLD").name("Old Plan").description("old")
-                .priceMonthlyCents(100).priceYearlyCents(1000).currency("USD")
-                .active(false).position(1)
-                .createdAt(createdAt).createdBy("creator").updatedBy("editor1")
-                .build();
+        SubscriptionPlan target = SubscriptionPlan.builder().id(id).code("OLD").name("Old Plan").description("old")
+                .priceMonthlyCents(100).priceYearlyCents(1000).currency("USD").active(false).position(1)
+                .createdAt(createdAt).createdBy("creator").updatedBy("editor1").build();
 
-        SubscriptionPlan source = SubscriptionPlan.builder()
-                .id(UUID.randomUUID()).code("NEW").name("New Plan").description("new")
-                .priceMonthlyCents(2000).priceYearlyCents(20000).currency("EUR")
-                .active(true).position(5)
-                .createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2")
+        SubscriptionPlan source = SubscriptionPlan.builder().id(UUID.randomUUID()).code("NEW").name("New Plan")
+                .description("new").priceMonthlyCents(2000).priceYearlyCents(20000).currency("EUR").active(true)
+                .position(5).createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2")
                 .build();
 
         mapper.updateFromModel(source, target);

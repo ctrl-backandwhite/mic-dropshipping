@@ -61,8 +61,7 @@ class Cov09GlobalExceptionHandlerTest {
         assertThat(subject.handleDomain(new DomainException("conflicto")).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
         // ConflictException es subclase de DomainException: el mismo 409, con su propio código.
-        assertThat(subject.handleDomain(new ConflictException("ya existe")).getBody().getCode())
-                .isEqualTo("CF001");
+        assertThat(subject.handleDomain(new ConflictException("ya existe")).getBody().getCode()).isEqualTo("CF001");
         assertThat(subject.handleBusiness(new BusinessException("no se puede")).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
         assertThat(subject.handleRateLimit(new RateLimitExceededException("demasiadas")).getStatusCode())
@@ -86,10 +85,8 @@ class Cov09GlobalExceptionHandlerTest {
     @Test
     void unCodigoSinCatalogarConservaElMensajeDeLaExcepcion() {
         // Si no, un error específico (p.ej. "confirma en la pasarela real") se perdería tras un genérico.
-        ApiResponseDtoOut<?> body = subject
-                .handleBusiness(new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
-                        "Esta recarga debe completarse en la pasarela de pago real"))
-                .getBody();
+        ApiResponseDtoOut<?> body = subject.handleBusiness(new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
+                "Esta recarga debe completarse en la pasarela de pago real")).getBody();
 
         assertThat(body.getMessage()).isEqualTo("Esta recarga debe completarse en la pasarela de pago real");
     }

@@ -56,10 +56,8 @@ public class AnuncioBusScheduler {
      */
     private final TransactionTemplate transaccion;
 
-    public AnuncioBusScheduler(ProductRepository productRepository,
-            ObjectProvider<CatalogoBusService> busCatalogo,
-            CatalogUseCase catalogUseCase,
-            PlatformTransactionManager gestorDeTransacciones) {
+    public AnuncioBusScheduler(ProductRepository productRepository, ObjectProvider<CatalogoBusService> busCatalogo,
+            CatalogUseCase catalogUseCase, PlatformTransactionManager gestorDeTransacciones) {
         this.productRepository = productRepository;
         this.busCatalogo = busCatalogo;
         this.catalogUseCase = catalogUseCase;
@@ -208,11 +206,11 @@ public class AnuncioBusScheduler {
         } catch (Exception e) {
             // Si ni siquiera se puede anotar el fallo, la base está caída: el producto sigue en
             // PENDIENTE y se reintentará. Lo grave sería perder el rastro, y el log lo conserva.
-            log.warn("Anuncio al bus: no se pudo anotar el fallo del producto {}: {}",
-                    pendiente.getExternalId(), e.toString());
+            log.warn("Anuncio al bus: no se pudo anotar el fallo del producto {}: {}", pendiente.getExternalId(),
+                    e.toString());
         }
-        log.debug("Anuncio al bus: falló el producto {} (intento {} de {}): {}",
-                pendiente.getExternalId(), intentos, maxIntentos, causa.toString());
+        log.debug("Anuncio al bus: falló el producto {} (intento {} de {}): {}", pendiente.getExternalId(), intentos,
+                maxIntentos, causa.toString());
     }
 
     /** El motivo se guarda para enseñarlo, no para depurar: una traza entera no cabe en un panel. */

@@ -35,8 +35,8 @@ class TotpUseCaseImplTest {
     @Test
     void setup_delegatesAndMapsSetupResultIntoDomainValue() {
         UUID userId = UUID.randomUUID();
-        when(totpService.setup(userId))
-                .thenReturn(new TotpService.SetupResult("JBSWY3DPEHPK3PXP", "otpauth://totp/NX036:u@x?secret=JBSWY3DPEHPK3PXP"));
+        when(totpService.setup(userId)).thenReturn(
+                new TotpService.SetupResult("JBSWY3DPEHPK3PXP", "otpauth://totp/NX036:u@x?secret=JBSWY3DPEHPK3PXP"));
 
         TotpSetup result = useCase.setup(userId);
 
@@ -49,8 +49,7 @@ class TotpUseCaseImplTest {
     void verifyAndEnable_delegatesWithOtpAndReturnsBackupCodes() {
         UUID userId = UUID.randomUUID();
         List<String> codes = List.of("AAAAA-BBBBB", "CCCCC-DDDDD");
-        when(totpService.verifyAndEnable(userId, "123456"))
-                .thenReturn(new TotpService.EnableResult(codes));
+        when(totpService.verifyAndEnable(userId, "123456")).thenReturn(new TotpService.EnableResult(codes));
 
         List<String> result = useCase.verifyAndEnable(userId, "123456");
 

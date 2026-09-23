@@ -251,9 +251,9 @@ class Cov05ProductRawConsumerTest {
         Map<String, Object> option = new LinkedHashMap<>();
         option.put("name_zh", "颜色");
         option.put("position", 0);
-        option.put("values", List.of(
-                Map.of("value_zh", "红色", "position", 0, "image_source_url", "https://cbu01.alicdn.com/red.jpg"),
-                Map.of("value_zh", "蓝色", "position", 1)));
+        option.put("values",
+                List.of(Map.of("value_zh", "红色", "position", 0, "image_source_url", "https://cbu01.alicdn.com/red.jpg"),
+                        Map.of("value_zh", "蓝色", "position", 1)));
         payload.put("options", List.of(option));
 
         consumer.onProductRaw(payload);

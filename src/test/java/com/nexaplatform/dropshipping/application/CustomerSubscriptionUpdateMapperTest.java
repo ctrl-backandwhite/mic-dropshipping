@@ -17,8 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class CustomerSubscriptionUpdateMapperTest {
 
-    private final CustomerSubscriptionUpdateMapper mapper =
-            Mappers.getMapper(CustomerSubscriptionUpdateMapper.class);
+    private final CustomerSubscriptionUpdateMapper mapper = Mappers.getMapper(CustomerSubscriptionUpdateMapper.class);
 
     @Test
     void updateFromModel_copiesEditableFieldsAndPreservesIdentityAndAudit() {
@@ -27,8 +26,8 @@ class CustomerSubscriptionUpdateMapperTest {
         Instant periodEnd = Instant.parse("2024-02-01T00:00:00Z");
 
         CustomerSubscription target = CustomerSubscription.builder().id(id).status(SubscriptionStatus.TRIALING)
-                .billingPeriod("MONTH").stripeCustomerId("cus_old").stripeSubscriptionId("sub_old")
-                .createdAt(created).createdBy("creator").build();
+                .billingPeriod("MONTH").stripeCustomerId("cus_old").stripeSubscriptionId("sub_old").createdAt(created)
+                .createdBy("creator").build();
 
         CustomerSubscription source = CustomerSubscription.builder().status(SubscriptionStatus.ACTIVE)
                 .billingPeriod("YEAR").stripeCustomerId("cus_new").stripeSubscriptionId("sub_new")

@@ -48,16 +48,14 @@ public class EuComplianceLookup {
     // La condición es `#result == null` y NO `#result.isEmpty()`: dentro de `unless`, Spring ya ha
     // desenvuelto el Optional, así que `#result` es el propio ResponsiblePersonView (o null si estaba
     // vacío). Llamar ahí a isEmpty() lanza SpelEvaluationException y convierte la lectura en un 500.
-    @Cacheable(cacheNames = CacheConfig.CACHE_EU_COMPLIANCE, key = "'responsible:' + #lang",
-            unless = "#result == null")
+    @Cacheable(cacheNames = CacheConfig.CACHE_EU_COMPLIANCE, key = "'responsible:' + #lang", unless = "#result == null")
     @Transactional(readOnly = true)
     public Optional<ResponsiblePersonView> responsible(String lang) {
         return responsibleRepository.findById(FILA_UNICA).map(e -> toView(e, lang));
     }
 
     /** Advertencias de seguridad que alcanzan a una categoría, heredadas de toda su cadena de ancestros. */
-    @Cacheable(cacheNames = CacheConfig.CACHE_EU_COMPLIANCE, key = "'warn:' + #categoryId + ':' + #lang",
-            sync = true)
+    @Cacheable(cacheNames = CacheConfig.CACHE_EU_COMPLIANCE, key = "'warn:' + #categoryId + ':' + #lang", sync = true)
     @Transactional(readOnly = true)
     public List<String> safetyWarnings(UUID categoryId, String lang) {
         if (categoryId == null) {
@@ -73,9 +71,8 @@ public class EuComplianceLookup {
         // permite contactar, así que cuenta como incompleta aunque el resto esté relleno.
         boolean completo = relleno(e.getName()) && relleno(e.getAddressLine()) && relleno(e.getPostalCode())
                 && relleno(e.getCity()) && relleno(e.getCountry()) && relleno(e.getEmail());
-        return new ResponsiblePersonView(e.getName(), e.getAddressLine(), e.getPostalCode(), e.getCity(),
-                e.getRegion(), e.getCountry(), e.getEmail(), e.getPhone(), rol.name(), rol.label(lang),
-                e.isEnabled(), completo);
+        return new ResponsiblePersonView(e.getName(), e.getAddressLine(), e.getPostalCode(), e.getCity(), e.getRegion(),
+                e.getCountry(), e.getEmail(), e.getPhone(), rol.name(), rol.label(lang), e.isEnabled(), completo);
     }
 
     static boolean relleno(String s) {

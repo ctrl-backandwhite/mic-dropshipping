@@ -189,8 +189,7 @@ class Cov01CatalogBulkImportTest {
         managed.setCategory(category);
 
         when(categoryRepository.findBySlug(CATEGORY_SLUG)).thenReturn(Optional.of(category));
-        when(categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(CATEGORY_ID))
-                .thenReturn(List.of());
+        when(categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(CATEGORY_ID)).thenReturn(List.of());
         when(supplierRepository.findAll()).thenReturn(List.of(defaultSupplier));
         when(supplierRepository.save(any(SupplierEntity.class))).thenAnswer(inv -> {
             SupplierEntity s = inv.getArgument(0);
@@ -249,8 +248,8 @@ class Cov01CatalogBulkImportTest {
         existing.setId(SUPPLIER_ID);
         when(supplierRepository.findBySourceAndExternalId("1688", "S1")).thenReturn(Optional.of(existing));
 
-        SupplierEntity saved = useCase.upsertSupplier(new IngestSupplierRequest("1688", "S1", "Nuevo", null, null, null,
-                null, null, false, false, null));
+        SupplierEntity saved = useCase.upsertSupplier(
+                new IngestSupplierRequest("1688", "S1", "Nuevo", null, null, null, null, null, false, false, null));
 
         assertThat(saved.getId()).isEqualTo(SUPPLIER_ID);
         assertThat(saved.getName()).isEqualTo("Nuevo");
@@ -261,8 +260,8 @@ class Cov01CatalogBulkImportTest {
         // Todo el catálogo viene de 1688: sin país no se puede declarar el origen en aduana.
         when(supplierRepository.findBySourceAndExternalId("1688", "S2")).thenReturn(Optional.empty());
 
-        SupplierEntity saved = useCase.upsertSupplier(new IngestSupplierRequest("1688", "S2", "Fábrica", null, null,
-                null, null, null, false, false, null));
+        SupplierEntity saved = useCase.upsertSupplier(
+                new IngestSupplierRequest("1688", "S2", "Fábrica", null, null, null, null, null, false, false, null));
 
         assertThat(saved.getCountry()).isEqualTo("CN");
     }
@@ -271,12 +270,10 @@ class Cov01CatalogBulkImportTest {
 
     @Test
     void crearUnaCategoriaConSlugYaExistenteSeRechaza() {
-        IngestCategoryRequest req = new IngestCategoryRequest(CATEGORY_SLUG, null, "1688", null, "女装", 1, "tag",
-                null);
+        IngestCategoryRequest req = new IngestCategoryRequest(CATEGORY_SLUG, null, "1688", null, "女装", 1, "tag", null);
 
         assertThatThrownBy(() -> useCase.createCategoryRejectingDuplicateSlug(req))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining(CATEGORY_SLUG);
+                .isInstanceOf(BusinessException.class).hasMessageContaining(CATEGORY_SLUG);
     }
 
     @Test
@@ -284,8 +281,8 @@ class Cov01CatalogBulkImportTest {
         when(categoryRepository.findBySlug("zapatos")).thenReturn(Optional.empty());
         when(categoryRepository.save(any(CategoryEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        CategoryEntity saved = useCase.upsertCategory(new IngestCategoryRequest("zapatos", null, null, null, "鞋", 3,
-                "shoe", null));
+        CategoryEntity saved = useCase
+                .upsertCategory(new IngestCategoryRequest("zapatos", null, null, null, "鞋", 3, "shoe", null));
 
         assertThat(saved.isActive()).isTrue();
         assertThat(saved.getSource()).isEqualTo("1688");
@@ -302,8 +299,8 @@ class Cov01CatalogBulkImportTest {
         when(categoryRepository.findBySlug("zapatos")).thenReturn(Optional.of(existing));
         when(categoryRepository.save(any(CategoryEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        CategoryEntity saved = useCase.upsertCategory(new IngestCategoryRequest("zapatos", null, "1688", null, "鞋", 1,
-                "shoe", Map.of("es", "Zapatos")));
+        CategoryEntity saved = useCase.upsertCategory(
+                new IngestCategoryRequest("zapatos", null, "1688", null, "鞋", 1, "shoe", Map.of("es", "Zapatos")));
 
         assertThat(saved.getTranslations()).hasSize(1);
         assertThat(saved.getTranslations().get(0).getName()).isEqualTo("Zapatos");
@@ -331,8 +328,8 @@ class Cov01CatalogBulkImportTest {
         when(categoryRepository.findBySlug("zapatos")).thenReturn(Optional.empty());
         when(categoryRepository.save(any(CategoryEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        useCase.upsertCategory(new IngestCategoryRequest("zapatos", null, "1688", null, "鞋", 1, "shoe",
-                Map.of("es", "Zapatos")));
+        useCase.upsertCategory(
+                new IngestCategoryRequest("zapatos", null, "1688", null, "鞋", 1, "shoe", Map.of("es", "Zapatos")));
 
         verify(categoryRepository, times(2)).save(any(CategoryEntity.class));
         verify(categoryIndexer).indexCategory(any());
@@ -342,8 +339,8 @@ class Cov01CatalogBulkImportTest {
 
     private static IngestProductRequest ingestRequest(List<IngestImage> images, List<IngestVariantOption> options,
             List<IngestVariant> variants, List<IngestPriceTier> tiers) {
-        return new IngestProductRequest("1688", "OFFER-1", "标题", null, null, null, null, new BigDecimal("9.90"),
-                null, 500, null, null, null, null, null, null, null, images, options, variants, tiers);
+        return new IngestProductRequest("1688", "OFFER-1", "标题", null, null, null, null, new BigDecimal("9.90"), null,
+                500, null, null, null, null, null, null, null, images, options, variants, tiers);
     }
 
     @Test
@@ -354,8 +351,8 @@ class Cov01CatalogBulkImportTest {
         existing.getImages().add(ProductImageEntity.builder().product(existing).sourceUrl("vieja-2.jpg").build());
         when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-1")).thenReturn(Optional.of(existing));
 
-        ProductEntity saved = useCase.upsertProduct(
-                ingestRequest(List.of(new IngestImage("nueva.jpg", 0, "MAIN")), null, null, null));
+        ProductEntity saved = useCase
+                .upsertProduct(ingestRequest(List.of(new IngestImage("nueva.jpg", 0, "MAIN")), null, null, null));
 
         assertThat(saved.getImages()).hasSize(1);
         assertThat(saved.getImages().get(0).getSourceUrl()).isEqualTo("nueva.jpg");
@@ -404,8 +401,7 @@ class Cov01CatalogBulkImportTest {
         ProductEntity saved = useCase.upsertProduct(
                 ingestRequest(List.of(new IngestImage("principal.jpg", 0, "MAIN")), options, null, null));
 
-        assertThat(saved.getVariantOptions().get(0).getValues().get(0).getImageSourceUrl())
-                .isEqualTo("principal.jpg");
+        assertThat(saved.getVariantOptions().get(0).getValues().get(0).getImageSourceUrl()).isEqualTo("principal.jpg");
         assertThat(saved.getVariantOptions().get(0).getValues().get(1).getImageSourceUrl()).isEqualTo("azul.jpg");
     }
 
@@ -771,8 +767,7 @@ class Cov01CatalogBulkImportTest {
         // como traducción española, inglesa y portuguesa (eso lo cubre CatalogFillWriterTest).
         BulkProductDtoIn r = validRow();
         r.setTitleEs(null);
-        r.setTranslations(Map.of("zh",
-                new BulkProductDtoIn.BulkTranslation("破洞牛仔裤男春季2025浅色修身弹力九分裤", null, "弹力牛仔裤")));
+        r.setTranslations(Map.of("zh", new BulkProductDtoIn.BulkTranslation("破洞牛仔裤男春季2025浅色修身弹力九分裤", null, "弹力牛仔裤")));
 
         useCase.createProductManual(r);
 
@@ -814,8 +809,8 @@ class Cov01CatalogBulkImportTest {
     void elPrecioSeTomaDelTramoMasBaratoCuandoNoVieneExplicito() {
         BulkProductDtoIn r = validRow();
         r.setPrice(null);
-        r.setTieredPricing(List.of(new BulkProductDtoIn.BulkTier(1, 9, new BigDecimal("15.00"), null),
-                new BulkProductDtoIn.BulkTier(10, null, new BigDecimal("11.00"), null)));
+        r.setTieredPricing(List.of(new BulkProductDtoIn.BulkTier(1, 9, new BigDecimal("15.00"), null, null),
+                new BulkProductDtoIn.BulkTier(10, null, new BigDecimal("11.00"), null, null)));
 
         useCase.createProductManual(r);
 
@@ -965,8 +960,7 @@ class Cov01CatalogBulkImportTest {
 
         useCase.createProductManual(r);
 
-        ArgumentCaptor<ProductSpecificationEntity> captor = ArgumentCaptor
-                .forClass(ProductSpecificationEntity.class);
+        ArgumentCaptor<ProductSpecificationEntity> captor = ArgumentCaptor.forClass(ProductSpecificationEntity.class);
         verify(productSpecificationRepository, times(2)).save(captor.capture());
         assertThat(captor.getAllValues().get(0).getPosition()).isZero();
         assertThat(captor.getAllValues().get(0).getLocale()).isEqualTo("es");

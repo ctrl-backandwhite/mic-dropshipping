@@ -70,8 +70,7 @@ class ProductSeoMetadataTest {
 
         ProductSeoMetadata.generate(p);
 
-        assertThat(p.getTranslations().get(0).getMetaTitle())
-                .hasSize(ProductSeoMetadata.TITLE_MAX);
+        assertThat(p.getTranslations().get(0).getMetaTitle()).hasSize(ProductSeoMetadata.TITLE_MAX);
     }
 
     // ---------------------------------------------------------------- descripción

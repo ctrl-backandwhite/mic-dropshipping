@@ -52,9 +52,8 @@ class PromotionServiceTest {
     private static final BigDecimal PRECIO = new BigDecimal("100.00");
 
     private static PromotionEntity promo(String name, String percent, PromotionScope scope, PromotionKind kind) {
-        return PromotionEntity.builder().id(UUID.randomUUID()).name(name)
-                .percentOff(new BigDecimal(percent)).scope(scope).kind(kind)
-                .active(true).createdAt(Instant.now()).build();
+        return PromotionEntity.builder().id(UUID.randomUUID()).name(name).percentOff(new BigDecimal(percent))
+                .scope(scope).kind(kind).active(true).createdAt(Instant.now()).build();
     }
 
     private static ProductEntity producto(UUID categoryId) {
@@ -98,13 +97,11 @@ class PromotionServiceTest {
 
     @Test
     void unDescuentoDeImporteFijoRestaEseImporte() {
-        PromotionEntity p = PromotionEntity.builder().id(UUID.randomUUID()).name("5 € menos")
-                .amountOffCents(500).scope(PromotionScope.ALL).kind(PromotionKind.FLASH)
-                .active(true).createdAt(Instant.now()).build();
+        PromotionEntity p = PromotionEntity.builder().id(UUID.randomUUID()).name("5 € menos").amountOffCents(500)
+                .scope(PromotionScope.ALL).kind(PromotionKind.FLASH).active(true).createdAt(Instant.now()).build();
         live(p);
 
-        assertThat(service.applyAutomatic(producto(null), PRECIO, null).finalAmount())
-                .isEqualByComparingTo("95.00");
+        assertThat(service.applyAutomatic(producto(null), PRECIO, null).finalAmount()).isEqualByComparingTo("95.00");
     }
 
     // ─────────────────────── regla 1: gana la mayor, no se acumulan ───────────────────────
@@ -112,7 +109,7 @@ class PromotionServiceTest {
     @Test
     void conDosRebajasAplicablesGanaLaQueMasDescuenta() {
         live(promo("Invierno", "20", PromotionScope.ALL, PromotionKind.SEASONAL),
-             promo("Liquidación", "45", PromotionScope.ALL, PromotionKind.CLEARANCE));
+                promo("Liquidación", "45", PromotionScope.ALL, PromotionKind.CLEARANCE));
 
         Discounted d = service.applyAutomatic(producto(null), PRECIO, null);
 
@@ -174,7 +171,7 @@ class PromotionServiceTest {
         // Si el suelo se aplicara ANTES, la del 80% quedaría recortada a 60 y perdería frente a la del
         // 30% (que da 70). Elegir primero y recortar después conserva la más ventajosa.
         live(promo("Suave", "30", PromotionScope.ALL, PromotionKind.SEASONAL),
-             promo("Agresiva", "80", PromotionScope.ALL, PromotionKind.CLEARANCE));
+                promo("Agresiva", "80", PromotionScope.ALL, PromotionKind.CLEARANCE));
 
         Discounted d = service.applyAutomatic(producto(null), PRECIO, new BigDecimal("60.00"));
 
@@ -190,8 +187,8 @@ class PromotionServiceTest {
         ProductEntity fuera = producto(null);
         PromotionEntity p = promo("Solo este", "50", PromotionScope.PRODUCT, PromotionKind.FLASH);
         live(p);
-        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
-                PromotionTargetEntity.builder().promotionId(p.getId()).productId(dentro.getId()).build()));
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(
+                List.of(PromotionTargetEntity.builder().promotionId(p.getId()).productId(dentro.getId()).build()));
 
         assertThat(service.applyAutomatic(dentro, PRECIO, null).applies()).isTrue();
         assertThat(service.applyAutomatic(fuera, PRECIO, null).applies()).isFalse();
@@ -213,8 +210,8 @@ class PromotionServiceTest {
 
         PromotionEntity p = promo("Ropa de mujer -25%", "25", PromotionScope.CATEGORY, PromotionKind.SEASONAL);
         live(p);
-        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
-                PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(madre).build()));
+        when(targetRepository.findByPromotionId(p.getId()))
+                .thenReturn(List.of(PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(madre).build()));
 
         assertThat(service.applyAutomatic(producto(hija), PRECIO, null).applies()).isTrue();
     }
@@ -229,8 +226,8 @@ class PromotionServiceTest {
 
         PromotionEntity p = promo("Calzado", "30", PromotionScope.CATEGORY, PromotionKind.SEASONAL);
         live(p);
-        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
-                PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(objetivo).build()));
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(
+                List.of(PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(objetivo).build()));
 
         assertThat(service.applyAutomatic(producto(ajena), PRECIO, null).applies()).isFalse();
     }
@@ -268,8 +265,8 @@ class PromotionServiceTest {
 
     @Test
     void unaVigenciaAbiertaPorLosDosLadosEstaViva() {
-        assertThat(promo("Permanente", "10", PromotionScope.ALL, PromotionKind.SEASONAL)
-                .isLiveAt(Instant.now())).isTrue();
+        assertThat(promo("Permanente", "10", PromotionScope.ALL, PromotionKind.SEASONAL).isLiveAt(Instant.now()))
+                .isTrue();
     }
 
     // ─────────────────────── cupones ───────────────────────
@@ -330,8 +327,7 @@ class PromotionServiceTest {
         PromotionEntity p = cupon("VIEJO");
         p.setEndsAt(Instant.now().minus(1, ChronoUnit.DAYS));
 
-        assertThat(service.checkCoupon("VIEJO", UUID.randomUUID(), 10_00).reason())
-                .isEqualTo("Ese cupón ha caducado");
+        assertThat(service.checkCoupon("VIEJO", UUID.randomUUID(), 10_00).reason()).isEqualTo("Ese cupón ha caducado");
     }
 
     @Test
@@ -431,8 +427,8 @@ class PromotionServiceTest {
         ProductEntity dentro = producto(null);
         ProductEntity fuera = producto(null);
         when(promotionRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
-        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
-                PromotionTargetEntity.builder().productId(dentro.getId()).build()));
+        when(targetRepository.findByPromotionId(p.getId()))
+                .thenReturn(List.of(PromotionTargetEntity.builder().productId(dentro.getId()).build()));
 
         java.util.function.Predicate<ProductEntity> f = service.reachFilter(p.getId()).orElseThrow();
         assertThat(f.test(dentro)).isTrue();
@@ -454,11 +450,11 @@ class PromotionServiceTest {
 
         PromotionEntity p = promo("Ropa", "25", PromotionScope.CATEGORY, PromotionKind.SEASONAL);
         when(promotionRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
-        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
-                PromotionTargetEntity.builder().categoryId(padre).build()));
+        when(targetRepository.findByPromotionId(p.getId()))
+                .thenReturn(List.of(PromotionTargetEntity.builder().categoryId(padre).build()));
 
         java.util.function.Predicate<ProductEntity> f = service.reachFilter(p.getId()).orElseThrow();
-        assertThat(f.test(producto(hijo))).isTrue();      // subcategoría de la objetivo
+        assertThat(f.test(producto(hijo))).isTrue(); // subcategoría de la objetivo
         assertThat(f.test(producto(UUID.randomUUID()))).isFalse(); // categoría ajena
     }
 

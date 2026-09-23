@@ -69,7 +69,7 @@ class VideoMirrorServiceTest {
      */
     @Test
     void unMp4DeVerdadSeReconocePorSusBytes() {
-        byte[] mp4 = new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'};
+        byte[] mp4 = new byte[]{0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'};
 
         assertThat(VideoMirrorService.esMp4(mp4)).isTrue();
     }
@@ -92,7 +92,7 @@ class VideoMirrorServiceTest {
 
     @Test
     void unContenidoDemasiadoCortoNoRevientaLaComprobacion() {
-        assertThat(VideoMirrorService.esMp4(new byte[] {0, 0, 0})).isFalse();
+        assertThat(VideoMirrorService.esMp4(new byte[]{0, 0, 0})).isFalse();
         assertThat(VideoMirrorService.esMp4(new byte[0])).isFalse();
     }
 
@@ -206,8 +206,8 @@ class VideoMirrorServiceTest {
         service.mirrorProductsAsync(List.of());
         service.mirrorProductsAsync(null);
 
-        verify(productRepository, never()).findByIdInAndVideoMirrorStatus(anyList(), org.mockito.ArgumentMatchers
-                .any(MirrorStatus.class));
+        verify(productRepository, never()).findByIdInAndVideoMirrorStatus(anyList(),
+                org.mockito.ArgumentMatchers.any(MirrorStatus.class));
     }
 
     // ────────────────────────────────────────────── la cola al guardar el producto

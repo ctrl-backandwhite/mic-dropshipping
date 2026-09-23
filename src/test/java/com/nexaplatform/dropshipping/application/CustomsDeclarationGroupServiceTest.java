@@ -60,8 +60,8 @@ class CustomsDeclarationGroupServiceTest {
     void usaLaDescripcionDelGrupoCuandoEstaAprobado() {
         ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Men's woven cotton trousers").approvedAt(Instant.now()).build()));
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder().ename("Men's woven cotton trousers")
+                        .approvedAt(Instant.now()).build()));
 
         assertThat(service.describeFor(p)).isEqualTo("Men's woven cotton trousers");
     }
@@ -72,8 +72,8 @@ class CustomsDeclarationGroupServiceTest {
         // menos. Es la salvaguarda que impide que cargar productos abarate el arancel por accidente.
         ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Men's woven cotton trousers").approvedAt(null).build()));
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder().ename("Men's woven cotton trousers")
+                        .approvedAt(null).build()));
 
         assertThat(service.describeFor(p)).isEqualTo("Blue denim jeans");
     }
@@ -81,8 +81,7 @@ class CustomsDeclarationGroupServiceTest {
     @Test
     void sinGrupoUsaElTituloDelProducto() {
         ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
-        when(groupRepository.findByHs6AndMaterialAndUsageCode(any(), any(), any()))
-                .thenReturn(Optional.empty());
+        when(groupRepository.findByHs6AndMaterialAndUsageCode(any(), any(), any())).thenReturn(Optional.empty());
 
         assertThat(service.describeFor(p)).isEqualTo("Blue denim jeans");
     }
@@ -103,8 +102,8 @@ class CustomsDeclarationGroupServiceTest {
         // como grupos separados partiría en dos un grupo que la aduana cuenta como uno.
         ProductEntity p = productoCon("6204431234", "  cotton ", "casual  wear", "Blue denim jeans");
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Men's woven cotton trousers").approvedAt(Instant.now()).build()));
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder().ename("Men's woven cotton trousers")
+                        .approvedAt(Instant.now()).build()));
 
         assertThat(service.describeFor(p)).isEqualTo("Men's woven cotton trousers");
     }
@@ -160,8 +159,8 @@ class CustomsDeclarationGroupServiceTest {
         when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
         when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(350);
         when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Men's woven cotton trousers").approvedAt(Instant.now()).build()));
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder().ename("Men's woven cotton trousers")
+                        .approvedAt(Instant.now()).build()));
         ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
 
         assertThat(service.describeFor(p, "ES")).isEqualTo("Men's woven cotton trousers");
@@ -176,7 +175,8 @@ class CustomsDeclarationGroupServiceTest {
         String materialLargo = "COTTON ".repeat(30).trim();
         ProductEntity p = productoCon("620443", materialLargo, "Casual wear", "Blue denim jeans");
         when(groupRepository.findByHs6AndMaterialAndUsageCode(eq("620443"), argThat(m -> m.length() == 120),
-                eq("CASUAL WEAR"))).thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                eq("CASUAL WEAR")))
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
                         .ename("Women's or girls' dresses, of synthetic fibres").approvedAt(Instant.now()).build()));
 
         assertThat(service.describeFor(p)).isEqualTo("Women's or girls' dresses, of synthetic fibres");
@@ -190,10 +190,9 @@ class CustomsDeclarationGroupServiceTest {
         ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
         when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
         when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
-        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Women's or girls' dresses, of synthetic fibres").cname("女式合成纤维制连衣裙")
-                        .approvedAt(Instant.now()).build()));
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR")).thenReturn(Optional
+                .of(CustomsDeclarationGroupEntity.builder().ename("Women's or girls' dresses, of synthetic fibres")
+                        .cname("女式合成纤维制连衣裙").approvedAt(Instant.now()).build()));
 
         assertThat(service.describeZhFor(p, "ES")).isEqualTo("女式合成纤维制连衣裙");
     }
@@ -205,10 +204,9 @@ class CustomsDeclarationGroupServiceTest {
         ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
         when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
         when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
-        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Women's or girls' dresses, of synthetic fibres").cname("女式合成纤维制连衣裙")
-                        .approvedAt(null).build()));
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR")).thenReturn(Optional
+                .of(CustomsDeclarationGroupEntity.builder().ename("Women's or girls' dresses, of synthetic fibres")
+                        .cname("女式合成纤维制连衣裙").approvedAt(null).build()));
 
         assertThat(service.describeZhFor(p, "ES")).isNull();
     }
@@ -220,10 +218,9 @@ class CustomsDeclarationGroupServiceTest {
         ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
         when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
         when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
-        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR"))
-                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
-                        .ename("Women's or girls' dresses, of synthetic fibres").cname("Dresses")
-                        .approvedAt(Instant.now()).build()));
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR")).thenReturn(Optional
+                .of(CustomsDeclarationGroupEntity.builder().ename("Women's or girls' dresses, of synthetic fibres")
+                        .cname("Dresses").approvedAt(Instant.now()).build()));
 
         assertThat(service.describeZhFor(p, "ES")).isNull();
     }

@@ -50,8 +50,7 @@ class PartnerWebhookDispatcherServiceTest {
     @InjectMocks
     PartnerWebhookDispatcherService service;
 
-    private static final String SELECT_APPS =
-            "SELECT id FROM partner_app WHERE active = true AND webhook_url IS NOT NULL AND webhook_url <> ''";
+    private static final String SELECT_APPS = "SELECT id FROM partner_app WHERE active = true AND webhook_url IS NOT NULL AND webhook_url <> ''";
 
     // ----- publish -----
 
@@ -59,14 +58,12 @@ class PartnerWebhookDispatcherServiceTest {
     void publish_enqueuesOnePendingRowPerActivePartnerApp() {
         UUID app1 = UUID.randomUUID();
         UUID app2 = UUID.randomUUID();
-        when(jdbc.queryForList(SELECT_APPS)).thenReturn(List.of(
-                Map.of("id", app1), Map.of("id", app2)));
+        when(jdbc.queryForList(SELECT_APPS)).thenReturn(List.of(Map.of("id", app1), Map.of("id", app2)));
 
         service.publish("order.created", "evt-1", Map.of("orderId", "1"));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc, times(2)).update(sql.capture(),
-                any(), any(), any(), any());
+        verify(jdbc, times(2)).update(sql.capture(), any(), any(), any(), any());
         assertThat(sql.getValue()).contains("INSERT INTO partner_webhook_delivery");
         assertThat(sql.getValue()).contains("'PENDING'");
     }
@@ -91,10 +88,8 @@ class PartnerWebhookDispatcherServiceTest {
         // (id, partner_app_id, event_type, payload)
         verify(jdbc).update(anyString(), any(UUID.class), eq(app1), eq("order.shipped"), args.capture());
         String payload = (String) args.getValue();
-        assertThat(payload).contains("\"id\":\"evt-9\"")
-                .contains("\"type\":\"order.shipped\"")
-                .contains("\"data\":{\"k\":\"v\"}")
-                .contains("\"createdAt\"");
+        assertThat(payload).contains("\"id\":\"evt-9\"").contains("\"type\":\"order.shipped\"")
+                .contains("\"data\":{\"k\":\"v\"}").contains("\"createdAt\"");
     }
 
     // ----- dispatchTestToAll -----
@@ -134,8 +129,7 @@ class PartnerWebhookDispatcherServiceTest {
         verify(jdbc).update(anyString(), eq("RETRY"), eq(1), a.capture(), anyString(), a.capture(), eq(id));
         Timestamp next = nextRetryArg(a.getAllValues());
         assertThat(next).isNotNull();
-        assertThat(next.toInstant()).isBetween(
-                Instant.now().plus(50, ChronoUnit.SECONDS),
+        assertThat(next.toInstant()).isBetween(Instant.now().plus(50, ChronoUnit.SECONDS),
                 Instant.now().plus(70, ChronoUnit.SECONDS));
     }
 

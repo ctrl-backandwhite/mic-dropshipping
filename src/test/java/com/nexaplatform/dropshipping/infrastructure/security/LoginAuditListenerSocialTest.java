@@ -35,11 +35,10 @@ class LoginAuditListenerSocialTest {
     @Test
     @DisplayName("acceso con Google: registra la entrada pero NO avisa desde aquí")
     void social_no_avisa() {
-        OAuth2User principal = new DefaultOAuth2User(
-                AuthorityUtils.createAuthorityList("ROLE_USER"),
+        OAuth2User principal = new DefaultOAuth2User(AuthorityUtils.createAuthorityList("ROLE_USER"),
                 Map.of("email", "cliente@nx036.com", "sub", "123"), "sub");
-        Authentication auth = new OAuth2AuthenticationToken(principal,
-                AuthorityUtils.createAuthorityList("ROLE_USER"), "google");
+        Authentication auth = new OAuth2AuthenticationToken(principal, AuthorityUtils.createAuthorityList("ROLE_USER"),
+                "google");
 
         oyente.onInteractiveSuccess(new InteractiveAuthenticationSuccessEvent(auth, getClass()));
 
@@ -51,8 +50,8 @@ class LoginAuditListenerSocialTest {
     @Test
     @DisplayName("acceso con contraseña: sí avisa desde aquí, como siempre")
     void con_contrasena_si_avisa() {
-        Authentication auth = new UsernamePasswordAuthenticationToken(
-                "cliente@nx036.com", "n/a", AuthorityUtils.createAuthorityList("ROLE_USER"));
+        Authentication auth = new UsernamePasswordAuthenticationToken("cliente@nx036.com", "n/a",
+                AuthorityUtils.createAuthorityList("ROLE_USER"));
 
         oyente.onInteractiveSuccess(new InteractiveAuthenticationSuccessEvent(auth, getClass()));
 

@@ -82,9 +82,11 @@ class Cov08FulfillmentShipmentsTest {
         shipmentRepository = mock(OrderShipmentRepository.class);
         shipmentItemRepository = mock(OrderShipmentItemRepository.class);
         trackingViewMapper = mock(TrackingViewMapper.class);
-        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class),
-                mock(OrderEmailService.class), new ObjectMapper(), mock(YunExpressEventCipher.class),
-                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, shipmentItemRepository, trackingViewMapper, readyPurchases());
+        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider),
+                mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
+                new ObjectMapper(), mock(YunExpressEventCipher.class), mock(OpsAlertService.class),
+                mock(NotificationUseCase.class), shipmentRepository, shipmentItemRepository, trackingViewMapper,
+                readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -104,13 +106,14 @@ class Cov08FulfillmentShipmentsTest {
                 new FulfillmentProvider.DeclaredReceiver("Ana", "López", "ES", "Zaragoza", "Zaragoza",
                         List.of("Calle Mayor 1"), "50001", "+34600000000", "ana@example.com"),
                 List.of(new FulfillmentProvider.DeclaredLine("Cotton T-shirt", "棉T恤", "610910", 2,
-                        new BigDecimal("15.00"), "USD", new BigDecimal("0.400"), "cotton", "daily use",
-                        "SKU-1", "https://detail.1688.com/offer/1.html")));
+                        new BigDecimal("15.00"), "USD", new BigDecimal("0.400"), "cotton", "daily use", "SKU-1",
+                        "https://detail.1688.com/offer/1.html")));
     }
 
     /** La misma declaración tal como queda archivada en la columna jsonb del bulto. */
     private static Map<String, Object> declaracionArchivada() {
-        return new ObjectMapper().convertValue(declaracion(), new TypeReference<Map<String, Object>>() { });
+        return new ObjectMapper().convertValue(declaracion(), new TypeReference<Map<String, Object>>() {
+        });
     }
 
     private static OrderShipmentEntity shipment(int sequenceNo, String waybill, String tracking) {
@@ -129,20 +132,20 @@ class Cov08FulfillmentShipmentsTest {
 
     @Test
     void cadaBultoSeDaDeAltaConSuGuiaYSuPesoReal() {
-        when(provider.createShipments(order)).thenReturn(List.of(
-                new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01"),
-                new FulfillmentResult("YunExpress", "YT-2", "WB-2", 15, 2, 700, 900, "CH01")));
+        when(provider.createShipments(order))
+                .thenReturn(List.of(new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01"),
+                        new FulfillmentResult("YunExpress", "YT-2", "WB-2", 15, 2, 700, 900, "CH01")));
 
         service.createShipment(order.getId());
 
         ArgumentCaptor<OrderShipmentEntity> saved = ArgumentCaptor.forClass(OrderShipmentEntity.class);
         verify(shipmentRepository, times(2)).save(saved.capture());
         assertThat(saved.getAllValues()).extracting(OrderShipmentEntity::getSequenceNo).containsExactly(1, 2);
-        assertThat(saved.getAllValues()).extracting(OrderShipmentEntity::getWaybillNumber)
-                .containsExactly("WB-1", "WB-2");
+        assertThat(saved.getAllValues()).extracting(OrderShipmentEntity::getWaybillNumber).containsExactly("WB-1",
+                "WB-2");
         assertThat(saved.getAllValues()).extracting(OrderShipmentEntity::getWeightGrams).containsExactly(500, 700);
-        assertThat(saved.getAllValues()).extracting(OrderShipmentEntity::getDeclaredValueCents)
-                .containsExactly(1200, 900);
+        assertThat(saved.getAllValues()).extracting(OrderShipmentEntity::getDeclaredValueCents).containsExactly(1200,
+                900);
     }
 
     @Test
@@ -150,9 +153,9 @@ class Cov08FulfillmentShipmentsTest {
         // Los listados, el email y la factura siguen enseñando UNA guía: la del primer bulto. El detalle
         // paquete a paquete vive aparte, así que si esto cambiara, el cliente vería una guía distinta de
         // la que le llegó por correo.
-        when(provider.createShipments(order)).thenReturn(List.of(
-                new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01"),
-                new FulfillmentResult("YunExpress", "YT-2", "WB-2", 15, 2, 700, 900, "CH01")));
+        when(provider.createShipments(order))
+                .thenReturn(List.of(new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01"),
+                        new FulfillmentResult("YunExpress", "YT-2", "WB-2", 15, 2, 700, 900, "CH01")));
 
         service.createShipment(order.getId());
 
@@ -293,9 +296,8 @@ class Cov08FulfillmentShipmentsTest {
         when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(uno));
         when(provider.track(eq("WB-1"), any(), eq("ES"))).thenReturn(snapshot(OrderStatus.SHIPPED, "En tránsito"));
         when(trackingRepository.findByShipmentIdOrderByOccurredAtAsc(uno.getId()))
-                .thenReturn(List.of(OrderTrackingEventEntity.builder().orderId(order.getId())
-                        .shipmentId(uno.getId()).status(OrderStatus.SHIPPED.name()).description("En tránsito")
-                        .build()));
+                .thenReturn(List.of(OrderTrackingEventEntity.builder().orderId(order.getId()).shipmentId(uno.getId())
+                        .status(OrderStatus.SHIPPED.name()).description("En tránsito").build()));
 
         service.pollEvents(order.getId());
 
@@ -344,8 +346,8 @@ class Cov08FulfillmentShipmentsTest {
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of(deUno));
         when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
         when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(uno, dos));
-        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList()))
-                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of(), List.of()));
+        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList())).thenReturn(
+                new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of(), List.of()));
 
         TrackingView view = service.adminTrackingView(order.getId());
 
@@ -433,9 +435,8 @@ class Cov08FulfillmentShipmentsTest {
     void cadaBultoEnsenaLoQueLleva() {
         order.setStatus(OrderStatus.SHIPPED);
         UUID lineaId = UUID.randomUUID();
-        OrderItem linea = OrderItem.builder().productId(UUID.randomUUID()).quantity(3)
-                .titleSnapshot("Chaqueta").imageUrlSnapshot("http://img/1.jpg").variantName("Caño 872 / M")
-                .build();
+        OrderItem linea = OrderItem.builder().productId(UUID.randomUUID()).quantity(3).titleSnapshot("Chaqueta")
+                .imageUrlSnapshot("http://img/1.jpg").variantName("Caño 872 / M").build();
         linea.setId(lineaId);
         order.setItems(List.of(linea));
         OrderShipmentEntity uno = shipment(1, "WB-1", "YT-1");
@@ -447,9 +448,8 @@ class Cov08FulfillmentShipmentsTest {
                 OrderShipmentItemEntity.builder().shipmentId(uno.getId()).orderItemId(lineaId).quantity(2).build()));
 
         ArgumentCaptor<List<FulfillmentService.ParcelItemView>> captor = ArgumentCaptor.forClass(List.class);
-        when(trackingViewMapper.toShipmentView(any(), anyList(), captor.capture()))
-                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null,
-                        List.of(), List.of()));
+        when(trackingViewMapper.toShipmentView(any(), anyList(), captor.capture())).thenReturn(
+                new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of(), List.of()));
 
         service.adminTrackingView(order.getId());
 
@@ -476,9 +476,8 @@ class Cov08FulfillmentShipmentsTest {
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
         when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
         when(shipmentItemRepository.findByShipmentIdIn(anyCollection())).thenReturn(List.of());
-        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList()))
-                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null,
-                        List.of(), List.of()));
+        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList())).thenReturn(
+                new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of(), List.of()));
 
         TrackingView view = service.adminTrackingView(order.getId());
 
@@ -496,9 +495,8 @@ class Cov08FulfillmentShipmentsTest {
      */
     @Test
     void laDeclaracionEnviadaAlTransportistaSeArchivaConElBulto() {
-        when(provider.createShipments(order)).thenReturn(List.of(
-                new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01",
-                        List.of(), declaracion())));
+        when(provider.createShipments(order)).thenReturn(List.of(new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15,
+                1, 500, 1200, "CH01", List.of(), declaracion())));
 
         service.createShipment(order.getId());
 
@@ -554,8 +552,8 @@ class Cov08FulfillmentShipmentsTest {
             assertThat(d.waybillNumber()).isEqualTo("WB-1");
             assertThat(d.declaration().receiver().city()).isEqualTo("Zaragoza");
             assertThat(d.declaration().receiver().addressLines()).containsExactly("Calle Mayor 1");
-            assertThat(d.declaration().lines()).singleElement()
-                    .extracting(FulfillmentProvider.DeclaredLine::hsCode).isEqualTo("610910");
+            assertThat(d.declaration().lines()).singleElement().extracting(FulfillmentProvider.DeclaredLine::hsCode)
+                    .isEqualTo("610910");
         });
     }
 

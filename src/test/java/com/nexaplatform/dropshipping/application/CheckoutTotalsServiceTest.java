@@ -42,8 +42,8 @@ class CheckoutTotalsServiceTest {
     }
 
     private void givenCustoms(int handlingCents, boolean exceeded, boolean blocked) {
-        when(customsValuationService.valuate(any(), anyInt(), anyInt(), anyList())).thenReturn(new CustomsValuation("ES",
-                TaxMode.DDP, 0, exceeded, OverThresholdPolicy.SURCHARGE, handlingCents, blocked, "", false));
+        when(customsValuationService.valuate(any(), anyInt(), anyInt(), anyList())).thenReturn(new CustomsValuation(
+                "ES", TaxMode.DDP, 0, exceeded, OverThresholdPolicy.SURCHARGE, handlingCents, blocked, "", false));
     }
 
     @Test
@@ -123,11 +123,10 @@ class CheckoutTotalsServiceTest {
         givenCustoms(3_00, false, false);
         // La bolsa se descuenta del envío y el arancel que paga el cliente. Lo que NO se mueve es el porte
         // base —es lo que nos cuesta el transportista— ni el derecho declarado, que se liquida íntegro.
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(10_00, 0));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(10_00, 0));
 
-        assertThat(t.shippingBaseCents()).as("el porte base NO se toca: es lo que cuesta de verdad")
-                .isEqualTo(20_00);
+        assertThat(t.shippingBaseCents()).as("el porte base NO se toca: es lo que cuesta de verdad").isEqualTo(20_00);
         assertThat(t.customsHandlingCents()).as("el derecho declarado tampoco").isEqualTo(3_00);
         assertThat(t.shippingSubsidyCents()).isEqualTo(10_00);
         assertThat(t.shippingCents()).isEqualTo(20_00 + 3_00 - 10_00);
@@ -141,10 +140,10 @@ class CheckoutTotalsServiceTest {
         // La invariante que no se puede romper: la bolsa abarata lo que PAGA el cliente, nunca lo que se
         // declara ni lo que se liquida. Declarar menos sería infradeclarar ante 27 aduanas, y de eso
         // responde el declarante.
-        CheckoutTotals conBolsa = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(50_00, 50_00));
-        CheckoutTotals sinBolsa = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), CheckoutTotalsService.Subsidy.NONE);
+        CheckoutTotals conBolsa = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(50_00, 50_00));
+        CheckoutTotals sinBolsa = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                CheckoutTotalsService.Subsidy.NONE);
 
         assertThat(conBolsa.customsHandlingCents()).isEqualTo(sinBolsa.customsHandlingCents());
     }
@@ -155,8 +154,8 @@ class CheckoutTotalsServiceTest {
         givenCustoms(3_00, false, false);
         // Si la bolsa da para más que el envío y el arancel, el sobrante se queda como ganancia: no se
         // devuelve en metálico ni se resta de la mercancía.
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(999_00, 999_00));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(999_00, 999_00));
 
         assertThat(t.shippingCents()).isZero();
         assertThat(t.subsidyCents())
@@ -172,10 +171,10 @@ class CheckoutTotalsServiceTest {
         givenCustoms(3_00, false, false);
         // El IVA lo fija la base imponible real —mercancía más porte—, no lo que acabemos regalando.
         // Calcularlo sobre el importe subvencionado sería liquidar de menos.
-        CheckoutTotals conBolsa = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(20_00, 0));
-        CheckoutTotals sinBolsa = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), CheckoutTotalsService.Subsidy.NONE);
+        CheckoutTotals conBolsa = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(20_00, 0));
+        CheckoutTotals sinBolsa = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                CheckoutTotalsService.Subsidy.NONE);
 
         assertThat(conBolsa.taxCents()).isEqualTo(sinBolsa.taxCents());
     }
@@ -184,10 +183,9 @@ class CheckoutTotalsServiceTest {
     void sinSubvencionElResultadoEsElDeSIEMPRE() {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
-        CheckoutTotals conCero = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), CheckoutTotalsService.Subsidy.NONE);
-        CheckoutTotals sinParametro = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)));
+        CheckoutTotals conCero = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                CheckoutTotalsService.Subsidy.NONE);
+        CheckoutTotals sinParametro = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)));
 
         assertThat(conCero.shippingCents()).isEqualTo(sinParametro.shippingCents());
         assertThat(conCero.shippingSubsidyCents()).isZero();
@@ -205,7 +203,8 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(15_00, 0));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(15_00, 0));
 
         assertThat(t.shippingSubsidyCents()).isEqualTo(15_00);
         assertThat(t.shippingNetCents()).isEqualTo(5_00);
@@ -217,7 +216,8 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(100_00, 0));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(100_00, 0));
 
         assertThat(t.shippingNetCents()).isZero();
         assertThat(t.freeShipping()).isTrue();
@@ -247,7 +247,8 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), CheckoutTotalsService.Subsidy.NONE);
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)),
+                CheckoutTotalsService.Subsidy.NONE);
 
         assertThat(t.shippingNetCents()).isEqualTo(20_00);
         assertThat(t.customsNetCents()).isEqualTo(3_00);
@@ -267,8 +268,8 @@ class CheckoutTotalsServiceTest {
         givenCustoms(6_00, false, false);
 
         // 50,00 de bolsa de porte para una tarifa de 10,00: sobran 40,00 que NO pueden ir al arancel.
-        CheckoutTotals t = service.compute("ES", null, 100_00, 10_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(50_00, 0));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 10_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(50_00, 0));
 
         assertThat(t.shippingSubsidyCents()).isEqualTo(10_00);
         assertThat(t.customsSubsidyCents()).as("el sobrante del porte no se traspasa").isZero();
@@ -280,8 +281,8 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(6_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 10_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(0, 500_00));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 10_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(0, 500_00));
 
         assertThat(t.customsSubsidyCents()).isEqualTo(6_00);
         assertThat(t.shippingSubsidyCents()).as("el sobrante del arancel no se traspasa").isZero();
@@ -294,8 +295,8 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(6_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 10_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(4_00, 2_00));
+        CheckoutTotals t = service.compute("ES", null, 100_00, 10_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(4_00, 2_00));
 
         assertThat(t.shippingNetCents()).isEqualTo(6_00);
         assertThat(t.customsNetCents()).isEqualTo(4_00);
@@ -313,8 +314,8 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(0, false, false);
 
-        service.compute("ES", null, 100_00, 10_00,
-                List.of(new DutyParcel(100_00, 1)), new CheckoutTotalsService.Subsidy(10_00, 0));
+        service.compute("ES", null, 100_00, 10_00, List.of(new DutyParcel(100_00, 1)),
+                new CheckoutTotalsService.Subsidy(10_00, 0));
 
         verify(taxService).taxCentsFor("ES", null, 110_00);
         verify(taxService).taxCentsFor("ES", null, 100_00);
@@ -326,8 +327,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00,
-                List.of(new DutyParcel(100_00, 1)), null);
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), null);
 
         assertThat(t.shippingSubsidyCents()).isZero();
         assertThat(t.customsSubsidyCents()).isZero();

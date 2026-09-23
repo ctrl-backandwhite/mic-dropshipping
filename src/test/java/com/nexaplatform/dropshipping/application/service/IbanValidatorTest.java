@@ -11,6 +11,7 @@ class IbanValidatorTest {
         assertTrue(IbanValidator.isValid("ES9121000418450200051332"));
         assertTrue(IbanValidator.isValid("es91 2100 0418 4502 0005 1332"));
     }
+
     @Test
     void rechazaIbanInvalido() {
         assertFalse(IbanValidator.isValid("ES0021000418450200051332"));

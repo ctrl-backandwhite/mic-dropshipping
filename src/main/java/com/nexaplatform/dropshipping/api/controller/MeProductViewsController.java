@@ -45,8 +45,7 @@ public class MeProductViewsController {
         // el listado de los favoritos, que vuelve a resolver el precio de cada producto: por cada una de
         // las cincuenta fichas, una conversión de divisa con su margen, su IVA, su envío, sus dos bolsas de
         // subvención y su recargo. Eso era lo que hacía lenta esta página.
-        return ResponseEntity.ok(catalogReadService.historial(historyService.fichasVistas(userId), page, size,
-                lang));
+        return ResponseEntity.ok(catalogReadService.historial(historyService.fichasVistas(userId), page, size, lang));
     }
 
     @Operation(summary = "Record that the authenticated user opened a product page (idempotent)")

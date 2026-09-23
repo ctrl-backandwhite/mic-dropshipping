@@ -111,11 +111,8 @@ public class CurrencyRateUseCaseImpl implements CurrencyRateUseCase {
     @Transactional(readOnly = true)
     public SyncStatus syncStatus() {
         // Última sincronización = la marca más reciente entre todas las divisas.
-        Instant last = currencyRateService.listAll().stream()
-                .map(CurrencyRateEntity::getLastSyncedAt)
-                .filter(Objects::nonNull)
-                .max(Comparator.naturalOrder())
-                .orElse(null);
+        Instant last = currencyRateService.listAll().stream().map(CurrencyRateEntity::getLastSyncedAt)
+                .filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
         // Próxima ejecución programada según el cron vigente (mismo que el scheduler).
         Instant next = null;
         try {

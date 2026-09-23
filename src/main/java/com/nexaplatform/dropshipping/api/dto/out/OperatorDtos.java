@@ -24,7 +24,7 @@ public final class OperatorDtos {
     }
 
     /** Fila del reporte admin: agregados por operador. */
-    public record OperatorReportRow(String operatorSubject, String operatorEmail, String operatorName,
-            long operations, long totalCommissionCnyCents, String currency) {
+    public record OperatorReportRow(String operatorSubject, String operatorEmail, String operatorName, long operations,
+            long totalCommissionCnyCents, String currency) {
     }
 }

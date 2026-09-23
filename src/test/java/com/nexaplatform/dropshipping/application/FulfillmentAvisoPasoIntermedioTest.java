@@ -95,11 +95,10 @@ class FulfillmentAvisoPasoIntermedioTest {
         SupplierPurchaseService compras = mock(SupplierPurchaseService.class);
         lenient().when(compras.readyForInternationalShipment(any())).thenReturn(true);
 
-        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider), userRepository,
-                mock(NotificationsPublisher.class), orderEmailService, new ObjectMapper(),
+        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider),
+                userRepository, mock(NotificationsPublisher.class), orderEmailService, new ObjectMapper(),
                 mock(YunExpressEventCipher.class), mock(OpsAlertService.class), mock(NotificationUseCase.class),
-                shipmentRepository, mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class),
-                compras);
+                shipmentRepository, mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), compras);
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -138,8 +137,7 @@ class FulfillmentAvisoPasoIntermedioTest {
 
         verify(orderEmailService).trackingUpdate(eq(order), eq(CORREO), eq("es"), eq(PASO_LLEGADA), any());
         verify(orderEmailService).trackingUpdate(eq(order), eq(CORREO), eq("es"), eq(PASO_ADUANA), any());
-        verify(orderEmailService, times(2))
-                .trackingUpdate(any(), anyString(), anyString(), anyString(), any());
+        verify(orderEmailService, times(2)).trackingUpdate(any(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
@@ -147,13 +145,11 @@ class FulfillmentAvisoPasoIntermedioTest {
     void noRepiteElAvisoDeUnPasoYaContado() {
         cuandoElTransportistaCuenta(PASO_RECOGIDA, PASO_LLEGADA);
         service.pollEvents(order.getId());
-        verify(orderEmailService, times(1))
-                .trackingUpdate(any(), anyString(), anyString(), anyString(), any());
+        verify(orderEmailService, times(1)).trackingUpdate(any(), anyString(), anyString(), anyString(), any());
 
         service.pollEvents(order.getId());
 
-        verify(orderEmailService, times(1))
-                .trackingUpdate(any(), anyString(), anyString(), anyString(), any());
+        verify(orderEmailService, times(1)).trackingUpdate(any(), anyString(), anyString(), anyString(), any());
     }
 
     /** Lo que el transportista responde al consultar la guía, en el orden en que ocurrió. */
@@ -163,8 +159,7 @@ class FulfillmentAvisoPasoIntermedioTest {
             pasos.add(new TrackingStep(OrderStatus.SHIPPED, descripciones[i], "Madrid, ES",
                     Instant.parse("2026-07-05T09:00:00Z").plusSeconds(i * 3600L)));
         }
-        when(provider.track(eq(GUIA), any(), eq(PAIS)))
-                .thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED, pasos));
+        when(provider.track(eq(GUIA), any(), eq(PAIS))).thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED, pasos));
     }
 
     /**
@@ -179,8 +174,7 @@ class FulfillmentAvisoPasoIntermedioTest {
         });
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId()))
                 .thenAnswer(invocacion -> List.copyOf(timeline));
-        when(trackingRepository.findByShipmentIdOrderByOccurredAtAsc(bulto.getId()))
-                .thenAnswer(invocacion -> timeline.stream()
-                        .filter(e -> bulto.getId().equals(e.getShipmentId())).toList());
+        when(trackingRepository.findByShipmentIdOrderByOccurredAtAsc(bulto.getId())).thenAnswer(
+                invocacion -> timeline.stream().filter(e -> bulto.getId().equals(e.getShipmentId())).toList());
     }
 }

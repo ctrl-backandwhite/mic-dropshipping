@@ -30,6 +30,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderInde
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -137,18 +138,21 @@ class CheckoutCartEmptiedTest {
 
     private OrderUseCaseImpl subject;
 
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    private final ProductPriceTierRepository tramos = mock(ProductPriceTierRepository.class);
+
     @BeforeEach
     void setUp() {
         subject = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher,
-                mock(com.nexaplatform.dropshipping.application.usecase.NotificationUseCase.class),
-                pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, router, checkoutTotalsService, subvenciones(), new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
-                operatorCommissionService, promotionService, supplierPurchaseService,
+                mock(com.nexaplatform.dropshipping.application.usecase.NotificationUseCase.class), pricingService,
+                tramos, affiliateProgramService, stockService, paymentUseCase, orderEmailService, fulfillment, router,
+                checkoutTotalsService, subvenciones(), new CustomsDutyLinesService(null),
+                mock(UnserviceableZoneService.class), operatorCommissionService, promotionService,
+                supplierPurchaseService,
                 mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class),
-                trackingRepository, orderIndexer,
-                orderSearchService, cartService);
+                trackingRepository, orderIndexer, orderSearchService, cartService);
 
         ProductEntity p = new ProductEntity();
         p.setId(productId);
@@ -157,9 +161,9 @@ class CheckoutCartEmptiedTest {
         p.setImages(new ArrayList<>());
         p.setStatus(ProductStatus.ACTIVE);
         when(productRepository.findById(productId)).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
-                new BigDecimal("10.00"), new BigDecimal("20.00"), null, "USD", "$", null, null, null, null, null,
-                null, null, null, null));
+        when(pricingService.priceFor(any(), any(), anyInt(), any()))
+                .thenReturn(new PricingService.PricedAmount(new BigDecimal("10.00"), new BigDecimal("20.00"), null,
+                        "USD", "$", null, null, null, null, null, null, null, null, null));
 
         when(fulfillment.isSupported("ES")).thenReturn(true);
         when(router.cotizar(anyString(), any(), anyList()))
@@ -250,12 +254,11 @@ class CheckoutCartEmptiedTest {
     @Test
     @DisplayName("si el saldo no llega, no hay pedido pagado ni cesta vaciada")
     void siElSaldoNoLlegaNoSeVaciaLaCesta() {
-        doThrow(new BusinessException("Saldo insuficiente"))
-                .when(walletUseCase).charge(any(), anyLong(), any(), anyString(), anyString());
+        doThrow(new BusinessException("Saldo insuficiente")).when(walletUseCase).charge(any(), anyLong(), any(),
+                anyString(), anyString());
         MeCheckoutDtoIn req = peticion("WALLET", productId);
 
-        assertThatThrownBy(() -> subject.checkout(userId, req, "idem-3"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> subject.checkout(userId, req, "idem-3")).isInstanceOf(BusinessException.class);
 
         verify(cartService, never()).removePurchased(any());
     }
@@ -267,8 +270,7 @@ class CheckoutCartEmptiedTest {
     @Test
     @DisplayName("un fallo al vaciar la cesta no tumba el checkout pagado con saldo")
     void unFalloAlVaciarLaCestaNoTumbaElCheckout() {
-        doThrow(new IllegalStateException("la base de datos no responde"))
-                .when(cartService).removePurchased(any());
+        doThrow(new IllegalStateException("la base de datos no responde")).when(cartService).removePurchased(any());
 
         Order pedido = subject.checkout(userId, peticion("WALLET", productId), "idem-4");
 
@@ -278,10 +280,11 @@ class CheckoutCartEmptiedTest {
 
     /** La bolsa de subvención del envío, real y con su suelo puesto (mide importes, no puede ser un cero). */
     private static com.nexaplatform.dropshipping.application.service.ProductSubsidyService subvenciones() {
-        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
-        org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
+        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa = org.mockito.Mockito
+                .mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
+        org.mockito.Mockito.lenient()
+                .when(divisa.toUsd(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new java.math.BigDecimal("5.85"));
         return new com.nexaplatform.dropshipping.application.service.ProductSubsidyService(divisa);
     }
 }

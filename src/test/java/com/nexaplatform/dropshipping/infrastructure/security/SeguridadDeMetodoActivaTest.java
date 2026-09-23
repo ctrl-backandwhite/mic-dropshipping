@@ -46,10 +46,8 @@ class SeguridadDeMetodoActivaTest {
         if (conPreAuthorize.isEmpty()) {
             return; // Nadie la usa: la autorización es solo por URL y no hace falta activarla.
         }
-        assertThat(activada)
-                .as("%s usan @PreAuthorize y no hay @EnableMethodSecurity: esas anotaciones no se ejecutan",
-                        conPreAuthorize)
-                .isTrue();
+        assertThat(activada).as("%s usan @PreAuthorize y no hay @EnableMethodSecurity: esas anotaciones no se ejecutan",
+                conPreAuthorize).isTrue();
     }
 
     private static List<Path> ficherosJava() throws IOException {

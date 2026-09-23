@@ -56,8 +56,8 @@ class NotificationUseCaseImplTest {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         // Estado coherente (leída + RECEIVED): markRead no debe cambiar nada.
-        PlatformNotification model = PlatformNotification.builder().id(id).userId(userId)
-                .readAt(Instant.now()).status("RECEIVED").build();
+        PlatformNotification model = PlatformNotification.builder().id(id).userId(userId).readAt(Instant.now())
+                .status("RECEIVED").build();
         when(notificationRepository.getById(id)).thenReturn(model);
 
         useCase.markRead(id, userId);

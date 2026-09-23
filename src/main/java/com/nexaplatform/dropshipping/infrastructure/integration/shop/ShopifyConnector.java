@@ -56,17 +56,15 @@ public class ShopifyConnector implements ShopConnector {
         try {
             String title = product.getTitleZh() != null ? product.getTitleZh() : product.getSlug();
             BigDecimal price = product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO;
-            Map<String, Object> body = Map.of("product", Map.of(
-                    "title", title,
-                    "body_html", product.getDescriptionZh() != null ? product.getDescriptionZh() : "",
-                    "vendor", product.getBrand() != null ? product.getBrand() : "",
-                    "status", "active",
-                    "variants", List.of(Map.of("price", price.toPlainString()))));
+            Map<String, Object> body = Map.of("product",
+                    Map.of("title", title, "body_html",
+                            product.getDescriptionZh() != null ? product.getDescriptionZh() : "", "vendor",
+                            product.getBrand() != null ? product.getBrand() : "", "status", "active", "variants",
+                            List.of(Map.of("price", price.toPlainString()))));
             String json = objectMapper.writeValueAsString(body);
             URI uri = URI.create("https://" + host + "/admin/api/" + API_VERSION + "/products.json");
             HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(15))
-                    .header("X-Shopify-Access-Token", decryptedToken)
-                    .header("Content-Type", "application/json")
+                    .header("X-Shopify-Access-Token", decryptedToken).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() / 100 == 2) {

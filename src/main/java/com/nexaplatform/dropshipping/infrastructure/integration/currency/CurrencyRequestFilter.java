@@ -54,7 +54,7 @@ public class CurrencyRequestFilter extends OncePerRequestFilter {
         if (codigo == null || codigo.isBlank()) {
             return null;
         }
-        return currencyRateService.find(codigo).filter(CurrencyRateEntity::isActive)
-                .map(CurrencyRateEntity::getCode).orElse(null);
+        return currencyRateService.find(codigo).filter(CurrencyRateEntity::isActive).map(CurrencyRateEntity::getCode)
+                .orElse(null);
     }
 }

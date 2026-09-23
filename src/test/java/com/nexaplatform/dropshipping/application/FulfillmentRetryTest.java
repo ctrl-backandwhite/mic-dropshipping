@@ -67,9 +67,10 @@ class FulfillmentRetryTest {
         notificationUseCase = mock(NotificationUseCase.class);
         shipmentRepository = mock(OrderShipmentRepository.class);
         service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
-                unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
-                new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
-                mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), readyPurchases());
+                unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class),
+                mock(OrderEmailService.class), new ObjectMapper(), new YunExpressEventCipher(), opsAlertService,
+                notificationUseCase, shipmentRepository, mock(OrderShipmentItemRepository.class),
+                mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -82,8 +83,8 @@ class FulfillmentRetryTest {
     @Test
     void unFalloPermanenteSeAbandonaAlPrimerIntentoConElMotivoGuardado() {
         // "Order rule verification failed" = el bulto no cabe en el canal. Reintentar no lo arregla.
-        when(provider.createShipments(any(Order.class))).thenThrow(FulfillmentFailure.from(
-                "YunExpress rechazó el envío: 02039171 Weight should not exceed 2KG"));
+        when(provider.createShipments(any(Order.class))).thenThrow(
+                FulfillmentFailure.from("YunExpress rechazó el envío: 02039171 Weight should not exceed 2KG"));
 
         service.createShipment(order.getId());
 
@@ -150,8 +151,7 @@ class FulfillmentRetryTest {
 
         service.createShipment(order.getId());
 
-        assertThat(order.getFulfillmentNextAttemptAt())
-                .isAfter(Instant.now().plus(Duration.ofMinutes(9)))
+        assertThat(order.getFulfillmentNextAttemptAt()).isAfter(Instant.now().plus(Duration.ofMinutes(9)))
                 .isBefore(Instant.now().plus(Duration.ofMinutes(11)));
     }
 
@@ -160,8 +160,8 @@ class FulfillmentRetryTest {
         order.setFulfillmentAttempts(3);
         order.setFulfillmentError("Service execution time-out");
         order.setFulfillmentNextAttemptAt(null);
-        when(provider.createShipments(any(Order.class))).thenReturn(List.of(
-                new FulfillmentResult("Standard Shipping", "YT2621101299000012", "YT2621101299000012", 15)));
+        when(provider.createShipments(any(Order.class))).thenReturn(
+                List.of(new FulfillmentResult("Standard Shipping", "YT2621101299000012", "YT2621101299000012", 15)));
 
         service.createShipment(order.getId());
 

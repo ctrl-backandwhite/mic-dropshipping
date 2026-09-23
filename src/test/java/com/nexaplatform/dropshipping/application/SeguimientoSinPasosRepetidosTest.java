@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,14 +56,25 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class SeguimientoSinPasosRepetidosTest {
 
-    @Mock com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
-    @Mock OrderTrackingEventRepository trackingRepository;
-    @Mock WebhookDispatcherService webhooks;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock OrderEmailService orderEmailService;
-    @Mock OperatorCommissionService operatorCommissionService;
-    @Mock OrderIndexer orderIndexer;
-    @Spy CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
+    @Mock
+    com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
+    @Mock
+    OrderTrackingEventRepository trackingRepository;
+    @Mock
+    WebhookDispatcherService webhooks;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    OrderEmailService orderEmailService;
+    @Mock
+    OperatorCommissionService operatorCommissionService;
+    @Mock
+    OrderIndexer orderIndexer;
+    @Spy
+    CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
 
     @InjectMocks
     private OrderUseCaseImpl subject;
@@ -82,10 +94,9 @@ class SeguimientoSinPasosRepetidosTest {
 
     /** Lo que el transportista ya dejó dicho en el seguimiento. */
     private void elTransportistaYaInformo(OrderStatus estado, String descripcion) {
-        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(PEDIDO)).thenReturn(List.of(
-                OrderTrackingEventEntity.builder().orderId(PEDIDO).status(estado.name())
-                        .description(descripcion).location("ES").source("YUNEXPRESS")
-                        .occurredAt(Instant.now()).createdAt(Instant.now()).build()));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(PEDIDO)).thenReturn(List.of(OrderTrackingEventEntity
+                .builder().orderId(PEDIDO).status(estado.name()).description(descripcion).location("ES")
+                .source("YUNEXPRESS").occurredAt(Instant.now()).createdAt(Instant.now()).build()));
     }
 
     private void seguimientoVacio() {
@@ -109,8 +120,7 @@ class SeguimientoSinPasosRepetidosTest {
 
         subject.deliverOrder(PEDIDO);
 
-        ArgumentCaptor<OrderTrackingEventEntity> anotado =
-                ArgumentCaptor.forClass(OrderTrackingEventEntity.class);
+        ArgumentCaptor<OrderTrackingEventEntity> anotado = ArgumentCaptor.forClass(OrderTrackingEventEntity.class);
         verify(trackingRepository).save(anotado.capture());
         assertThat(anotado.getValue().getDescription()).isEqualTo("Entregado al destinatario");
         assertThat(anotado.getValue().getSource()).isEqualTo("ADMIN");

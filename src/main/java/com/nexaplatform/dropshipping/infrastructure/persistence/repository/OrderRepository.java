@@ -15,6 +15,6 @@ public interface OrderRepository extends JpaRepository<CustomerOrderEntity, UUID
     List<CustomerOrderEntity> findByPartnerAppId(UUID partnerAppId);
 
     /** Orden reutilizable del mismo carrito (mismo idem) aún sin pagar, para no duplicar. */
-    Optional<CustomerOrderEntity> findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
-            UUID userId, String idempotencyKey, Collection<OrderStatus> statuses);
+    Optional<CustomerOrderEntity> findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(UUID userId,
+            String idempotencyKey, Collection<OrderStatus> statuses);
 }

@@ -154,8 +154,8 @@ class Cov10SupportTicketRepositoryImplTest {
     @Test
     void unParcheConEstadoYPrioridadLosAplica() {
         UUID id = UUID.randomUUID();
-        SupportTicketEntity gestionado = SupportTicketEntity.builder().user(UserEntity.builder().build())
-                .status("OPEN").priority("NORMAL").build();
+        SupportTicketEntity gestionado = SupportTicketEntity.builder().user(UserEntity.builder().build()).status("OPEN")
+                .priority("NORMAL").build();
         when(supportTicketJpaRepositoryAdapter.findById(id)).thenReturn(Optional.of(gestionado));
         when(supportTicketJpaRepositoryAdapter.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

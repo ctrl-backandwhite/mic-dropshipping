@@ -56,8 +56,8 @@ class CatalogoBusConsumerTest {
     @Test
     @DisplayName("Una categoría raíz se aplica con su código y sus idiomas")
     void categoriaRaiz() {
-        consumidor.recibirCategoria(json(CategoriaPublicada.de(
-                "moda-mujer", Map.of("es", "Mujer", "en", "Women", "zh", "女装"), null, true)));
+        consumidor.recibirCategoria(json(
+                CategoriaPublicada.de("moda-mujer", Map.of("es", "Mujer", "en", "Women", "zh", "女装"), null, true)));
 
         ArgumentCaptor<IngestCategoryRequest> captor = ArgumentCaptor.captor();
         verify(catalogo).upsertCategory(captor.capture());
@@ -78,8 +78,8 @@ class CatalogoBusConsumerTest {
         padre.setId(idPadre);
         when(categorias.findBySlug("moda-mujer")).thenReturn(Optional.of(padre));
 
-        consumidor.recibirCategoria(json(CategoriaPublicada.de(
-                "moda-mujer-abrigos", Map.of("es", "Abrigos"), "moda-mujer", true)));
+        consumidor.recibirCategoria(
+                json(CategoriaPublicada.de("moda-mujer-abrigos", Map.of("es", "Abrigos"), "moda-mujer", true)));
 
         ArgumentCaptor<IngestCategoryRequest> captor = ArgumentCaptor.captor();
         verify(catalogo).upsertCategory(captor.capture());
@@ -93,10 +93,9 @@ class CatalogoBusConsumerTest {
         // no da ningún error: simplemente queda mal, y nadie lo ve hasta que alguien navega.
         when(categorias.findBySlug("moda-mujer")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> consumidor.recibirCategoria(json(CategoriaPublicada.de(
-                "moda-mujer-abrigos", Map.of("es", "Abrigos"), "moda-mujer", true))))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("moda-mujer");
+        assertThatThrownBy(() -> consumidor.recibirCategoria(
+                json(CategoriaPublicada.de("moda-mujer-abrigos", Map.of("es", "Abrigos"), "moda-mujer", true))))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("moda-mujer");
         verify(catalogo, never()).upsertCategory(any());
     }
 
@@ -121,8 +120,7 @@ class CatalogoBusConsumerTest {
                 .thenReturn(new BulkResultDtoOut(0, 1, List.of("categoría desconocida")));
 
         assertThatThrownBy(() -> consumidor.recibirProducto(json(ProductoCertificado.de(ficha()))))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("1688-987");
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("1688-987");
     }
 
     @Test

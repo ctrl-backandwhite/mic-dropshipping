@@ -51,8 +51,7 @@ public class OutboxDispatcher {
     // Constructor explícito, sin @RequiredArgsConstructor: Lombok no copia @Qualifier a los
     // parámetros salvo que se le configure, y sin el cualificador Spring no sabría cuál de los dos
     // KafkaTemplate corresponde a cada campo.
-    public OutboxDispatcher(EventOutboxRepository repo,
-            KafkaTemplate<String, Object> kafka,
+    public OutboxDispatcher(EventOutboxRepository repo, KafkaTemplate<String, Object> kafka,
             @Qualifier("busKafkaTemplate") ObjectProvider<KafkaTemplate<String, Object>> busKafka) {
         this.repo = repo;
         this.kafka = kafka;
@@ -70,8 +69,8 @@ public class OutboxDispatcher {
         List<UUID> sentIds = new ArrayList<>(batch.size());
         for (EventOutboxEntity e : batch) {
             try {
-                CompletableFuture<SendResult<String, Object>> future = plantillaPara(e)
-                        .send(e.getTopic(), e.getPartitionKey(), e.getPayload());
+                CompletableFuture<SendResult<String, Object>> future = plantillaPara(e).send(e.getTopic(),
+                        e.getPartitionKey(), e.getPayload());
                 future.get(); // bloquea hasta ack; el ack y el commit van juntos
                 sentIds.add(e.getId());
             } catch (Exception ex) {

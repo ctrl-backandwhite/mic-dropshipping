@@ -115,10 +115,8 @@ class Cov08AdminMentorsControllerTest {
         Map<String, Object> creado = controller.create(body).getBody();
 
         assertThat(creado).containsEntry("expertise", List.of("SEO", "Ads"))
-                .containsEntry("languages", List.of("es", "en"))
-                .containsEntry("hourlyRateUsd", 49.99)
-                .containsEntry("active", false)
-                .containsEntry("name", "Marta");
+                .containsEntry("languages", List.of("es", "en")).containsEntry("hourlyRateUsd", 49.99)
+                .containsEntry("active", false).containsEntry("name", "Marta");
     }
 
     @Test
@@ -204,9 +202,9 @@ class Cov08AdminMentorsControllerTest {
 
         Map<String, Object> fila = controller.list().get(0);
 
-        assertThat(fila).containsEntry("name", "").containsEntry("userEmail", null)
-                .containsEntry("headline", "").containsEntry("bio", "").containsEntry("timezone", "")
-                .containsEntry("expertise", List.of()).containsEntry("languages", List.of());
+        assertThat(fila).containsEntry("name", "").containsEntry("userEmail", null).containsEntry("headline", "")
+                .containsEntry("bio", "").containsEntry("timezone", "").containsEntry("expertise", List.of())
+                .containsEntry("languages", List.of());
     }
 
     @Test

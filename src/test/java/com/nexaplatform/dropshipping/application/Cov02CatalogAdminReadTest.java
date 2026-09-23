@@ -145,9 +145,8 @@ class Cov02CatalogAdminReadTest {
 
     @BeforeEach
     void setUp() {
-        producto = ProductEntity.builder().source("1688").externalId("OFFER-1").titleZh("原始标题")
-                .slug("zapatos-offer-1").status(ProductStatus.DRAFT).moq(1).basePrice(new BigDecimal("10"))
-                .currency("CNY").build();
+        producto = ProductEntity.builder().source("1688").externalId("OFFER-1").titleZh("原始标题").slug("zapatos-offer-1")
+                .status(ProductStatus.DRAFT).moq(1).basePrice(new BigDecimal("10")).currency("CNY").build();
         producto.setId(UUID.randomUUID());
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(any())).thenReturn(List.of());
     }
@@ -162,15 +161,15 @@ class Cov02CatalogAdminReadTest {
     void conTextoDeBusquedaSeConsultaTodoElCatalogoNoSoloLaPaginaActual() {
         // La caja de búsqueda del admin debe encontrar el producto esté en la página que esté y en
         // cualquier idioma; filtrar en cliente solo miraría las 20 filas visibles.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
-                .thenReturn(pagina(producto));
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), any(Pageable.class))).thenReturn(pagina(producto));
 
-        Page<ProductSummaryView> page = useCase.listProductsForAdmin("ACTIVE", null, "  Bailarinas  ", 0, 20,
-                "es", null, null, null, null, null, null);
+        Page<ProductSummaryView> page = useCase.listProductsForAdmin("ACTIVE", null, "  Bailarinas  ", 0, 20, "es",
+                null, null, null, null, null, null);
 
         assertThat(page.getTotalElements()).isEqualTo(1);
-        verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(), eq("es"),
-                eq(false), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
+        verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(),
+                eq("es"), eq(false), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
         // El listado se traduce al idioma pedido: el admin en español no puede ver títulos en chino.
         verify(productMapper).toSummary(producto, "es");
     }
@@ -178,8 +177,8 @@ class Cov02CatalogAdminReadTest {
     @Test
     void elFiltroDeVerificadosUsaLaBusquedaAunqueNoHayaTexto() {
         // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
-                .thenReturn(pagina(producto));
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), any(Pageable.class))).thenReturn(pagina(producto));
 
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, Boolean.FALSE, null, null, null, null);
 
@@ -194,7 +193,8 @@ class Cov02CatalogAdminReadTest {
         useCase.listProductsForAdmin("ALL", null, "", 0, 20, "es", null, null, null, null, null, null);
 
         verify(productJpaRepository).findAll(any(Pageable.class));
-        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(), any(), any(), any(Pageable.class));
+        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(),
+                any(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test
@@ -202,7 +202,7 @@ class Cov02CatalogAdminReadTest {
         // El front serializa a veces undefined/null como texto; el listado no puede devolver 500 por eso.
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
 
-        for (String estado : new String[] {"undefined", "null", "  ", "INVENTADO"}) {
+        for (String estado : new String[]{"undefined", "null", "  ", "INVENTADO"}) {
             useCase.listProductsForAdmin(estado, null, null, 0, 20, "es", null, null, null, null, null, null);
         }
 
@@ -253,8 +253,7 @@ class Cov02CatalogAdminReadTest {
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "price_desc", null, null, null, null, null);
 
         verify(productJpaRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().getOrderFor("basePrice"))
-                .isNotNull()
+        assertThat(captor.getValue().getSort().getOrderFor("basePrice")).isNotNull()
                 .extracting(Sort.Order::getDirection).isEqualTo(Sort.Direction.DESC);
     }
 
@@ -280,8 +279,7 @@ class Cov02CatalogAdminReadTest {
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "oldest", null, null, null, null, null);
 
         verify(productJpaRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().getOrderFor("ingestedAt"))
-                .isNotNull()
+        assertThat(captor.getValue().getSort().getOrderFor("ingestedAt")).isNotNull()
                 .extracting(Sort.Order::getDirection).isEqualTo(Sort.Direction.ASC);
     }
 
@@ -328,8 +326,7 @@ class Cov02CatalogAdminReadTest {
     void laFichaPorSlugInexistenteDevuelveNoEncontrado() {
         when(productJpaRepository.findWithDetailsBySlug("no-existe")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.getProductBySlug("no-existe", "es"))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.getProductBySlug("no-existe", "es")).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -444,8 +441,7 @@ class Cov02CatalogAdminReadTest {
         UUID id = UUID.randomUUID();
         when(productJpaRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase.updateStatus(id, ProductStatus.ACTIVE))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.updateStatus(id, ProductStatus.ACTIVE)).isInstanceOf(NotFoundException.class);
     }
 
     /* ============ tramos de precio ============ */
@@ -489,8 +485,8 @@ class Cov02CatalogAdminReadTest {
         producto.setBrand("Marca vieja");
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
-        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
-                .basePrice(new BigDecimal("25.50")).build(), "es");
+        useCase.quickEdit(producto.getId(),
+                AdminProductQuickEditDtoIn.builder().basePrice(new BigDecimal("25.50")).build(), "es");
 
         assertThat(producto.getBrand()).isEqualTo("Marca vieja");
         assertThat(producto.getBasePrice()).isEqualByComparingTo("25.50");
@@ -507,8 +503,8 @@ class Cov02CatalogAdminReadTest {
         producto.setIvaCny(new BigDecimal("3.00"));
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
-        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
-                .shippingCny(new BigDecimal("10.00")).ivaCny(new BigDecimal("3.38")).build(), "es");
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().shippingCny(new BigDecimal("10.00"))
+                .ivaCny(new BigDecimal("3.38")).build(), "es");
 
         assertThat(producto.getShippingCny()).isEqualByComparingTo("10.00");
         assertThat(producto.getIvaCny()).isEqualByComparingTo("3.38");
@@ -542,8 +538,8 @@ class Cov02CatalogAdminReadTest {
         // El título chino es el dato del proveedor y es lo que empareja las reimportaciones.
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
-        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
-                .title("Bailarinas de mujer").build(), "es");
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().title("Bailarinas de mujer").build(),
+                "es");
 
         assertThat(producto.getTitleZh()).isEqualTo("原始标题");
         assertThat(producto.getTranslations()).hasSize(1);
@@ -558,8 +554,8 @@ class Cov02CatalogAdminReadTest {
                 .title("Antiguo").provider("bulk").build());
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
-        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
-                .description("Descripción nueva").build(), "es");
+        useCase.quickEdit(producto.getId(),
+                AdminProductQuickEditDtoIn.builder().description("Descripción nueva").build(), "es");
 
         assertThat(producto.getTranslations()).hasSize(1);
         assertThat(producto.getTranslations().get(0).getTitle()).isEqualTo("Antiguo");
@@ -572,8 +568,8 @@ class Cov02CatalogAdminReadTest {
                 .title("Bailarinas").metaTitle("Viejo meta").metaDescription("Vieja meta").build());
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
-        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
-                .metaTitle("   ").metaDescription("  Meta escrita a mano  ").build(), "es");
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().metaTitle("   ")
+                .metaDescription("  Meta escrita a mano  ").build(), "es");
 
         assertThat(producto.getTranslations().get(0).getMetaTitle()).isNull();
         assertThat(producto.getTranslations().get(0).getMetaDescription()).isEqualTo("Meta escrita a mano");
@@ -758,10 +754,10 @@ class Cov02CatalogAdminReadTest {
     @Test
     @DisplayName("el filtro de coste viaja a la consulta")
     void elFiltroDeCosteViajaALaConsulta() {
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(),
-                any(), any(), any(Pageable.class))).thenReturn(pagina());
-        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null,
-                BigDecimal.ZERO, BigDecimal.valueOf(50), null, null);
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), any(Pageable.class))).thenReturn(pagina());
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null, BigDecimal.ZERO, BigDecimal.valueOf(50),
+                null, null);
 
         verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(),
                 eq(BigDecimal.ZERO), eq(BigDecimal.valueOf(50)), isNull(), isNull(), isNull(), isNull(),
@@ -772,14 +768,13 @@ class Cov02CatalogAdminReadTest {
     @Test
     @DisplayName("ventas y tendencia filtran por mínimo")
     void ventasYTendenciaFiltranPorMinimo() {
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(),
-                any(), any(), any(Pageable.class))).thenReturn(pagina());
-        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null,
-                null, null, 1000, BigDecimal.valueOf(0.5));
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), any(Pageable.class))).thenReturn(pagina());
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null, null, null, 1000,
+                BigDecimal.valueOf(0.5));
 
-        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(),
-                isNull(), isNull(), eq(1000), eq(BigDecimal.valueOf(0.5)), isNull(), isNull(),
-                any(Pageable.class));
+        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), isNull(),
+                isNull(), eq(1000), eq(BigDecimal.valueOf(0.5)), isNull(), isNull(), any(Pageable.class));
     }
 
     /**
@@ -800,8 +795,8 @@ class Cov02CatalogAdminReadTest {
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null, null, null, 1, null);
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(),
-                any(), any(), any(), any(), any(), any(), captor.capture());
+        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), captor.capture());
         assertThat(captor.getValue().getPageSize()).isEqualTo(20);
     }
 }

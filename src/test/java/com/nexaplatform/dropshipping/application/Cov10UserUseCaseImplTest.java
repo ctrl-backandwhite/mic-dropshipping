@@ -97,8 +97,8 @@ class Cov10UserUseCaseImplTest {
 
     @Test
     void elNombreVisibleSeComponeConNombreYApellidosCuandoNoVieneDado() {
-        User candidato = User.builder().email("ana@x.com").firstName(" Ana ").lastName1("Pérez ")
-                .lastName2(" Gil").language("es").build();
+        User candidato = User.builder().email("ana@x.com").firstName(" Ana ").lastName1("Pérez ").lastName2(" Gil")
+                .language("es").build();
 
         User creado = useCase.register(candidato, "Str0ngP@ssword!");
 
@@ -127,8 +127,8 @@ class Cov10UserUseCaseImplTest {
 
     @Test
     void elAvisoDeAccesoLlevaLaFechaResueltaNoElMarcador() {
-        when(userRepository.findByEmail("ana@x.com")).thenReturn(Optional.of(
-                User.builder().id(UUID.randomUUID()).email("ana@x.com").displayName("Ana").language("es").build()));
+        when(userRepository.findByEmail("ana@x.com")).thenReturn(Optional
+                .of(User.builder().id(UUID.randomUUID()).email("ana@x.com").displayName("Ana").language("es").build()));
 
         useCase.notifyLoginDetected(" Ana@X.com ");
 
@@ -176,8 +176,8 @@ class Cov10UserUseCaseImplTest {
 
         ArgumentCaptor<String> asunto = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Map<String, Object>> datos = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueueService).enqueue(eq("ann@x.com"), asunto.capture(),
-                eq("emails/account-deletion-code"), datos.capture());
+        verify(emailQueueService).enqueue(eq("ann@x.com"), asunto.capture(), eq("emails/account-deletion-code"),
+                datos.capture());
         assertThat(asunto.getValue()).isEqualTo("Confirm your account deletion — NX036");
         assertThat(datos.getValue()).containsEntry("title", "Confirm your account deletion");
         assertThat(datos.getValue().get("intro").toString()).startsWith("You asked to delete");
@@ -190,8 +190,7 @@ class Cov10UserUseCaseImplTest {
                 .deletionCodeExpiresAt(Instant.now().plusSeconds(600)).active(true).build();
         when(userRepository.getById(id)).thenReturn(u);
 
-        assertThatThrownBy(() -> useCase.confirmAccountDeletion(id, "999999"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.confirmAccountDeletion(id, "999999")).isInstanceOf(BusinessException.class);
         assertThat(u.getDeletedAt()).isNull();
         assertThat(u.isActive()).isTrue();
     }
@@ -203,8 +202,7 @@ class Cov10UserUseCaseImplTest {
                 .deletionCodeExpiresAt(Instant.now().minusSeconds(1)).active(true).build();
         when(userRepository.getById(id)).thenReturn(u);
 
-        assertThatThrownBy(() -> useCase.confirmAccountDeletion(id, "123456"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.confirmAccountDeletion(id, "123456")).isInstanceOf(BusinessException.class);
         assertThat(u.getDeletedAt()).isNull();
     }
 
@@ -214,8 +212,7 @@ class Cov10UserUseCaseImplTest {
         User u = User.builder().id(id).email("ana@x.com").active(true).build();
         when(userRepository.getById(id)).thenReturn(u);
 
-        assertThatThrownBy(() -> useCase.confirmAccountDeletion(id, "123456"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.confirmAccountDeletion(id, "123456")).isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -305,8 +302,8 @@ class Cov10UserUseCaseImplTest {
     @Test
     void unTokenDeRestablecimientoYaConsumidoNoSirveDosVeces() {
         PasswordResetTokenEntity prt = PasswordResetTokenEntity.builder()
-                .user(UserEntity.builder().email("ana@x.com").build())
-                .expiresAt(Instant.now().plusSeconds(600)).consumedAt(Instant.now()).build();
+                .user(UserEntity.builder().email("ana@x.com").build()).expiresAt(Instant.now().plusSeconds(600))
+                .consumedAt(Instant.now()).build();
         when(resetTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(prt));
 
         assertThatThrownBy(() -> useCase.confirmPasswordReset("token", "Str0ngP@ssword!"))
@@ -317,8 +314,7 @@ class Cov10UserUseCaseImplTest {
     @Test
     void unTokenCaducadoNoRestableceLaContrasena() {
         PasswordResetTokenEntity prt = PasswordResetTokenEntity.builder()
-                .user(UserEntity.builder().email("ana@x.com").build())
-                .expiresAt(Instant.now().minusSeconds(1)).build();
+                .user(UserEntity.builder().email("ana@x.com").build()).expiresAt(Instant.now().minusSeconds(1)).build();
         when(resetTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(prt));
 
         assertThatThrownBy(() -> useCase.confirmPasswordReset("token", "Str0ngP@ssword!"))
@@ -514,8 +510,8 @@ class Cov10UserUseCaseImplTest {
         User ajeno = User.builder().email("z@x.com").role(UserRole.USER).build();
         when(userRepository.findAll()).thenReturn(List.of(porCorreo, porNombre, porEmpresa, ajeno));
 
-        assertThat(useCase.listUsers(null, " AnA ", null, 0, 25))
-                .containsExactlyInAnyOrder(porCorreo, porNombre, porEmpresa);
+        assertThat(useCase.listUsers(null, " AnA ", null, 0, 25)).containsExactlyInAnyOrder(porCorreo, porNombre,
+                porEmpresa);
     }
 
     @Test
@@ -540,8 +536,7 @@ class Cov10UserUseCaseImplTest {
 
     @Test
     void unaPaginaMasAllaDelFinalDevuelveVacioEnVezDeReventar() {
-        when(userRepository.findAll())
-                .thenReturn(List.of(User.builder().email("a@x.com").role(UserRole.USER).build()));
+        when(userRepository.findAll()).thenReturn(List.of(User.builder().email("a@x.com").role(UserRole.USER).build()));
 
         assertThat(useCase.listUsers(null, null, null, 9, 25)).isEmpty();
         assertThat(useCase.countUsers(null, null, null)).isEqualTo(1);
@@ -572,8 +567,8 @@ class Cov10UserUseCaseImplTest {
     @Test
     void vincularUnaCuentaYaVinculadaNoRepiteNiGuardaNiAudita() {
         UUID id = UUID.randomUUID();
-        when(userRepository.getById(id)).thenReturn(
-                User.builder().id(id).email("ana@gmail.com").googleLinked(true).build());
+        when(userRepository.getById(id))
+                .thenReturn(User.builder().id(id).email("ana@gmail.com").googleLinked(true).build());
 
         useCase.linkGoogleAccount(id);
 

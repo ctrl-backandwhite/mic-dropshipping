@@ -177,16 +177,10 @@ class Cov10SupplierIndexerTest {
         assertThat(captor.getValue().index()).isEqualTo(INDEX);
         assertThat(captor.getValue().id()).isEqualTo(s.getId().toString());
         Map<String, Object> doc = captor.getValue().document();
-        assertThat(doc).containsEntry("id", s.getId().toString())
-                .containsEntry("externalId", "sup-1688")
-                .containsEntry("source", "1688")
-                .containsEntry("name", "Fábrica X")
-                .containsEntry("nameZh", "工厂")
-                .containsEntry("country", "CN")
-                .containsEntry("city", "Yiwu")
-                .containsEntry("yearsActive", 7)
-                .containsEntry("verified", true)
-                .containsEntry("trustPass", false)
+        assertThat(doc).containsEntry("id", s.getId().toString()).containsEntry("externalId", "sup-1688")
+                .containsEntry("source", "1688").containsEntry("name", "Fábrica X").containsEntry("nameZh", "工厂")
+                .containsEntry("country", "CN").containsEntry("city", "Yiwu").containsEntry("yearsActive", 7)
+                .containsEntry("verified", true).containsEntry("trustPass", false)
                 // productCount no está en la tabla: si no se recalculara, el listado mostraría 0.
                 .containsEntry("productCount", 42L);
         assertThat(doc.get("createdAt")).isNotNull();
@@ -234,8 +228,8 @@ class Cov10SupplierIndexerTest {
         indexer.deleteFromIndex(id);
 
         @SuppressWarnings({"unchecked", "rawtypes"})
-        ArgumentCaptor<Function<DeleteRequest.Builder, ObjectBuilder<DeleteRequest>>> captor =
-                ArgumentCaptor.forClass((Class) Function.class);
+        ArgumentCaptor<Function<DeleteRequest.Builder, ObjectBuilder<DeleteRequest>>> captor = ArgumentCaptor
+                .forClass((Class) Function.class);
         verify(client).delete(captor.capture());
         DeleteRequest req = captor.getValue().apply(new DeleteRequest.Builder()).build();
         assertThat(req.index()).isEqualTo(INDEX);
@@ -254,7 +248,7 @@ class Cov10SupplierIndexerTest {
         SupplierEntity conProductos = proveedor();
         SupplierEntity sinProductos = proveedor();
         when(supplierRepository.findAll()).thenReturn(List.of(conProductos, sinProductos));
-        stubConteoAgrupado(List.<Object[]>of(new Object[] {conProductos.getId(), 9L}));
+        stubConteoAgrupado(List.<Object[]>of(new Object[]{conProductos.getId(), 9L}));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 
         int n = indexer.reindexAll();
@@ -272,17 +266,17 @@ class Cov10SupplierIndexerTest {
     /* ---------- utilidades ---------- */
 
     private static SupplierEntity proveedor() {
-        SupplierEntity s = SupplierEntity.builder().externalId("sup-1688").source("1688").name("Fábrica X")
-                .nameZh("工厂").country("CN").city("Yiwu").rating(new BigDecimal("4.8")).yearsActive(7)
-                .verified(true).trustPass(false).build();
+        SupplierEntity s = SupplierEntity.builder().externalId("sup-1688").source("1688").name("Fábrica X").nameZh("工厂")
+                .country("CN").city("Yiwu").rating(new BigDecimal("4.8")).yearsActive(7).verified(true).trustPass(false)
+                .build();
         s.setId(UUID.randomUUID()); // el id de BaseEntity no entra en el @Builder
         s.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
         return s;
     }
 
     private static SupplierSearchService.IndexedSupplier indexado() {
-        return new SupplierSearchService.IndexedSupplier(UUID.randomUUID(), "sup-1688", "Fábrica X", "工厂", "CN",
-                "Yiwu", null, null, false, false, 0);
+        return new SupplierSearchService.IndexedSupplier(UUID.randomUUID(), "sup-1688", "Fábrica X", "工厂", "CN", "Yiwu",
+                null, null, false, false, 0);
     }
 
     private void stubConteoAgrupado(List<Object[]> rows) {

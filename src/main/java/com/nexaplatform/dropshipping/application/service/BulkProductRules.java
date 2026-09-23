@@ -52,8 +52,7 @@ public final class BulkProductRules {
      * perfectamente porque existe; lo que no es, es una foto.
      */
     public static boolean isProductPhoto(String url) {
-        return url != null && !url.isBlank()
-                && !url.toLowerCase(Locale.ROOT).contains(RECURSOS_DE_INTERFAZ);
+        return url != null && !url.isBlank() && !url.toLowerCase(Locale.ROOT).contains(RECURSOS_DE_INTERFAZ);
     }
 
     /**
@@ -63,10 +62,8 @@ public final class BulkProductRules {
      */
     public static void assertRequiredAttributes(BulkProductDtoIn r, List<CategoryAttributeSchemaEntity> schema,
             String categorySlug) {
-        List<String> required = schema.stream()
-                .filter(CategoryAttributeSchemaEntity::isRequired)
-                .map(CategoryAttributeSchemaEntity::getAttrKey)
-                .toList();
+        List<String> required = schema.stream().filter(CategoryAttributeSchemaEntity::isRequired)
+                .map(CategoryAttributeSchemaEntity::getAttrKey).toList();
         if (required.isEmpty()) {
             return;
         }
@@ -132,8 +129,8 @@ public final class BulkProductRules {
      * fila no trae uno, se deriva del título; en cualquier caso se capa a lo que admite la columna,
      * porque un título largo desbordaba el varchar(120) y tumbaba la importación.
      */
-    public static String externalIdOf(BulkProductDtoIn r, String esTitle, java.util.function.
-            UnaryOperator<String> slugify, long uniqueSuffix) {
+    public static String externalIdOf(BulkProductDtoIn r, String esTitle,
+            java.util.function.UnaryOperator<String> slugify, long uniqueSuffix) {
         String externalId;
         if (r.getExternalId() != null && !r.getExternalId().isBlank()) {
             externalId = r.getExternalId().trim();

@@ -86,8 +86,7 @@ public class ApiSinCookieDeSesionFilter extends OncePerRequestFilter {
             if (originales == null) {
                 return null;
             }
-            Cookie[] limpias = Arrays.stream(originales)
-                    .filter(c -> !COOKIE_SESION.equals(c.getName()))
+            Cookie[] limpias = Arrays.stream(originales).filter(c -> !COOKIE_SESION.equals(c.getName()))
                     .toArray(Cookie[]::new);
             return limpias.length == originales.length ? originales : limpias;
         }
@@ -120,12 +119,9 @@ public class ApiSinCookieDeSesionFilter extends OncePerRequestFilter {
             if (cabecera == null) {
                 return null;
             }
-            String resto = Arrays.stream(cabecera.split(";"))
-                    .map(String::trim)
+            String resto = Arrays.stream(cabecera.split(";")).map(String::trim)
                     .filter(par -> !par.equals(COOKIE_SESION) && !par.startsWith(COOKIE_SESION + "="))
-                    .filter(par -> !par.isEmpty())
-                    .reduce((a, b) -> a + "; " + b)
-                    .orElse(null);
+                    .filter(par -> !par.isEmpty()).reduce((a, b) -> a + "; " + b).orElse(null);
             return Objects.equals(resto, cabecera) ? cabecera : resto;
         }
 

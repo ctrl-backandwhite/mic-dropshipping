@@ -30,9 +30,9 @@ class CategoryUpdateMapperTest {
                 .productCount(42L).slug("old").nameZh("旧").position(1).active(false).icon("old-icon")
                 .names(new java.util.HashMap<>(Map.of("es", "Vieja"))).createdAt(created).createdBy("creator").build();
 
-        Category source = Category.builder().source("HACK").externalId("ext-evil")
-                .parentId(UUID.randomUUID()).productCount(999L).slug("new").nameZh("新").position(7).active(true)
-                .icon("new-icon").names(Map.of("es", "Nueva")).build();
+        Category source = Category.builder().source("HACK").externalId("ext-evil").parentId(UUID.randomUUID())
+                .productCount(999L).slug("new").nameZh("新").position(7).active(true).icon("new-icon")
+                .names(Map.of("es", "Nueva")).build();
 
         mapper.updateFromModel(source, target);
 

@@ -14,18 +14,15 @@ package com.nexaplatform.dropshipping.domain.enums;
 public enum LegalUpdateEmailLabel {
 
     SUBJECT(new Translations("Hemos actualizado nuestros términos y la política de privacidad",
-            "We've updated our terms and privacy policy",
-            "Atualizámos os nossos termos e a política de privacidade",
-            "我们更新了服务条款和隐私政策",
-            "Nous avons mis à jour nos conditions et notre politique de confidentialité",
+            "We've updated our terms and privacy policy", "Atualizámos os nossos termos e a política de privacidade",
+            "我们更新了服务条款和隐私政策", "Nous avons mis à jour nos conditions et notre politique de confidentialité",
             "Wir haben unsere AGB und Datenschutzerklärung aktualisiert",
             "Abbiamo aggiornato i nostri termini e l'informativa sulla privacy",
             "We hebben onze voorwaarden en privacybeleid bijgewerkt")),
 
-    TITLE(new Translations("Cambios en nuestras condiciones", "Changes to our terms",
-            "Alterações às nossas condições", "条款变更", "Modification de nos conditions",
-            "Änderungen an unseren Bedingungen", "Modifiche alle nostre condizioni",
-            "Wijzigingen in onze voorwaarden")),
+    TITLE(new Translations("Cambios en nuestras condiciones", "Changes to our terms", "Alterações às nossas condições",
+            "条款变更", "Modification de nos conditions", "Änderungen an unseren Bedingungen",
+            "Modifiche alle nostre condizioni", "Wijzigingen in onze voorwaarden")),
 
     INTRO(new Translations(
             "Hemos publicado una nueva versión de nuestros términos de uso y de la política de privacidad. "
@@ -66,9 +63,9 @@ public enum LegalUpdateEmailLabel {
             "Ler a política de privacidade", "阅读隐私政策", "Lire la politique de confidentialité",
             "Datenschutzerklärung lesen", "Leggi l'informativa sulla privacy", "Lees het privacybeleid")),
 
-    CTA_TERMS(new Translations("Leer los términos de uso", "Read the terms of use",
-            "Ler os termos de utilização", "阅读服务条款", "Lire les conditions d'utilisation",
-            "Nutzungsbedingungen lesen", "Leggi i termini d'uso", "Lees de gebruiksvoorwaarden")),
+    CTA_TERMS(new Translations("Leer los términos de uso", "Read the terms of use", "Ler os termos de utilização",
+            "阅读服务条款", "Lire les conditions d'utilisation", "Nutzungsbedingungen lesen", "Leggi i termini d'uso",
+            "Lees de gebruiksvoorwaarden")),
 
     /** Sin enlace de baja, y diciendo por qué: es un aviso de servicio, no una lista de correo. */
     FOOTER(new Translations(

@@ -23,18 +23,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BorrarCuentaBorraDeVerdadTest {
 
     private static User anonimizada() {
-        User user = User.builder()
-                .email("cliente.real@example.com")
-                .passwordHash("$2a$10$hashRealDeBcrypt")
-                .displayName("Ana Pérez García")
-                .firstName("Ana").lastName1("Pérez").lastName2("García")
-                .companyName("Tienda de Ana S.L.")
-                .phone("+34600111222")
-                .avatarUrl("https://cdn/avatar/ana.jpg")
-                .country("ES").language("es")
-                .lastLogin(Instant.now())
-                .googleLinked(true)
-                .build();
+        User user = User.builder().email("cliente.real@example.com").passwordHash("$2a$10$hashRealDeBcrypt")
+                .displayName("Ana Pérez García").firstName("Ana").lastName1("Pérez").lastName2("García")
+                .companyName("Tienda de Ana S.L.").phone("+34600111222").avatarUrl("https://cdn/avatar/ana.jpg")
+                .country("ES").language("es").lastLogin(Instant.now()).googleLinked(true).build();
         UserUseCaseImpl.anonymise(user, "$2a$10$hashDeUnSecretoAleatorioQueNadieConoce");
         return user;
     }

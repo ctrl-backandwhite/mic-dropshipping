@@ -130,15 +130,18 @@ public class AdminPricingController implements AdminPricingApi {
             return;
         }
         Map<UUID, String> names = new HashMap<>();
-        names.putAll(lookup("CATEGORY", idsByScope, "SELECT c.id, COALESCE("
-                + "(SELECT t.name FROM category_translation t WHERE t.category_id = c.id "
-                + "ORDER BY CASE t.language WHEN 'es' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1), c.slug) "
-                + "FROM category c WHERE c.id IN (%s)"));
-        names.putAll(lookup("SUPPLIER", idsByScope, "SELECT id, COALESCE(name, name_zh) FROM supplier WHERE id IN (%s)"));
-        names.putAll(lookup("PRODUCT", idsByScope, "SELECT id, COALESCE(NULLIF(title_zh,''), slug) FROM product WHERE id IN (%s)"));
+        names.putAll(lookup("CATEGORY", idsByScope,
+                "SELECT c.id, COALESCE(" + "(SELECT t.name FROM category_translation t WHERE t.category_id = c.id "
+                        + "ORDER BY CASE t.language WHEN 'es' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1), c.slug) "
+                        + "FROM category c WHERE c.id IN (%s)"));
+        names.putAll(
+                lookup("SUPPLIER", idsByScope, "SELECT id, COALESCE(name, name_zh) FROM supplier WHERE id IN (%s)"));
+        names.putAll(lookup("PRODUCT", idsByScope,
+                "SELECT id, COALESCE(NULLIF(title_zh,''), slug) FROM product WHERE id IN (%s)"));
         names.putAll(lookup("PRODUCT_GROUP", idsByScope, "SELECT id, name FROM product_group WHERE id IN (%s)"));
         names.putAll(lookup("CATEGORY_GROUP", idsByScope, "SELECT id, name FROM category_group WHERE id IN (%s)"));
-        names.putAll(lookup("VARIANT", idsByScope, "SELECT id, COALESCE(NULLIF(title,''), sku) FROM product_variant WHERE id IN (%s)"));
+        names.putAll(lookup("VARIANT", idsByScope,
+                "SELECT id, COALESCE(NULLIF(title,''), sku) FROM product_variant WHERE id IN (%s)"));
         for (PriceRuleDtoOut d : dtos) {
             if (d.getScopeId() != null) {
                 d.setScopeName(names.get(d.getScopeId()));

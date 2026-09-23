@@ -71,9 +71,7 @@ public class CountryTaxService {
         if (country != null && !country.isBlank() && region != null && !region.isBlank()) {
             Integer regionBps = regionRepository
                     .findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase(country.trim(), region.trim())
-                    .filter(CountryRegionEntity::isActive)
-                    .map(CountryRegionEntity::getRateBps)
-                    .orElse(null);
+                    .filter(CountryRegionEntity::isActive).map(CountryRegionEntity::getRateBps).orElse(null);
             if (regionBps != null) {
                 return Math.max(0, regionBps);
             }
@@ -86,8 +84,8 @@ public class CountryTaxService {
         if (bps <= 0 || taxableBaseCents <= 0) {
             return 0;
         }
-        return BigDecimal.valueOf((long) taxableBaseCents * bps).divide(BigDecimal.valueOf(10000), 0,
-                RoundingMode.HALF_UP).intValue();
+        return BigDecimal.valueOf((long) taxableBaseCents * bps)
+                .divide(BigDecimal.valueOf(10000), 0, RoundingMode.HALF_UP).intValue();
     }
 
     /** Regiones (estado/provincia) activas de un país para el dropdown del checkout. */
@@ -138,8 +136,8 @@ public class CountryTaxService {
 
     /** Crea o actualiza una región (estado/provincia). {@code rateBps} null = usa la tasa nacional. */
     @Transactional
-    public CountryRegionEntity regionUpsert(String country, String code, String name, Integer rateBps,
-            boolean active, Integer position) {
+    public CountryRegionEntity regionUpsert(String country, String code, String name, Integer rateBps, boolean active,
+            Integer position) {
         String cc = country.trim().toUpperCase();
         String rc = code.trim().toUpperCase();
         CountryRegionEntity e = regionRepository.findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase(cc, rc)

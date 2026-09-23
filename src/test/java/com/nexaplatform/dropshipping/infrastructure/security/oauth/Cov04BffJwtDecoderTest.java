@@ -64,13 +64,12 @@ class Cov04BffJwtDecoderTest {
 
     private String token(String typ, String subject, Instant issuedAt) throws Exception {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder().issuer(ISSUER).subject(subject)
-                .issueTime(Date.from(issuedAt))
-                .expirationTime(Date.from(issuedAt.plus(Duration.ofHours(1))));
+                .issueTime(Date.from(issuedAt)).expirationTime(Date.from(issuedAt.plus(Duration.ofHours(1))));
         if (typ != null) {
             claims.claim("typ", typ);
         }
-        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1")
-                .type(JOSEObjectType.JWT).build(), claims.build());
+        SignedJWT jwt = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1").type(JOSEObjectType.JWT).build(), claims.build());
         jwt.sign(new RSASSASigner(firmante));
         return jwt.serialize();
     }
@@ -123,11 +122,10 @@ class Cov04BffJwtDecoderTest {
     @Test
     void unTokenDeOtroEmisorNoSeAcepta() throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder().issuer("https://malo.test").subject("usuario-1")
-                .issueTime(Date.from(Instant.now()))
-                .expirationTime(Date.from(Instant.now().plus(Duration.ofHours(1))))
+                .issueTime(Date.from(Instant.now())).expirationTime(Date.from(Instant.now().plus(Duration.ofHours(1))))
                 .claim("typ", "access").build();
-        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1")
-                .type(JOSEObjectType.JWT).build(), claims);
+        SignedJWT jwt = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1").type(JOSEObjectType.JWT).build(), claims);
         jwt.sign(new RSASSASigner(firmante));
         String ajeno = jwt.serialize();
 

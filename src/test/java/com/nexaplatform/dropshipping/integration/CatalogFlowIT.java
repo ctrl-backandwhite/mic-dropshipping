@@ -81,28 +81,24 @@ class CatalogFlowIT extends BaseIntegration {
         // ordena (precio, nota, ventas, tendencia, vídeo, envío gratis, origen), para que ningún filtro
         // pueda "acertar" devolviendo la lista entera.
         Instant ahora = Instant.now();
-        newProduct(SLUG_BOTAS, "Botas de agua para lluvia", "Rain boots", categoriaRopa)
-                .basePrice("10.0000").rating("4.50").monthlySales(100).trendScore("50")
-                .shipFrom("CN").freeShipping(true).hasVideo(false).inventory(10)
-                .createdAt(ahora.minus(30, ChronoUnit.DAYS)).insert();
-        newProduct(SLUG_CAMISETA, "Camiseta básica de algodón", "Basic t-shirt", categoriaRopa)
-                .basePrice("20.0000").rating("3.00").monthlySales(500).trendScore("10")
-                .shipFrom("ES").freeShipping(false).hasVideo(true).inventory(5)
-                .createdAt(ahora.minus(20, ChronoUnit.DAYS)).insert();
-        newProduct(SLUG_VESTIDO, "Vestido de verano", "Summer dress", categoriaMerceria)
-                .basePrice("30.0000").rating("5.00").monthlySales(50).trendScore("90")
-                .shipFrom("CN").freeShipping(true).hasVideo(false).inventory(0)
-                .createdAt(ahora.minus(10, ChronoUnit.DAYS)).insert();
-        newProduct(SLUG_BOTONES, "Botones dorados", "Golden buttons", categoriaMerceria)
-                .basePrice("5.0000").rating("2.00").monthlySales(1).trendScore("1")
-                .shipFrom("CN").freeShipping(false).hasVideo(false).inventory(999)
-                .createdAt(ahora.minus(5, ChronoUnit.DAYS)).insert();
+        newProduct(SLUG_BOTAS, "Botas de agua para lluvia", "Rain boots", categoriaRopa).basePrice("10.0000")
+                .rating("4.50").monthlySales(100).trendScore("50").shipFrom("CN").freeShipping(true).hasVideo(false)
+                .inventory(10).createdAt(ahora.minus(30, ChronoUnit.DAYS)).insert();
+        newProduct(SLUG_CAMISETA, "Camiseta básica de algodón", "Basic t-shirt", categoriaRopa).basePrice("20.0000")
+                .rating("3.00").monthlySales(500).trendScore("10").shipFrom("ES").freeShipping(false).hasVideo(true)
+                .inventory(5).createdAt(ahora.minus(20, ChronoUnit.DAYS)).insert();
+        newProduct(SLUG_VESTIDO, "Vestido de verano", "Summer dress", categoriaMerceria).basePrice("30.0000")
+                .rating("5.00").monthlySales(50).trendScore("90").shipFrom("CN").freeShipping(true).hasVideo(false)
+                .inventory(0).createdAt(ahora.minus(10, ChronoUnit.DAYS)).insert();
+        newProduct(SLUG_BOTONES, "Botones dorados", "Golden buttons", categoriaMerceria).basePrice("5.0000")
+                .rating("2.00").monthlySales(1).trendScore("1").shipFrom("CN").freeShipping(false).hasVideo(false)
+                .inventory(999).createdAt(ahora.minus(5, ChronoUnit.DAYS)).insert();
 
         // Señuelos: NINGUNO debe salir en el escaparate.
-        newProduct("borrador-invisible", "Borrador invisible", "Draft", categoriaRopa)
-                .basePrice("11.0000").status("DRAFT").createdAt(ahora).insert();
-        newProduct("sin-espejar", "Sin imagen espejada", "Unmirrored", categoriaRopa)
-                .basePrice("12.0000").mirroredImage(false).createdAt(ahora).insert();
+        newProduct("borrador-invisible", "Borrador invisible", "Draft", categoriaRopa).basePrice("11.0000")
+                .status("DRAFT").createdAt(ahora).insert();
+        newProduct("sin-espejar", "Sin imagen espejada", "Unmirrored", categoriaRopa).basePrice("12.0000")
+                .mirroredImage(false).createdAt(ahora).insert();
     }
 
     /* ============================================================================================
@@ -183,15 +179,13 @@ class CatalogFlowIT extends BaseIntegration {
     void filtrosDeFacetas() {
         assertThat(slugs(getJson(PRODUCTS + "?size=50&freeShipping=true", userToken)))
                 .containsExactlyInAnyOrder(SLUG_BOTAS, SLUG_VESTIDO);
-        assertThat(slugs(getJson(PRODUCTS + "?size=50&hasVideo=true", userToken)))
-                .containsExactly(SLUG_CAMISETA);
-        assertThat(slugs(getJson(PRODUCTS + "?size=50&minRating=4", userToken)))
-                .containsExactlyInAnyOrder(SLUG_BOTAS, SLUG_VESTIDO);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&hasVideo=true", userToken))).containsExactly(SLUG_CAMISETA);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&minRating=4", userToken))).containsExactlyInAnyOrder(SLUG_BOTAS,
+                SLUG_VESTIDO);
         // El código de país se normaliza a mayúsculas en el servidor: "cn" tiene que valer igual que "CN".
-        assertThat(slugs(getJson(PRODUCTS + "?size=50&shipFrom=cn", userToken)))
-                .containsExactlyInAnyOrder(SLUG_BOTAS, SLUG_VESTIDO, SLUG_BOTONES);
-        assertThat(slugs(getJson(PRODUCTS + "?size=50&inventoryMin=100", userToken)))
-                .containsExactly(SLUG_BOTONES);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&shipFrom=cn", userToken))).containsExactlyInAnyOrder(SLUG_BOTAS,
+                SLUG_VESTIDO, SLUG_BOTONES);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&inventoryMin=100", userToken))).containsExactly(SLUG_BOTONES);
     }
 
     @Test
@@ -250,8 +244,8 @@ class CatalogFlowIT extends BaseIntegration {
         assertThat(conSemilla).isEqualTo(slugs(getJson(PRODUCTS + "?size=50&seed=7", userToken)));
 
         // Sin semilla se mantiene el orden fijo de siempre: quien no la manda no nota el cambio.
-        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken)))
-                .containsExactly(SLUG_VESTIDO, SLUG_BOTAS, SLUG_CAMISETA, SLUG_BOTONES);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken))).containsExactly(SLUG_VESTIDO, SLUG_BOTAS,
+                SLUG_CAMISETA, SLUG_BOTONES);
 
         // Una semilla negativa o desbordada tampoco rompe la consulta: se reduce al rango de barajas.
         assertThat(slugs(getJson(PRODUCTS + "?size=50&seed=-1", userToken))).hasSize(4);
@@ -265,14 +259,14 @@ class CatalogFlowIT extends BaseIntegration {
     @DisplayName("Ordenación por novedad, por ventas y por relevancia (tendencia) por defecto")
     void ordenPorNovedadVentasYRelevancia() {
         // Novedad: el sembrado da fechas descendentes conocidas, así que el orden es exacto.
-        assertThat(slugs(getJson(PRODUCTS + "?size=50&sort=newest", userToken)))
-                .containsExactly(SLUG_BOTONES, SLUG_VESTIDO, SLUG_CAMISETA, SLUG_BOTAS);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&sort=newest", userToken))).containsExactly(SLUG_BOTONES,
+                SLUG_VESTIDO, SLUG_CAMISETA, SLUG_BOTAS);
         // Ventas mensuales: 500 > 100 > 50 > 1.
-        assertThat(slugs(getJson(PRODUCTS + "?size=50&sort=sales", userToken)))
-                .containsExactly(SLUG_CAMISETA, SLUG_BOTAS, SLUG_VESTIDO, SLUG_BOTONES);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&sort=sales", userToken))).containsExactly(SLUG_CAMISETA,
+                SLUG_BOTAS, SLUG_VESTIDO, SLUG_BOTONES);
         // Sin `sort` manda best_match, que sin texto libre equivale a tendencia: 90 > 50 > 10 > 1.
-        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken)))
-                .containsExactly(SLUG_VESTIDO, SLUG_BOTAS, SLUG_CAMISETA, SLUG_BOTONES);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken))).containsExactly(SLUG_VESTIDO, SLUG_BOTAS,
+                SLUG_CAMISETA, SLUG_BOTONES);
     }
 
     @Test
@@ -311,15 +305,14 @@ class CatalogFlowIT extends BaseIntegration {
     @Test
     @DisplayName("Caso borde: tamaño de página 0 se rechaza con 400, nunca con 500")
     void tamanoDePaginaCero() {
-        client.get().uri(PRODUCTS + "?size=0").header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isBadRequest();
+        client.get().uri(PRODUCTS + "?size=0").header(AUTH, bearer(userToken)).exchange().expectStatus().isBadRequest();
     }
 
     @Test
     @DisplayName("Caso borde: tamaño de página negativo se rechaza con 400, nunca con 500")
     void tamanoDePaginaNegativo() {
-        client.get().uri(PRODUCTS + "?size=-5").header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isBadRequest();
+        client.get().uri(PRODUCTS + "?size=-5").header(AUTH, bearer(userToken)).exchange().expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -351,10 +344,10 @@ class CatalogFlowIT extends BaseIntegration {
     @Test
     @DisplayName("Caso borde: page y size no numéricos se rechazan con 400")
     void paginacionNoNumerica() {
-        client.get().uri(PRODUCTS + "?page=abc").header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isBadRequest();
-        client.get().uri(PRODUCTS + "?size=diez").header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isBadRequest();
+        client.get().uri(PRODUCTS + "?page=abc").header(AUTH, bearer(userToken)).exchange().expectStatus()
+                .isBadRequest();
+        client.get().uri(PRODUCTS + "?size=diez").header(AUTH, bearer(userToken)).exchange().expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -395,12 +388,9 @@ class CatalogFlowIT extends BaseIntegration {
     @Test
     @DisplayName("Caso borde: ficha inexistente devuelve 404 y un id mal formado 400")
     void fichaInexistente() {
-        client.get().uri("/api/catalog/products/by-id/" + UUID.randomUUID()).exchange()
-                .expectStatus().isNotFound();
-        client.get().uri("/api/catalog/products/by-id/no-es-uuid").exchange()
-                .expectStatus().isBadRequest();
-        client.get().uri("/api/catalog/products/by-external/1688/NO-EXISTE").exchange()
-                .expectStatus().isNotFound();
+        client.get().uri("/api/catalog/products/by-id/" + UUID.randomUUID()).exchange().expectStatus().isNotFound();
+        client.get().uri("/api/catalog/products/by-id/no-es-uuid").exchange().expectStatus().isBadRequest();
+        client.get().uri("/api/catalog/products/by-external/1688/NO-EXISTE").exchange().expectStatus().isNotFound();
     }
 
     /* ============================================================================================
@@ -435,8 +425,8 @@ class CatalogFlowIT extends BaseIntegration {
         JsonNode v = getJson(PRODUCTS + "/" + id + "/variants/by-sku/SKU-AZUL", userToken);
         assertThat(v.get("options").get("Color").asText()).isEqualTo("Azul");
 
-        client.get().uri(PRODUCTS + "/" + id + "/variants/by-sku/NO-EXISTE")
-                .header(AUTH, bearer(userToken)).exchange().expectStatus().isNotFound();
+        client.get().uri(PRODUCTS + "/" + id + "/variants/by-sku/NO-EXISTE").header(AUTH, bearer(userToken)).exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
@@ -519,10 +509,10 @@ class CatalogFlowIT extends BaseIntegration {
     void estimadorDeMargenSoloAdmin() {
         UUID id = productId(SLUG_BOTAS);
 
-        client.get().uri(PRODUCTS + "/" + id + "/margin-estimate").header(AUTH, bearer(userToken))
-                .exchange().expectStatus().isForbidden();
-        client.get().uri(PRODUCTS + "/" + id + "/margin-estimate").header(AUTH, bearer(adminToken))
-                .exchange().expectStatus().isOk();
+        client.get().uri(PRODUCTS + "/" + id + "/margin-estimate").header(AUTH, bearer(userToken)).exchange()
+                .expectStatus().isForbidden();
+        client.get().uri(PRODUCTS + "/" + id + "/margin-estimate").header(AUTH, bearer(adminToken)).exchange()
+                .expectStatus().isOk();
     }
 
     /**
@@ -580,8 +570,8 @@ class CatalogFlowIT extends BaseIntegration {
         // Marcar dos veces no duplica.
         postEmpty("/api/me/favorites/" + id, userToken).expectStatus().isOk();
         postEmpty("/api/me/favorites/" + id, userToken).expectStatus().isOk();
-        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM product_favorite WHERE user_id = ?",
-                Integer.class, userId)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM product_favorite WHERE user_id = ?", Integer.class,
+                userId)).isEqualTo(1);
 
         JsonNode ids = getJson("/api/me/favorites/ids", userToken);
         assertThat(ids.size()).isEqualTo(1);
@@ -591,10 +581,8 @@ class CatalogFlowIT extends BaseIntegration {
         assertThat(slugs(lista)).containsExactly(SLUG_BOTAS);
 
         // Desmarcar dos veces tampoco falla.
-        client.delete().uri("/api/me/favorites/" + id).header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isOk();
-        client.delete().uri("/api/me/favorites/" + id).header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isOk();
+        client.delete().uri("/api/me/favorites/" + id).header(AUTH, bearer(userToken)).exchange().expectStatus().isOk();
+        client.delete().uri("/api/me/favorites/" + id).header(AUTH, bearer(userToken)).exchange().expectStatus().isOk();
         assertThat(getJson("/api/me/favorites/ids", userToken).size()).isZero();
     }
 
@@ -637,8 +625,8 @@ class CatalogFlowIT extends BaseIntegration {
         assertThat(idPorExternalId("BULK-UPSERT")).as("el id NO puede cambiar: cuelgan favoritos y pedidos")
                 .isEqualTo(idOriginal);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT title FROM product_translation WHERE product_id = ? AND language = 'es'",
-                String.class, idOriginal)).isEqualTo("Mochila de viaje XL");
+                "SELECT title FROM product_translation WHERE product_id = ? AND language = 'es'", String.class,
+                idOriginal)).isEqualTo("Mochila de viaje XL");
     }
 
     @Test
@@ -713,8 +701,7 @@ class CatalogFlowIT extends BaseIntegration {
     @DisplayName("La importación masiva es exclusiva del admin: un usuario normal recibe 403")
     void bulkSoloAdmin() {
         client.post().uri(ADMIN_CATALOG + "/products/bulk").header(AUTH, bearer(userToken))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue("[]").exchange()
-                .expectStatus().isForbidden();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("[]").exchange().expectStatus().isForbidden();
     }
 
     /* ============================================================================================
@@ -726,8 +713,8 @@ class CatalogFlowIT extends BaseIntegration {
     void borradoDeProducto() {
         UUID id = productId(SLUG_BOTONES);
 
-        client.delete().uri(ADMIN_CATALOG + "/products/" + id).header(AUTH, bearer(adminToken))
-                .exchange().expectStatus().isNoContent();
+        client.delete().uri(ADMIN_CATALOG + "/products/" + id).header(AUTH, bearer(adminToken)).exchange()
+                .expectStatus().isNoContent();
 
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM product WHERE id = ?", Integer.class, id))
                 .isZero();
@@ -741,8 +728,8 @@ class CatalogFlowIT extends BaseIntegration {
         UUID id = productId(SLUG_VESTIDO);
 
         client.put().uri(ADMIN_CATALOG + "/products/" + id + "/status").header(AUTH, bearer(adminToken))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"status\":\"ARCHIVED\"}")
-                .exchange().expectStatus().is2xxSuccessful();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"status\":\"ARCHIVED\"}").exchange()
+                .expectStatus().is2xxSuccessful();
 
         clearAllCaches();
         assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken))).doesNotContain(SLUG_VESTIDO);
@@ -788,21 +775,21 @@ class CatalogFlowIT extends BaseIntegration {
 
         JsonNode res = client.put().uri(ADMIN_CATALOG + "/products/bulk-status").header(AUTH, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"ids\":[\"" + uno + "\",\"" + dos + "\"],\"status\":\"ARCHIVED\"}")
-                .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+                .bodyValue("{\"ids\":[\"" + uno + "\",\"" + dos + "\"],\"status\":\"ARCHIVED\"}").exchange()
+                .expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
 
         assertThat(res).isNotNull();
         assertThat(res.get("succeeded").asInt()).isEqualTo(2);
         clearAllCaches();
-        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken)))
-                .containsExactlyInAnyOrder(SLUG_VESTIDO, SLUG_BOTONES);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken))).containsExactlyInAnyOrder(SLUG_VESTIDO,
+                SLUG_BOTONES);
     }
 
     @Test
     @DisplayName("Caso borde: borrar un producto inexistente devuelve 404, no 500")
     void borradoDeProductoInexistente() {
-        client.delete().uri(ADMIN_CATALOG + "/products/" + UUID.randomUUID())
-                .header(AUTH, bearer(adminToken)).exchange().expectStatus().isNotFound();
+        client.delete().uri(ADMIN_CATALOG + "/products/" + UUID.randomUUID()).header(AUTH, bearer(adminToken))
+                .exchange().expectStatus().isNotFound();
     }
 
     /* ============================================================================================
@@ -828,8 +815,8 @@ class CatalogFlowIT extends BaseIntegration {
     /** POST del lote de importación masiva como admin; devuelve el {@code BulkResultDtoOut}. */
     private JsonNode bulk(String jsonArray) {
         JsonNode body = client.post().uri(ADMIN_CATALOG + "/products/bulk").header(AUTH, bearer(adminToken))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(jsonArray).exchange()
-                .expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(jsonArray).exchange().expectStatus().isOk()
+                .expectBody(JsonNode.class).returnResult().getResponseBody();
         assertThat(body).isNotNull();
         return body;
     }
@@ -911,15 +898,17 @@ class CatalogFlowIT extends BaseIntegration {
     private UUID insertUser(String email, String role) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("INSERT INTO users (id, email, role, active, created_at, updated_at, google_linked, "
-                + "marketing_opt_out, free_trial_used) VALUES (?, ?, ?, true, now(), now(), false, false, false)",
-                id, email, role);
+                + "marketing_opt_out, free_trial_used) VALUES (?, ?, ?, true, now(), now(), false, false, false)", id,
+                email, role);
         return id;
     }
 
     private UUID insertSupplier(String externalId, String nombre) {
         UUID id = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO supplier (id, external_id, source, name, country, rating, years_active, "
-                + "verified, trust_pass) VALUES (?, ?, '1688', ?, 'CN', 4.8, 5, true, true)", id, externalId, nombre);
+        jdbcTemplate.update(
+                "INSERT INTO supplier (id, external_id, source, name, country, rating, years_active, "
+                        + "verified, trust_pass) VALUES (?, ?, '1688', ?, 'CN', 4.8, 5, true, true)",
+                id, externalId, nombre);
         return id;
     }
 
@@ -933,9 +922,10 @@ class CatalogFlowIT extends BaseIntegration {
     }
 
     private void insertImage(UUID productId, int position, String role, String cdnUrl) {
-        jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
-                + "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)", productId, position, role,
-                "https://origen.test/" + productId + "-" + position + ".jpg", cdnUrl);
+        jdbcTemplate.update(
+                "INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
+                        + "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)",
+                productId, position, role, "https://origen.test/" + productId + "-" + position + ".jpg", cdnUrl);
     }
 
     private void insertVariant(UUID productId, String sku, String titulo, String precioCny, int stock,
@@ -950,15 +940,17 @@ class CatalogFlowIT extends BaseIntegration {
             first = false;
         }
         json.append('}');
-        jdbcTemplate.update("INSERT INTO product_variant (id, product_id, external_id, sku, title, price, stock, "
-                + "options_json, active) VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), true)",
+        jdbcTemplate.update(
+                "INSERT INTO product_variant (id, product_id, external_id, sku, title, price, stock, "
+                        + "options_json, active) VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), true)",
                 productId, "EXT-" + sku, sku, titulo, new BigDecimal(precioCny), stock, json.toString());
     }
 
     private UUID insertVariantOption(UUID productId, String nameZh, String nombre) {
         UUID id = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO variant_option (id, product_id, name_zh, name, position) "
-                + "VALUES (?, ?, ?, ?, 0)", id, productId, nameZh, nombre);
+        jdbcTemplate.update(
+                "INSERT INTO variant_option (id, product_id, name_zh, name, position) " + "VALUES (?, ?, ?, ?, 0)", id,
+                productId, nameZh, nombre);
         return id;
     }
 
@@ -972,8 +964,8 @@ class CatalogFlowIT extends BaseIntegration {
     }
 
     private int contarProductos(String externalId) {
-        Integer n = jdbcTemplate.queryForObject("SELECT count(*) FROM product WHERE external_id = ?",
-                Integer.class, externalId);
+        Integer n = jdbcTemplate.queryForObject("SELECT count(*) FROM product WHERE external_id = ?", Integer.class,
+                externalId);
         return n == null ? 0 : n;
     }
 
@@ -1075,10 +1067,9 @@ class CatalogFlowIT extends BaseIntegration {
                     + "ship_from, free_shipping, self_pickup, has_video, inventory_count, moq, shipping_cny, "
                     + "iva_cny, created_at, updated_at, ingested_at) "
                     + "VALUES (?, ?, ?, '1688', ?, ?, ?, ?, ?, 'CNY', ?, 0, ?, ?, ?, ?, false, ?, ?, 1, 5, 1, "
-                    + "?, ?, ?)",
-                    id, slug, "EXT-" + slug, proveedor, categoryId, tituloEs, status, new BigDecimal(basePrice),
-                    new BigDecimal(rating), monthlySales, new BigDecimal(trendScore), shipFrom, freeShipping,
-                    hasVideo, inventory, Timestamp.from(createdAt), Timestamp.from(createdAt),
+                    + "?, ?, ?)", id, slug, "EXT-" + slug, proveedor, categoryId, tituloEs, status,
+                    new BigDecimal(basePrice), new BigDecimal(rating), monthlySales, new BigDecimal(trendScore),
+                    shipFrom, freeShipping, hasVideo, inventory, Timestamp.from(createdAt), Timestamp.from(createdAt),
                     Timestamp.from(createdAt));
             insertImage(id, 0, "MAIN", mirroredImage ? IMG_CDN + slug + ".jpg" : null);
             jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, description) "

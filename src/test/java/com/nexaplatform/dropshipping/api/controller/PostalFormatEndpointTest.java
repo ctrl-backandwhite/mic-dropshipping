@@ -21,9 +21,9 @@ import static org.mockito.Mockito.mock;
  */
 class PostalFormatEndpointTest {
 
-    private final ShippingQuoteController controller = new ShippingQuoteController(
-            mock(CheckoutPreviewService.class), mock(ShippingQuoteService.class), mock(CountryTaxService.class),
-            mock(PricingService.class), mock(CurrencyRateService.class));
+    private final ShippingQuoteController controller = new ShippingQuoteController(mock(CheckoutPreviewService.class),
+            mock(ShippingQuoteService.class), mock(CountryTaxService.class), mock(PricingService.class),
+            mock(CurrencyRateService.class));
 
     @Test
     @DisplayName("un país conocido publica su patrón y un ejemplo")

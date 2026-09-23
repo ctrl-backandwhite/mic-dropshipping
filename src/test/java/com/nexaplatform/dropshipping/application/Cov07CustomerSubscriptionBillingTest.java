@@ -106,8 +106,8 @@ class Cov07CustomerSubscriptionBillingTest {
 
     @Test
     void unPlanGratisNuncaSeMuestraEnPruebaEnElListadoDeAdmin() {
-        CustomerSubscription free = CustomerSubscription.builder().planCode("FREE")
-                .status(SubscriptionStatus.TRIALING).trialEndsAt(Instant.now()).billingPeriod("MONTH").build();
+        CustomerSubscription free = CustomerSubscription.builder().planCode("FREE").status(SubscriptionStatus.TRIALING)
+                .trialEndsAt(Instant.now()).billingPeriod("MONTH").build();
         when(customerSubscriptionRepository.findAll()).thenReturn(List.of(free));
 
         // Se pide el filtro ACTIVE: la normalización ocurre ANTES de filtrar, así que la fila FREE entra.
@@ -120,8 +120,8 @@ class Cov07CustomerSubscriptionBillingTest {
 
     @Test
     void unPlanSinPrecioTambienCuentaComoGratisAunqueSuCodigoNoSeaFree() {
-        CustomerSubscription free = CustomerSubscription.builder().planCode("STARTER")
-                .priceMonthly(0).priceYearly(0).status(SubscriptionStatus.TRIALING).build();
+        CustomerSubscription free = CustomerSubscription.builder().planCode("STARTER").priceMonthly(0).priceYearly(0)
+                .status(SubscriptionStatus.TRIALING).build();
         when(customerSubscriptionRepository.findAll()).thenReturn(List.of(free));
 
         assertThat(useCase.listAdminSubscriptions(null).get(0).getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
@@ -148,8 +148,8 @@ class Cov07CustomerSubscriptionBillingTest {
         List<CustomerSubscription> result = useCase.listAdminSubscriptions(null);
 
         // El front traduce el periodo por i18n: un valor crudo del enum se mostraría sin traducir.
-        assertThat(result).extracting(CustomerSubscription::getBillingPeriod)
-                .containsExactly("MONTHLY", "YEARLY", "TRIMESTRAL", null);
+        assertThat(result).extracting(CustomerSubscription::getBillingPeriod).containsExactly("MONTHLY", "YEARLY",
+                "TRIMESTRAL", null);
     }
 
     /* ==================== Prueba gratis ==================== */
@@ -168,8 +168,7 @@ class Cov07CustomerSubscriptionBillingTest {
         // El modelo trata FREE como ACTIVE (no TRIALING) y siempre MENSUAL, ignorando el periodo pedido.
         assertThat(saved.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(saved.getBillingPeriod()).isEqualTo("MONTHLY");
-        assertThat(saved.getCurrentPeriodEnd())
-                .isAfterOrEqualTo(before.plus(15, ChronoUnit.DAYS).minusSeconds(5))
+        assertThat(saved.getCurrentPeriodEnd()).isAfterOrEqualTo(before.plus(15, ChronoUnit.DAYS).minusSeconds(5))
                 .isBefore(before.plus(16, ChronoUnit.DAYS));
         assertThat(user.isFreeTrialUsed()).isTrue();
         verify(userRepository).save(user);
@@ -181,8 +180,7 @@ class Cov07CustomerSubscriptionBillingTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user(true)));
 
         assertThatThrownBy(() -> useCase.createSubscription(userId, "FREE", "MONTHLY"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("15 días");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("15 días");
         verify(customerSubscriptionRepository, never()).save(any());
     }
 
@@ -371,7 +369,7 @@ class Cov07CustomerSubscriptionBillingTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "active,ACTIVE", "trialing,TRIALING", "past_due,PAST_DUE", "paused,PAUSED", "canceled,CANCELED" })
+    @CsvSource({"active,ACTIVE", "trialing,TRIALING", "past_due,PAST_DUE", "paused,PAUSED", "canceled,CANCELED"})
     void losEstadosConocidosDeStripeSeTraducenAlEnumDelDominio(String stripeStatus, SubscriptionStatus expected) {
         CustomerSubscription sub = CustomerSubscription.builder().id(UUID.randomUUID()).build();
         when(customerSubscriptionRepository.findByStripeSubscriptionId("sub_1")).thenReturn(Optional.of(sub));
@@ -436,8 +434,7 @@ class Cov07CustomerSubscriptionBillingTest {
         List<PaymentMethod> cards = List.of(card("pm_1", "visa", "4242"));
         when(stripeService.listCards("cus_1")).thenReturn(cards);
 
-        assertThatThrownBy(() -> useCase.setDefaultCard(userId, "pm_ajena"))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.setDefaultCard(userId, "pm_ajena")).isInstanceOf(NotFoundException.class);
         verify(stripeService, never()).setDefaultPaymentMethod(anyString(), anyString());
     }
 
@@ -531,8 +528,7 @@ class Cov07CustomerSubscriptionBillingTest {
         when(stripeService.isEnabled()).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user(false)));
 
-        assertThatThrownBy(() -> useCase.renderInvoicePdf(userId, "F-001", "es"))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.renderInvoicePdf(userId, "F-001", "es")).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -542,13 +538,13 @@ class Cov07CustomerSubscriptionBillingTest {
         when(stripeService.isEnabled()).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(stripeService.listInvoices("cus_1", 50)).thenReturn(List.of(invoice("F-001")));
-        when(invoiceService.renderPlanInvoicePdf(any(), eq("es"))).thenReturn(new byte[] { 1, 2, 3 });
+        when(invoiceService.renderPlanInvoicePdf(any(), eq("es"))).thenReturn(new byte[]{1, 2, 3});
 
         byte[] pdf = useCase.renderInvoicePdf(userId, "F-001", "es");
 
         assertThat(pdf).hasSize(3);
-        ArgumentCaptor<InvoiceService.PlanInvoiceData> captor =
-                ArgumentCaptor.forClass(InvoiceService.PlanInvoiceData.class);
+        ArgumentCaptor<InvoiceService.PlanInvoiceData> captor = ArgumentCaptor
+                .forClass(InvoiceService.PlanInvoiceData.class);
         verify(invoiceService).renderPlanInvoicePdf(captor.capture(), eq("es"));
         assertThat(captor.getValue().number()).isEqualTo("F-001");
         assertThat(captor.getValue().totalCents()).isEqualTo(1210L);
@@ -582,8 +578,7 @@ class Cov07CustomerSubscriptionBillingTest {
 
         // Sin país no se puede calcular el IVA de la factura, así que no se cobra.
         assertThatThrownBy(() -> useCase.subscribeWithSavedCard(userId, "PRO", "MONTHLY"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("país");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("país");
     }
 
     @Test
@@ -597,8 +592,7 @@ class Cov07CustomerSubscriptionBillingTest {
         when(stripeService.defaultOrFirstCardId("cus_1")).thenReturn(null);
 
         assertThatThrownBy(() -> useCase.subscribeWithSavedCard(userId, "PRO", "MONTHLY"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("tarjeta");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("tarjeta");
     }
 
     @Test
@@ -741,7 +735,7 @@ class Cov07CustomerSubscriptionBillingTest {
     }
 
     private static StripeService.InvoiceInfo invoice(String number) {
-        return new StripeService.InvoiceInfo("in_1", number, 1210L, "eur", "paid", 1000L, "http://pdf",
-                "http://hosted", 1000L, 210L, 1L, 2L, "Plan PRO", "Cliente", "u@example.com");
+        return new StripeService.InvoiceInfo("in_1", number, 1210L, "eur", "paid", 1000L, "http://pdf", "http://hosted",
+                1000L, 210L, 1L, 2L, "Plan PRO", "Cliente", "u@example.com");
     }
 }

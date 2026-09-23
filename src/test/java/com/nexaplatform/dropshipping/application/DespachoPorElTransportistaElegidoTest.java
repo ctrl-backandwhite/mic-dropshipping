@@ -125,8 +125,8 @@ class DespachoPorElTransportistaElegidoTest {
     }
 
     private FulfillmentService servicio() {
-        FulfillmentProviderSelector selector =
-                new FulfillmentProviderSelector(List.of(yunExpress, segundo), yunExpress);
+        FulfillmentProviderSelector selector = new FulfillmentProviderSelector(List.of(yunExpress, segundo),
+                yunExpress);
         return new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), selector,
                 mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), mock(OpsAlertService.class),

@@ -161,7 +161,7 @@ public class ProductIndexer {
         purgeIndex();
         // Solo los ids: con findAll() el barrido se quedaba con miles de entidades vivas en la sesión.
         List<UUID> ids = lectura.execute(estado -> productRepository.findAllIds());
-        int[] counters = { 0, 0 };
+        int[] counters = {0, 0};
         for (UUID id : Objects.requireNonNullElse(ids, List.<UUID>of())) {
             if (indexaProducto(id)) {
                 counters[0]++;
@@ -267,8 +267,7 @@ public class ProductIndexer {
         // lleva ideogramas. Indexar texto español en un campo con analizador `cjk` —que no conoce las
         // palabras vacías del español— convertía cada "de", "con" o "para" en ~4.300 coincidencias con
         // peso 3: buscar "Blazer de" devolvía 4.368 resultados con el blazer buscado en tercer lugar.
-        doc.put("titleZh", tituloChino != null ? tituloChino
-                : (esChino(p.getTitleZh()) ? p.getTitleZh() : null));
+        doc.put("titleZh", tituloChino != null ? tituloChino : (esChino(p.getTitleZh()) ? p.getTitleZh() : null));
         doc.put("descAll", descriptions.toString());
         // Atributos y variantes: son el otro sitio donde el usuario espera acertar ("Botas de nieve" vive
         // en un atributo del proveedor, "rojo"/"talla 38" en las variantes). Se indexan aplanados porque a
@@ -299,8 +298,8 @@ public class ProductIndexer {
         // Las fotos de la DESCRIPCION no cuentan: el escaparate filtra por `hasImage` para no enseñar
         // productos cuya imagen no renderiza, y un producto cuya unica foto espejada fuese un cartel
         // de la descripcion saldria en el listado sin una sola foto de galeria que enseñar.
-        List<ProductImageEntity> deGaleria = p.getImages().stream()
-                .filter(i -> !"DETAIL".equalsIgnoreCase(i.getRole())).toList();
+        List<ProductImageEntity> deGaleria = p.getImages().stream().filter(i -> !"DETAIL".equalsIgnoreCase(i.getRole()))
+                .toList();
         boolean hasMirroredImage = deGaleria.stream().anyMatch(i -> i.getCdnUrl() != null);
         doc.put("hasImage", hasMirroredImage);
         if (!deGaleria.isEmpty()) {
@@ -356,8 +355,7 @@ public class ProductIndexer {
     }
 
     private static String flatten(Stream<String> values) {
-        return values.filter(Objects::nonNull).filter(s -> !s.isBlank()).distinct()
-                .collect(Collectors.joining(" "));
+        return values.filter(Objects::nonNull).filter(s -> !s.isBlank()).distinct().collect(Collectors.joining(" "));
     }
 
     private static void append(StringBuilder sb, String text) {

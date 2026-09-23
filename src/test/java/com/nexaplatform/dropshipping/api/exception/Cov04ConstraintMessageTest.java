@@ -17,10 +17,8 @@ class Cov04ConstraintMessageTest {
 
     @Test
     void unaConstraintConocidaSeTraduceAAlgoQueElUsuarioPuedeCorregir() {
-        assertThat(ConstraintMessage.forConstraint("users_email_key"))
-                .isEqualTo("Ya existe un usuario con ese email.");
-        assertThat(ConstraintMessage.forConstraint("affiliate_code_key"))
-                .contains("código de afiliado");
+        assertThat(ConstraintMessage.forConstraint("users_email_key")).isEqualTo("Ya existe un usuario con ese email.");
+        assertThat(ConstraintMessage.forConstraint("affiliate_code_key")).contains("código de afiliado");
     }
 
     @Test
@@ -44,8 +42,7 @@ class Cov04ConstraintMessageTest {
         // Dos entradas con el mismo nombre harían que el mensaje mostrado dependiera del orden del enum.
         Set<String> vistas = new HashSet<>();
         for (ConstraintMessage c : ConstraintMessage.values()) {
-            assertThat(vistas.add(c.constraint()))
-                    .as("constraint duplicada: %s", c.constraint()).isTrue();
+            assertThat(vistas.add(c.constraint())).as("constraint duplicada: %s", c.constraint()).isTrue();
         }
     }
 
@@ -56,16 +53,16 @@ class Cov04ConstraintMessageTest {
                     .isEqualTo(c.constraint().toLowerCase());
             // El nombre en minúsculas no es cosmético: forConstraint compara con el nombre normalizado,
             // así que una entrada con mayúsculas nunca llegaría a encontrarse.
-            assertThat(c.message()).as("mensaje de %s", c.name()).isNotBlank()
-                    .doesNotContain("violates").doesNotContain("ERROR:").doesNotContain("constraint");
+            assertThat(c.message()).as("mensaje de %s", c.name()).isNotBlank().doesNotContain("violates")
+                    .doesNotContain("ERROR:").doesNotContain("constraint");
         }
     }
 
     @Test
     void todasLasConstraintsDeclaradasSeEncuentranPorSuNombre() {
         for (ConstraintMessage c : ConstraintMessage.values()) {
-            assertThat(ConstraintMessage.forConstraint(c.constraint()))
-                    .as("no se encuentra %s", c.name()).isEqualTo(c.message());
+            assertThat(ConstraintMessage.forConstraint(c.constraint())).as("no se encuentra %s", c.name())
+                    .isEqualTo(c.message());
         }
     }
 }

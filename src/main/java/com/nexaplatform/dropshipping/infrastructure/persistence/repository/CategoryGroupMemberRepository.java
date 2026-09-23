@@ -10,7 +10,8 @@ import java.util.UUID;
 
 /** Pertenencia de categorías a grupos. Alimenta la resolución de reglas CATEGORY_GROUP en MarginService. */
 public interface CategoryGroupMemberRepository
-        extends JpaRepository<CategoryGroupMemberEntity, CategoryGroupMemberEntity.Id> {
+        extends
+            JpaRepository<CategoryGroupMemberEntity, CategoryGroupMemberEntity.Id> {
 
     /** Grupos a los que pertenece una categoría — usado por MarginService para resolver CATEGORY_GROUP. */
     @Query("SELECT m.id.groupId FROM CategoryGroupMemberEntity m WHERE m.id.categoryId = :categoryId")

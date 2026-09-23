@@ -30,8 +30,7 @@ public class RepartidorDeAvisosPush {
     public void alEntrarUnAviso(AvisoCreado aviso) {
         // El identificador y el tipo viajan como datos para que la aplicación pueda abrir el aviso
         // —o la pantalla que le corresponda— al tocarlo, en vez de limitarse a abrirse por la portada.
-        sender.reparte(aviso.userId(), aviso.titulo(), aviso.cuerpo(),
-                Map.of("avisoId", String.valueOf(aviso.avisoId()), "eventType",
-                        aviso.eventType() == null ? "" : aviso.eventType()));
+        sender.reparte(aviso.userId(), aviso.titulo(), aviso.cuerpo(), Map.of("avisoId",
+                String.valueOf(aviso.avisoId()), "eventType", aviso.eventType() == null ? "" : aviso.eventType()));
     }
 }

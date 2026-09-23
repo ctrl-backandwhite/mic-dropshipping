@@ -31,8 +31,8 @@ import java.util.Map;
 public class CatalogSearchTool implements ChatTool {
 
     /** Campos que pueden salir del índice hacia el modelo. Todo lo demás se descarta. */
-    private static final List<String> CAMPOS_PUBLICOS = List.of("id", "slug", "rating", "monthlySales",
-            "freeShipping", "hasVideo", "mainImage", "categoryName");
+    private static final List<String> CAMPOS_PUBLICOS = List.of("id", "slug", "rating", "monthlySales", "freeShipping",
+            "hasVideo", "mainImage", "categoryName");
 
     private static final int MAX_RESULTADOS = 6;
 
@@ -42,8 +42,8 @@ public class CatalogSearchTool implements ChatTool {
     @Override
     public ChatToolSpec spec() {
         return new ChatToolSpec("buscar_productos",
-                "Busca productos en el catálogo de la tienda por palabras clave. "
-                        + "Devuelve como mucho " + MAX_RESULTADOS + " resultados con su identificador, "
+                "Busca productos en el catálogo de la tienda por palabras clave. " + "Devuelve como mucho "
+                        + MAX_RESULTADOS + " resultados con su identificador, "
                         + "título e imagen. No devuelve precios: el precio se muestra en la ficha.",
                 """
                         {"type":"object",

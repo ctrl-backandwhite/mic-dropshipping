@@ -36,8 +36,8 @@ class CoberturaFiscalDestinosIT extends PersistenceITBase {
     private JdbcTemplate jdbcTemplate;
 
     private int tipoDe(String pais) {
-        Integer bps = jdbcTemplate.queryForObject(
-                "SELECT rate_bps FROM country_tax_rate WHERE country_code = ?", Integer.class, pais);
+        Integer bps = jdbcTemplate.queryForObject("SELECT rate_bps FROM country_tax_rate WHERE country_code = ?",
+                Integer.class, pais);
         assertThat(bps).as("el país %s no tiene tipo impositivo", pais).isNotNull();
         return bps;
     }
@@ -49,16 +49,12 @@ class CoberturaFiscalDestinosIT extends PersistenceITBase {
     void todosLosDestinosHabilitadosTienenTipo() {
         // Si esto falla al añadir un destino, no hay que tocar la prueba: hay que darle tipo al destino.
         List<String> huerfanos = jdbcTemplate.queryForList(
-                "SELECT z.country_code FROM cainiao_shipping_zone z"
-                        + " WHERE z.enabled"
+                "SELECT z.country_code FROM cainiao_shipping_zone z" + " WHERE z.enabled"
                         + " AND NOT EXISTS (SELECT 1 FROM country_tax_rate t"
-                        + "                 WHERE t.country_code = z.country_code)"
-                        + " ORDER BY z.country_code",
+                        + "                 WHERE t.country_code = z.country_code)" + " ORDER BY z.country_code",
                 String.class);
 
-        assertThat(huerfanos)
-                .as("destinos a la venta que se cobrarían sin impuesto")
-                .isEmpty();
+        assertThat(huerfanos).as("destinos a la venta que se cobrarían sin impuesto").isEmpty();
     }
 
     @Test
@@ -66,12 +62,9 @@ class CoberturaFiscalDestinosIT extends PersistenceITBase {
     void elTipoDeUnDestinoHabilitadoEstaActivo() {
         // Una fila con active = false devuelve 0 igual que si no existiera: el filtro de
         // CountryTaxService la descarta antes de leer el rate_bps.
-        List<String> inactivos = jdbcTemplate.queryForList(
-                "SELECT z.country_code FROM cainiao_shipping_zone z"
-                        + " JOIN country_tax_rate t ON t.country_code = z.country_code"
-                        + " WHERE z.enabled AND NOT t.active"
-                        + " ORDER BY z.country_code",
-                String.class);
+        List<String> inactivos = jdbcTemplate.queryForList("SELECT z.country_code FROM cainiao_shipping_zone z"
+                + " JOIN country_tax_rate t ON t.country_code = z.country_code" + " WHERE z.enabled AND NOT t.active"
+                + " ORDER BY z.country_code", String.class);
 
         assertThat(inactivos).as("tipos apagados en destinos a la venta").isEmpty();
     }
@@ -79,10 +72,9 @@ class CoberturaFiscalDestinosIT extends PersistenceITBase {
     @Test
     @DisplayName("la migración cubrió los 90 destinos a la venta")
     void laMigracionCubrioLosNoventaDestinos() {
-        Integer habilitados = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cainiao_shipping_zone WHERE enabled", Integer.class);
-        Integer tipos = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM country_tax_rate", Integer.class);
+        Integer habilitados = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cainiao_shipping_zone WHERE enabled",
+                Integer.class);
+        Integer tipos = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM country_tax_rate", Integer.class);
 
         assertThat(habilitados).isEqualTo(90);
         assertThat(tipos).as("50 de antes más los 40 que faltaban").isEqualTo(90);
@@ -124,11 +116,9 @@ class CoberturaFiscalDestinosIT extends PersistenceITBase {
         // directo a country_tax_rate. Si algún día se añade PR como región de US, esta prueba avisa de que
         // hay dos sitios donde mirar el mismo impuesto.
         Integer comoRegion = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM country_region WHERE country_code = 'US' AND region_code = 'PR'",
-                Integer.class);
+                "SELECT COUNT(*) FROM country_region WHERE country_code = 'US' AND region_code = 'PR'", Integer.class);
         Integer comoPais = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cainiao_shipping_zone WHERE country_code = 'PR' AND enabled",
-                Integer.class);
+                "SELECT COUNT(*) FROM cainiao_shipping_zone WHERE country_code = 'PR' AND enabled", Integer.class);
 
         assertThat(comoRegion).isZero();
         assertThat(comoPais).isEqualTo(1);
@@ -144,8 +134,7 @@ class CoberturaFiscalDestinosIT extends PersistenceITBase {
         assertThat(tipoDe("QA")).isZero();
 
         List<String> etiquetas = jdbcTemplate.queryForList(
-                "SELECT label FROM country_tax_rate WHERE country_code IN ('KW', 'QA')"
-                        + " ORDER BY country_code",
+                "SELECT label FROM country_tax_rate WHERE country_code IN ('KW', 'QA')" + " ORDER BY country_code",
                 String.class);
         assertThat(etiquetas).allSatisfy(etiqueta -> assertThat(etiqueta).isNotBlank());
     }

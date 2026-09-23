@@ -14,10 +14,14 @@ import java.util.UUID;
 public interface NotificationUseCase {
 
     /** Carpeta del buzón. INBOX = ni archivada ni en papelera; ARCHIVED = archivada; TRASH = papelera. */
-    enum Folder { INBOX, ARCHIVED, TRASH }
+    enum Folder {
+        INBOX, ARCHIVED, TRASH
+    }
 
     /** Flujo de gestión tipo ticket: NEW → RECEIVED → IN_PROGRESS ⇄ WAITING → RESOLVED. */
-    enum Status { NEW, RECEIVED, IN_PROGRESS, WAITING, RESOLVED }
+    enum Status {
+        NEW, RECEIVED, IN_PROGRESS, WAITING, RESOLVED
+    }
 
     /** Cambia el estado de gestión de una notificación (transición manual del gestor). */
     void setStatus(UUID id, UUID ownerUserId, Status status);

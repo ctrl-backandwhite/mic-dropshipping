@@ -62,8 +62,7 @@ class Cov10CustomerSubscriptionRepositoryImplTest {
 
         repository.save(CustomerSubscription.builder().userId(userId).planId(planId).build());
 
-        ArgumentCaptor<CustomerSubscriptionEntity> captor =
-                ArgumentCaptor.forClass(CustomerSubscriptionEntity.class);
+        ArgumentCaptor<CustomerSubscriptionEntity> captor = ArgumentCaptor.forClass(CustomerSubscriptionEntity.class);
         verify(customerSubscriptionJpaRepositoryAdapter).save(captor.capture());
         assertThat(captor.getValue().getUser()).isSameAs(user);
         assertThat(captor.getValue().getPlan()).isSameAs(plan);

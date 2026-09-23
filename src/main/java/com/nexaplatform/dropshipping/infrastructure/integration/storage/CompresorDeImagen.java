@@ -102,12 +102,12 @@ public class CompresorDeImagen {
                 // pequeñas o ya optimizadas—, se conserva el original: el objetivo era aligerar.
                 return new Comprimida(originales, tipoOriginal, contentTypeDe(tipoOriginal), ancho, alto);
             }
-            log.debug("Imagen comprimida: {} -> {} bytes ({}x{} -> {}x{})", originales.length, webp.length,
-                    ancho, alto, lista.getWidth(), lista.getHeight());
+            log.debug("Imagen comprimida: {} -> {} bytes ({}x{} -> {}x{})", originales.length, webp.length, ancho, alto,
+                    lista.getWidth(), lista.getHeight());
             return new Comprimida(webp, "webp", "image/webp", lista.getWidth(), lista.getHeight());
         } catch (Exception e) {
-            log.warn("No se pudo comprimir la imagen ({} bytes): {}. Se guarda tal cual.",
-                    originales.length, e.toString());
+            log.warn("No se pudo comprimir la imagen ({} bytes): {}. Se guarda tal cual.", originales.length,
+                    e.toString());
             return sinTocar(originales, tipoOriginal);
         }
     }
@@ -125,8 +125,8 @@ public class CompresorDeImagen {
             if (imagen == null) {
                 return sinTocar(originales, tipoOriginal);
             }
-            return new Comprimida(originales, tipoOriginal, contentTypeDe(tipoOriginal),
-                    imagen.getWidth(), imagen.getHeight());
+            return new Comprimida(originales, tipoOriginal, contentTypeDe(tipoOriginal), imagen.getWidth(),
+                    imagen.getHeight());
         } catch (Exception e) {
             log.warn("No se pudieron leer las medidas de la imagen ({} bytes): {}", originales.length, e.toString());
             return sinTocar(originales, tipoOriginal);
@@ -196,7 +196,7 @@ public class CompresorDeImagen {
     /** La codificación en sí. Siempre bajo {@link #CERROJO_NATIVO}: toca la biblioteca nativa. */
     private byte[] codificaEnWebp(ImageWriter escritor, BufferedImage imagen) throws Exception {
         try (ByteArrayOutputStream salida = new ByteArrayOutputStream();
-             MemoryCacheImageOutputStream flujo = new MemoryCacheImageOutputStream(salida)) {
+                MemoryCacheImageOutputStream flujo = new MemoryCacheImageOutputStream(salida)) {
             ImageWriteParam parametros = escritor.getDefaultWriteParam();
             if (parametros.canWriteCompressed()) {
                 parametros.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);

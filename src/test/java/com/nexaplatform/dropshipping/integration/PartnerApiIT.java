@@ -110,8 +110,8 @@ class PartnerApiIT extends BaseIntegration {
         assertThat(creada.get("clientId").asText()).startsWith("pk_");
         assertThat(creada.get("clientSecret").asText()).startsWith("sk_");
 
-        JsonNode listado = client.get().uri(API_KEYS).header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode listado = client.get().uri(API_KEYS).header(AUTH, bearer(userToken)).exchange().expectStatus().isOk()
+                .expectBody(JsonNode.class).returnResult().getResponseBody();
 
         assertThat(listado).isNotNull();
         assertThat(listado.size()).isEqualTo(1);
@@ -124,11 +124,11 @@ class PartnerApiIT extends BaseIntegration {
     void revocarClave() {
         String clientId = crearClave("Temporal", List.of(SCOPE_CATALOG)).get("clientId").asText();
 
-        client.delete().uri(API_KEYS + "/" + clientId).header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isNoContent();
+        client.delete().uri(API_KEYS + "/" + clientId).header(AUTH, bearer(userToken)).exchange().expectStatus()
+                .isNoContent();
 
-        JsonNode listado = client.get().uri(API_KEYS).header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode listado = client.get().uri(API_KEYS).header(AUTH, bearer(userToken)).exchange().expectStatus().isOk()
+                .expectBody(JsonNode.class).returnResult().getResponseBody();
         assertThat(listado).isNotNull();
         assertThat(listado.size()).isZero();
     }
@@ -137,8 +137,8 @@ class PartnerApiIT extends BaseIntegration {
     @DisplayName("Caso borde: un ámbito inventado se rechaza (422) y no crea la clave")
     void ambitoInventado() {
         client.post().uri(API_KEYS).header(AUTH, bearer(userToken)).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"name\":\"Mala\",\"scopes\":[\"catalog.write\"]}").exchange()
-                .expectStatus().isEqualTo(422);
+                .bodyValue("{\"name\":\"Mala\",\"scopes\":[\"catalog.write\"]}").exchange().expectStatus()
+                .isEqualTo(422);
     }
 
     @Test
@@ -156,16 +156,16 @@ class PartnerApiIT extends BaseIntegration {
         }
 
         client.post().uri(API_KEYS).header(AUTH, bearer(userToken)).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"name\":\"La sexta\",\"scopes\":[\"catalog.read\"]}").exchange()
-                .expectStatus().isEqualTo(422);
+                .bodyValue("{\"name\":\"La sexta\",\"scopes\":[\"catalog.read\"]}").exchange().expectStatus()
+                .isEqualTo(422);
     }
 
     @Test
     @DisplayName("Caso borde: gestionar claves sin credencial es 401")
     void clavesSinCredencial() {
         client.get().uri(API_KEYS).exchange().expectStatus().isUnauthorized();
-        client.post().uri(API_KEYS).contentType(MediaType.APPLICATION_JSON).bodyValue("{\"name\":\"X\"}")
-                .exchange().expectStatus().isUnauthorized();
+        client.post().uri(API_KEYS).contentType(MediaType.APPLICATION_JSON).bodyValue("{\"name\":\"X\"}").exchange()
+                .expectStatus().isUnauthorized();
     }
 
     /* ============================================================================================
@@ -193,8 +193,8 @@ class PartnerApiIT extends BaseIntegration {
         client.post().uri(PARTNER_ORDERS).header(AUTH, bearer(token)).contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{}").exchange().expectStatus().isForbidden();
         limpiarCuotaDePeticiones();
-        client.get().uri(PARTNER_ORDERS + "/" + UUID.randomUUID()).header(AUTH, bearer(token)).exchange()
-                .expectStatus().isForbidden();
+        client.get().uri(PARTNER_ORDERS + "/" + UUID.randomUUID()).header(AUTH, bearer(token)).exchange().expectStatus()
+                .isForbidden();
     }
 
     @Test
@@ -203,8 +203,8 @@ class PartnerApiIT extends BaseIntegration {
         String token = tokenDeClave(List.of(SCOPE_ORDERS), SCOPE_ORDERS);
 
         int estado = client.post().uri(PARTNER_ORDERS).header(AUTH, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().returnResult(Void.class)
-                .getStatus().value();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().returnResult(Void.class).getStatus()
+                .value();
         assertThat(estado).as("orders.write no debe bloquearse en /orders").isNotIn(401, 403);
 
         client.get().uri(PARTNER_CATALOG).header(AUTH, bearer(token)).exchange().expectStatus().isForbidden();
@@ -228,8 +228,8 @@ class PartnerApiIT extends BaseIntegration {
 
         client.get().uri(PARTNER_CATALOG).header(AUTH, bearer(token)).exchange().expectStatus().isOk();
         int estado = client.post().uri(PARTNER_ORDERS).header(AUTH, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().returnResult(Void.class)
-                .getStatus().value();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{}").exchange().returnResult(Void.class).getStatus()
+                .value();
         assertThat(estado).isNotIn(401, 403);
     }
 
@@ -240,21 +240,21 @@ class PartnerApiIT extends BaseIntegration {
 
         client.post().uri(TOKEN).header(HttpHeaders.AUTHORIZATION, basic(clave))
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .bodyValue("grant_type=client_credentials&scope=" + SCOPE_ORDERS).exchange()
-                .expectStatus().is4xxClientError();
+                .bodyValue("grant_type=client_credentials&scope=" + SCOPE_ORDERS).exchange().expectStatus()
+                .is4xxClientError();
     }
 
     @Test
     @DisplayName("Caso borde: un secreto equivocado no obtiene token")
     void secretoEquivocado() {
         JsonNode clave = crearClave("Con secreto", List.of(SCOPE_CATALOG));
-        String basicMalo = "Basic " + Base64.getEncoder().encodeToString(
-                (clave.get("clientId").asText() + ":sk_lo-que-sea").getBytes(StandardCharsets.UTF_8));
+        String basicMalo = "Basic " + Base64.getEncoder()
+                .encodeToString((clave.get("clientId").asText() + ":sk_lo-que-sea").getBytes(StandardCharsets.UTF_8));
 
         client.post().uri(TOKEN).header(HttpHeaders.AUTHORIZATION, basicMalo)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .bodyValue("grant_type=client_credentials&scope=" + SCOPE_CATALOG).exchange()
-                .expectStatus().is4xxClientError();
+                .bodyValue("grant_type=client_credentials&scope=" + SCOPE_CATALOG).exchange().expectStatus()
+                .is4xxClientError();
     }
 
     /* ============================================================================================
@@ -279,8 +279,8 @@ class PartnerApiIT extends BaseIntegration {
     void tokenDePartnerNoValeEnAdmin() {
         String token = tokenDeClave(List.of(SCOPE_CATALOG), SCOPE_CATALOG);
 
-        int estado = client.get().uri(ADMIN_DASHBOARD).header(AUTH, bearer(token)).exchange()
-                .returnResult(Void.class).getStatus().value();
+        int estado = client.get().uri(ADMIN_DASHBOARD).header(AUTH, bearer(token)).exchange().returnResult(Void.class)
+                .getStatus().value();
 
         assertThat(estado).as("un token de partner no puede administrar la plataforma").isIn(401, 403);
     }
@@ -306,8 +306,7 @@ class PartnerApiIT extends BaseIntegration {
         String token = tokenDeClave(List.of(SCOPE_CATALOG), SCOPE_CATALOG);
         String manipulado = token.substring(0, token.length() - 4) + "AAAA";
 
-        client.get().uri(PARTNER_CATALOG).header(AUTH, bearer(manipulado)).exchange()
-                .expectStatus().isUnauthorized();
+        client.get().uri(PARTNER_CATALOG).header(AUTH, bearer(manipulado)).exchange().expectStatus().isUnauthorized();
     }
 
     @Test
@@ -317,8 +316,7 @@ class PartnerApiIT extends BaseIntegration {
         // (una ficha por minuto). Se vacía entre ellas para que la segunda mida el 401 y no el 429.
         client.get().uri(PARTNER_CATALOG).header(AUTH, "Bearer ").exchange().expectStatus().isUnauthorized();
         limpiarCuotaDePeticiones();
-        client.get().uri(PARTNER_CATALOG).header(AUTH, "Basic dXNlcjpwYXNz").exchange()
-                .expectStatus().isUnauthorized();
+        client.get().uri(PARTNER_CATALOG).header(AUTH, "Basic dXNlcjpwYXNz").exchange().expectStatus().isUnauthorized();
     }
 
     /* ============================================================================================
@@ -330,9 +328,8 @@ class PartnerApiIT extends BaseIntegration {
     void partnerNoVeCosteNiMargen() {
         String token = tokenDeClave(List.of(SCOPE_CATALOG), SCOPE_CATALOG);
 
-        JsonNode ficha = client.get().uri("/api/v1/partner/catalog/products/" + SLUG)
-                .header(AUTH, bearer(token)).exchange().expectStatus().isOk()
-                .expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode ficha = client.get().uri("/api/v1/partner/catalog/products/" + SLUG).header(AUTH, bearer(token))
+                .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
 
         assertThat(ficha).isNotNull();
         assertThat(ficha.get("costUsd").isNull()).as("el coste es información interna").isTrue();
@@ -358,8 +355,8 @@ class PartnerApiIT extends BaseIntegration {
                 + "CAST('{\"Talla\":\"M\"}' AS jsonb), true)", productId, new BigDecimal("150.0000"));
 
         JsonNode variantes = client.get().uri("/api/v1/partner/catalog/products/" + productId + "/variants")
-                .header(AUTH, bearer(token)).exchange().expectStatus().isOk()
-                .expectBody(JsonNode.class).returnResult().getResponseBody();
+                .header(AUTH, bearer(token)).exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult()
+                .getResponseBody();
 
         assertThat(variantes).isNotNull();
         assertThat(variantes.size()).isEqualTo(1);
@@ -381,8 +378,8 @@ class PartnerApiIT extends BaseIntegration {
     void partnerNoDebeVerCosteEnElListado() {
         String token = tokenDeClave(List.of(SCOPE_CATALOG), SCOPE_CATALOG);
 
-        JsonNode page = client.get().uri(PARTNER_CATALOG).header(AUTH, bearer(token)).exchange()
-                .expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode page = client.get().uri(PARTNER_CATALOG).header(AUTH, bearer(token)).exchange().expectStatus().isOk()
+                .expectBody(JsonNode.class).returnResult().getResponseBody();
 
         assertThat(page).isNotNull();
         assertThat(page.get("items").size()).as("el producto sembrado tiene que salir en el listado").isPositive();
@@ -434,8 +431,7 @@ class PartnerApiIT extends BaseIntegration {
         byte[] original = CUERPO_PEDIDO.getBytes(StandardCharsets.UTF_8);
         String firmaDelOriginal = hmacHex(INBOUND_SECRET, original);
         // Se cambia la cantidad después de firmar: es el ataque que la firma tiene que cazar.
-        byte[] alterado = CUERPO_PEDIDO.replace("\"quantity\":1", "\"quantity\":99")
-                .getBytes(StandardCharsets.UTF_8);
+        byte[] alterado = CUERPO_PEDIDO.replace("\"quantity\":1", "\"quantity\":99").getBytes(StandardCharsets.UTF_8);
 
         postWebhook(shopId, alterado, firmaDelOriginal).expectStatus().isUnauthorized();
     }
@@ -456,9 +452,8 @@ class PartnerApiIT extends BaseIntegration {
         byte[] cuerpo = CUERPO_PEDIDO.getBytes(StandardCharsets.UTF_8);
 
         // La cabecera de firma es obligatoria: sin ella Spring corta en el 400, antes del controlador.
-        client.post().uri("/api/v1/integrations/shops/" + shopId + "/orders")
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().is4xxClientError();
+        client.post().uri("/api/v1/integrations/shops/" + shopId + "/orders").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(cuerpo).exchange().expectStatus().is4xxClientError();
     }
 
     @Test
@@ -498,11 +493,11 @@ class PartnerApiIT extends BaseIntegration {
         UUID subId = UUID.fromString(sub.get("id").asText());
         assertThat(sub.get("secret").asText()).isNotBlank();
 
-        client.post().uri(ADMIN_SUBS + "/" + subId + "/test").header(AUTH, bearer(adminToken)).exchange()
-                .expectStatus().isOk();
+        client.post().uri(ADMIN_SUBS + "/" + subId + "/test").header(AUTH, bearer(adminToken)).exchange().expectStatus()
+                .isOk();
 
-        List<Map<String, Object>> entregas = jdbcTemplate.queryForList(
-                "SELECT event_type, signature FROM webhook_delivery WHERE subscription_id = ?", subId);
+        List<Map<String, Object>> entregas = jdbcTemplate
+                .queryForList("SELECT event_type, signature FROM webhook_delivery WHERE subscription_id = ?", subId);
 
         assertThat(entregas).hasSize(1);
         assertThat(entregas.get(0).get("event_type")).isEqualTo("test.ping");
@@ -534,8 +529,8 @@ class PartnerApiIT extends BaseIntegration {
         String secretoInicial = sub.get("secret").asText();
 
         JsonNode rotada = client.post().uri(ADMIN_SUBS + "/" + sub.get("id").asText() + "/rotate-secret")
-                .header(AUTH, bearer(adminToken)).exchange().expectStatus().isOk()
-                .expectBody(JsonNode.class).returnResult().getResponseBody();
+                .header(AUTH, bearer(adminToken)).exchange().expectStatus().isOk().expectBody(JsonNode.class)
+                .returnResult().getResponseBody();
 
         assertThat(rotada).isNotNull();
         String secretoNuevo = rotada.get("secret").asText();
@@ -557,11 +552,11 @@ class PartnerApiIT extends BaseIntegration {
      * ========================================================================================== */
 
     private JsonNode crearClave(String nombre, List<String> scopes) {
-        String cuerpo = "{\"name\":\"" + nombre + "\",\"scopes\":[" + scopes.stream()
-                .map(s -> "\"" + s + "\"").reduce((a, b) -> a + "," + b).orElse("") + "]}";
+        String cuerpo = "{\"name\":\"" + nombre + "\",\"scopes\":["
+                + scopes.stream().map(s -> "\"" + s + "\"").reduce((a, b) -> a + "," + b).orElse("") + "]}";
         JsonNode creada = client.post().uri(API_KEYS).header(AUTH, bearer(userToken))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated().expectBody(JsonNode.class).returnResult().getResponseBody();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isCreated()
+                .expectBody(JsonNode.class).returnResult().getResponseBody();
         assertThat(creada).isNotNull();
         return creada;
     }
@@ -574,8 +569,8 @@ class PartnerApiIT extends BaseIntegration {
         JsonNode clave = crearClave("Clave de prueba " + UUID.randomUUID(), scopesDeLaClave);
         EntityExchangeResult<JsonNode> res = client.post().uri(TOKEN).header(HttpHeaders.AUTHORIZATION, basic(clave))
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .bodyValue("grant_type=client_credentials&scope=" + scopesPedidos.replace(" ", "%20"))
-                .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult();
+                .bodyValue("grant_type=client_credentials&scope=" + scopesPedidos.replace(" ", "%20")).exchange()
+                .expectStatus().isOk().expectBody(JsonNode.class).returnResult();
         JsonNode body = res.getResponseBody();
         assertThat(body).as("respuesta de /oauth2/token").isNotNull();
         return body.get("access_token").asText();
@@ -655,8 +650,9 @@ class PartnerApiIT extends BaseIntegration {
     private UUID insertShopConnection(String inboundSecret) {
         UUID id = UUID.randomUUID();
         String metadata = inboundSecret == null ? "{}" : "{\"inboundSecret\":\"" + inboundSecret + "\"}";
-        jdbcTemplate.update("INSERT INTO user_shop_connection (id, user_id, platform, shop_handle, status, metadata) "
-                + "VALUES (?, ?, 'shopify', 'tienda-de-pruebas', 'CONNECTED', CAST(? AS jsonb))",
+        jdbcTemplate.update(
+                "INSERT INTO user_shop_connection (id, user_id, platform, shop_handle, status, metadata) "
+                        + "VALUES (?, ?, 'shopify', 'tienda-de-pruebas', 'CONNECTED', CAST(? AS jsonb))",
                 id, userId, metadata);
         return id;
     }
@@ -670,11 +666,12 @@ class PartnerApiIT extends BaseIntegration {
         jdbcTemplate.update("INSERT INTO category (id, slug, name_zh, position, active, source) "
                 + "VALUES (?, 'moda', '时尚', 0, true, '1688')", categoryId);
         UUID productId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, supplier_id, category_id, title_zh, "
-                + "status, base_price, currency, rating, monthly_sales, trend_score, ship_from, free_shipping, "
-                + "self_pickup, has_video, inventory_count, moq, shipping_cny, iva_cny) "
-                + "VALUES (?, ?, 'EXT-PARTNER', '1688', ?, ?, '冬季外套', 'ACTIVE', ?, 'CNY', 4.5, 20, 5, 'CN', "
-                + "false, false, false, 50, 1, 5, 1)",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, supplier_id, category_id, title_zh, "
+                        + "status, base_price, currency, rating, monthly_sales, trend_score, ship_from, free_shipping, "
+                        + "self_pickup, has_video, inventory_count, moq, shipping_cny, iva_cny) "
+                        + "VALUES (?, ?, 'EXT-PARTNER', '1688', ?, ?, '冬季外套', 'ACTIVE', ?, 'CNY', 4.5, 20, 5, 'CN', "
+                        + "false, false, false, 50, 1, 5, 1)",
                 productId, SLUG, supplierId, categoryId, new BigDecimal("25.0000"));
         jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
                 + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', 'https://origen.test/a.jpg', "

@@ -86,9 +86,8 @@ public class ShippingQuoteController {
      * pedido por encima del umbral, para que el checkout lo impida antes de intentar cobrar.
      */
     public record QuoteResponse(boolean supported, String countryCode, int amountUsdCents, String carrier,
-            String serviceName, int etaMinDays, int etaMaxDays, String zone, int taxRateBps,
-            String shippingFormatted, String taxFormatted, String totalFormatted,
-            int discountCents, String discountFormatted,
+            String serviceName, int etaMinDays, int etaMaxDays, String zone, int taxRateBps, String shippingFormatted,
+            String taxFormatted, String totalFormatted, int discountCents, String discountFormatted,
             boolean customsThresholdExceeded, boolean customsBlocked, String taxMode,
             /** Umbral de importación del país en su divisa legal ("150 EUR"); "" si no aplica. */
             String customsLimit,
@@ -188,8 +187,8 @@ public class ShippingQuoteController {
      * Lo compone el backend y no el navegador para que se llame igual en todas las pantallas y en los
      * correos.
      */
-    public record ShippingOptionOut(String code, int amountUsdCents, String amountFormatted,
-            int etaMinDays, int etaMaxDays, String carrierName) {
+    public record ShippingOptionOut(String code, int amountUsdCents, String amountFormatted, int etaMinDays,
+            int etaMaxDays, String carrierName) {
     }
 
     /**
@@ -240,9 +239,9 @@ public class ShippingQuoteController {
     public ResponseEntity<QuoteResponse> quote(@RequestBody QuoteRequest req, Authentication auth) {
         List<QuoteItem> items = req.items() == null ? List.of() : req.items();
         UUID userId = auth != null ? parseUserId(auth.getName()) : null;
-        CheckoutPreviewService.Preview preview = checkoutPreview.compute(req.country(), req.region(),
-                items.stream().map(i -> new CheckoutPreviewService.Line(i.productId(), i.variantId(), i.quantity()))
-                        .toList(),
+        CheckoutPreviewService.Preview preview = checkoutPreview.compute(
+                req.country(), req.region(), items.stream()
+                        .map(i -> new CheckoutPreviewService.Line(i.productId(), i.variantId(), i.quantity())).toList(),
                 userId, req.couponCode(), req.shippingOptionCode());
 
         ShippingQuote q = preview.quote();
@@ -259,8 +258,9 @@ public class ShippingQuoteController {
                 .setScale(2, RoundingMode.HALF_UP);
         String customsFmt = customsCents > 0 ? currencyService.formatDisplay(customsDisplay, code) : "";
         String shippingBaseFmt = currencyService.formatDisplay(
-                currencyService.usdToDisplay(BigDecimal.valueOf(preview.totals().shippingBaseCents())
-                        .movePointLeft(2)).setScale(2, RoundingMode.HALF_UP), code);
+                currencyService.usdToDisplay(BigDecimal.valueOf(preview.totals().shippingBaseCents()).movePointLeft(2))
+                        .setScale(2, RoundingMode.HALF_UP),
+                code);
         // amountUsdCents = envío TOTAL (tarifa + recargo de despacho), que es lo que se cobrará. Si se
         // devolviera la tarifa sin recargo, el front pintaría un envío distinto del facturado.
         // Descuento en el envío: importe y porcentaje cubierto. El porcentaje se mide sobre lo que el
@@ -273,35 +273,30 @@ public class ShippingQuoteController {
         String shippingNetFmt = importeExacto(preview.totals().shippingNetCents(), code);
         String customsNetFmt = importeExacto(preview.totals().customsNetCents(), code);
 
-        QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(),
-                q.carrier(), q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), preview.taxRateBps(),
+        QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(), q.carrier(),
+                q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), preview.taxRateBps(),
                 currencyService.formatDisplay(preview.shippingDisplay(), code),
                 currencyService.formatDisplay(preview.taxDisplay(), code),
-                currencyService.formatDisplay(preview.totalDisplay(), code),
-                preview.discountUsdCents(),
+                currencyService.formatDisplay(preview.totalDisplay(), code), preview.discountUsdCents(),
                 currencyService.formatDisplay(preview.discountDisplay(), code),
                 preview.totals().customs().deMinimisExceeded(), preview.totals().blocked(),
-                preview.totals().customs().taxMode().name(),
-                preview.totals().customs().deMinimisLabel(),
+                preview.totals().customs().taxMode().name(), preview.totals().customs().deMinimisLabel(),
                 preview.couponCode(), preview.couponError(),
                 q.options().stream()
                         .map(o -> new ShippingOptionOut(o.code(), o.amountUsdCents(),
-                                currencyService.formatDisplay(currencyService.usdToDisplay(
-                                        java.math.BigDecimal.valueOf(o.amountUsdCents(), 2)), code),
-                                o.etaMinDays(), o.etaMaxDays(),
-                                NombreDelTransportista.visibleDe(o.carrier())))
+                                currencyService.formatDisplay(currencyService
+                                        .usdToDisplay(java.math.BigDecimal.valueOf(o.amountUsdCents(), 2)), code),
+                                o.etaMinDays(), o.etaMaxDays(), NombreDelTransportista.visibleDe(o.carrier())))
                         .toList(),
-                preview.shippingOption() != null ? preview.shippingOption().code() : null,
-                preview.subtotalUsdCents(), preview.totals().customsHandlingCents(),
-                shippingBaseFmt, customsFmt,
+                preview.shippingOption() != null ? preview.shippingOption().code() : null, preview.subtotalUsdCents(),
+                preview.totals().customsHandlingCents(), shippingBaseFmt, customsFmt,
                 currencyService.formatDisplay(preview.subtotalDisplay(), code),
                 preview.lines().stream()
                         .map(l -> new QuoteLine(l.productId(), l.variantId(), l.quantity(), l.unitFormatted(),
                                 l.lineSubtotalFormatted()))
                         .toList(),
-                subsidyFmt, preview.totals().shippingSubsidyPercent(),
-                customsSubsidyFmt, preview.totals().customsSubsidyPercent(),
-                shippingNetFmt, customsNetFmt,
+                subsidyFmt, preview.totals().shippingSubsidyPercent(), customsSubsidyFmt,
+                preview.totals().customsSubsidyPercent(), shippingNetFmt, customsNetFmt,
                 preview.totals().freeShipping(),
                 preview.totals().totalCents(preview.subtotalUsdCents() - preview.discountUsdCents()));
         return ResponseEntity.ok(body);
@@ -309,15 +304,16 @@ public class ShippingQuoteController {
 
     /** Un importe formateado en la divisa del comprador, incluido el cero: aquí un 0,00 € es información. */
     private String importeExacto(int cents, String code) {
-        return currencyService.formatDisplay(currencyService.usdToDisplay(
-                BigDecimal.valueOf(Math.max(0, cents)).movePointLeft(2)), code);
+        return currencyService.formatDisplay(
+                currencyService.usdToDisplay(BigDecimal.valueOf(Math.max(0, cents)).movePointLeft(2)), code);
     }
 
     /** Un importe de la bolsa, ya formateado en la divisa del comprador; cadena vacía si no hay nada. */
     private String importeSubvencionado(int cents, String code) {
-        return cents <= 0 ? ""
-                : currencyService.formatDisplay(currencyService.usdToDisplay(
-                        BigDecimal.valueOf(cents).movePointLeft(2)), code);
+        return cents <= 0
+                ? ""
+                : currencyService
+                        .formatDisplay(currencyService.usdToDisplay(BigDecimal.valueOf(cents).movePointLeft(2)), code);
     }
 
     @Operation(summary = "Países a los que se puede enviar (cobertura real del transportista)")
@@ -336,17 +332,14 @@ public class ShippingQuoteController {
         Collator alfabeto = Collator.getInstance(idioma);
         return ResponseEntity.ok(shippingQuoteService.supportedCountries().stream()
                 .map(pais -> new SupportedCountry(pais.countryCode(), nombreEn(pais, idioma)))
-                .sorted(Comparator.comparing(SupportedCountry::countryName, alfabeto))
-                .toList());
+                .sorted(Comparator.comparing(SupportedCountry::countryName, alfabeto)).toList());
     }
 
     /** El nombre del país en ese idioma, o el que hubiera guardado si Java no lo reconoce. */
     private static String nombreEn(SupportedCountry pais, Locale idioma) {
         try {
-            String traducido = Locale.of("", pais.countryCode().toUpperCase(Locale.ROOT))
-                    .getDisplayCountry(idioma);
-            boolean util = traducido != null && !traducido.isBlank()
-                    && !traducido.equalsIgnoreCase(pais.countryCode());
+            String traducido = Locale.of("", pais.countryCode().toUpperCase(Locale.ROOT)).getDisplayCountry(idioma);
+            boolean util = traducido != null && !traducido.isBlank() && !traducido.equalsIgnoreCase(pais.countryCode());
             return util ? traducido : pais.countryName();
         } catch (RuntimeException e) {
             return pais.countryName();
@@ -382,8 +375,7 @@ public class ShippingQuoteController {
 
     @Operation(summary = "Regiones (estado/provincia) de un país para el dropdown del checkout")
     @GetMapping("/regions")
-    public ResponseEntity<List<RegionOut>> regions(
-            @RequestParam String country) {
+    public ResponseEntity<List<RegionOut>> regions(@RequestParam String country) {
         List<RegionOut> out = countryTaxService.regionsFor(country).stream()
                 .map(r -> new RegionOut(r.getRegionCode(), r.getRegionName())).toList();
         return ResponseEntity.ok(out);

@@ -73,8 +73,7 @@ class CatalogDatosAduanerosTest {
         p.setId(UUID.randomUUID());
         p.setHsCode("9102190000");
         p.setWeightGrams(300);
-        p.setTranslations(new ArrayList<>(List.of(traduccion("en", "Men's quartz watch"),
-                traduccion("zh", "男士石英手表"))));
+        p.setTranslations(new ArrayList<>(List.of(traduccion("en", "Men's quartz watch"), traduccion("zh", "男士石英手表"))));
         return p;
     }
 

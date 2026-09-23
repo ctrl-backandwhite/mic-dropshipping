@@ -182,13 +182,13 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
     /** Contenido (asunto + cuerpo) del email de aviso al solicitante por cada estado gestionable. */
     private enum StatusMail {
         IN_PROGRESS("Tu solicitud está en proceso",
-                "Hemos comenzado a gestionar tu solicitud «%s». Te mantendremos informado del progreso."),
-        WAITING("Necesitamos más información",
-                "Para continuar con tu solicitud «%s» necesitamos algunos datos adicionales. "
-                        + "Por favor, responde a este correo con la información."),
-        RESOLVED("Tu solicitud ha sido resuelta",
-                "Tu solicitud «%s» ha quedado resuelta. Si necesitas cualquier otra cosa, estaremos "
-                        + "encantados de ayudarte.");
+                "Hemos comenzado a gestionar tu solicitud «%s». Te mantendremos informado del progreso."), WAITING(
+                        "Necesitamos más información",
+                        "Para continuar con tu solicitud «%s» necesitamos algunos datos adicionales. "
+                                + "Por favor, responde a este correo con la información."), RESOLVED(
+                                        "Tu solicitud ha sido resuelta",
+                                        "Tu solicitud «%s» ha quedado resuelta. Si necesitas cualquier otra cosa, estaremos "
+                                                + "encantados de ayudarte.");
 
         private final String title;
         private final String body;
@@ -241,8 +241,8 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
         if (userId == null || orderNumber == null || orderNumber.isBlank()) {
             return;
         }
-        create(userId, OrderEmailLabel.PAID_TITLE.of(lang),
-                OrderEmailLabel.PAID_BODY.of(lang, orderNumber), "ORDER_PAID");
+        create(userId, OrderEmailLabel.PAID_TITLE.of(lang), OrderEmailLabel.PAID_BODY.of(lang, orderNumber),
+                "ORDER_PAID");
     }
 
     private void create(UUID userId, String title, String body, String eventType) {

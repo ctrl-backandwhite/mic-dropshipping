@@ -21,14 +21,14 @@ import java.util.regex.Pattern;
  */
 final class SmtpFailureClassifier {
 
-    enum Kind { TRANSIENT, PERMANENT }
+    enum Kind {
+        TRANSIENT, PERMANENT
+    }
 
     /** Palabras que delatan un rechazo temporal aunque el código no se reconozca. */
-    private static final String[] TRANSIENT_HINTS = {
-            "ratelimit", "rate limit", "too many", "try again", "temporar", "throttl",
-            "greylist", "grey-list", "timed out", "timeout", "connection", "unavailable, try",
-            "4.7.1", "resources temporarily"
-    };
+    private static final String[] TRANSIENT_HINTS = {"ratelimit", "rate limit", "too many", "try again", "temporar",
+            "throttl", "greylist", "grey-list", "timed out", "timeout", "connection", "unavailable, try", "4.7.1",
+            "resources temporarily"};
 
     /** Primer código de estado SMTP de tres dígitos que empiece por 4 (temporal) o 5 (permanente). */
     private static final Pattern SMTP_CODE = Pattern.compile("\\b([45]\\d\\d)\\b");

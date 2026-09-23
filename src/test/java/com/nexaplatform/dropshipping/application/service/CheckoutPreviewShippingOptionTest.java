@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,8 +41,7 @@ import static org.mockito.Mockito.verify;
 class CheckoutPreviewShippingOptionTest {
 
     /** Cotización real de España: la línea de ropa es más barata y más rápida que la generalista. */
-    private static final List<ShippingOption> OPCIONES = List.of(
-            new ShippingOption("FZZXR", "Apparel line", 785, 5, 8),
+    private static final List<ShippingOption> OPCIONES = List.of(new ShippingOption("FZZXR", "Apparel line", 785, 5, 8),
             new ShippingOption("THPHR", "Global line", 821, 6, 10));
 
     private final ShippingQuoteService shipping = mock(ShippingQuoteService.class);
@@ -59,9 +59,11 @@ class CheckoutPreviewShippingOptionTest {
      */
     private final CustomsDeclarationGroupService declarationGroups = mock(CustomsDeclarationGroupService.class);
 
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    private final ProductPriceTierRepository tramos = mock(ProductPriceTierRepository.class);
 
     private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, subvenciones(), pricing,
-            currency, products, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
+            currency, products, tramos, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
 
     private final UUID productId = UUID.randomUUID();
 
@@ -75,13 +77,13 @@ class CheckoutPreviewShippingOptionTest {
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenReturn(BigDecimal.ZERO);
         lenient().when(currency.decimalsOf(anyString())).thenReturn(2);
         lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
-        lenient().when(shipping.quote(anyString(), any())).thenReturn(new ShippingQuote(true, "ES", 785,
-                "Standard Shipping", "Standard Shipping", 5, 8, "EU", OPCIONES));
+        lenient().when(shipping.quote(anyString(), any())).thenReturn(
+                new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping", 5, 8, "EU", OPCIONES));
     }
 
     private CheckoutPreviewService.Preview previewCon(String shippingOptionCode) {
-        return service.compute("ES", null,
-                List.of(new CheckoutPreviewService.Line(productId, null, 1)), null, null, shippingOptionCode);
+        return service.compute("ES", null, List.of(new CheckoutPreviewService.Line(productId, null, 1)), null, null,
+                shippingOptionCode);
     }
 
     /** La tarifa que el desglose ha usado como base del envío (y, con ella, de la base del impuesto). */
@@ -117,15 +119,14 @@ class CheckoutPreviewShippingOptionTest {
 
         assertThat(tarifaUsada()).isEqualTo(785);
         assertThat(preview.shippingOption().code())
-                .as("el checkout tiene que poder marcar la que de verdad se está cobrando")
-                .isEqualTo("FZZXR");
+                .as("el checkout tiene que poder marcar la que de verdad se está cobrando").isEqualTo("FZZXR");
     }
 
     @Test
     @DisplayName("sin canales cotizados (tarifa de tabla de zonas) el envío sigue siendo el de la cotización")
     void sinOpcionesSeUsaLaTarifaDeLaCotizacion() {
-        lenient().when(shipping.quote(anyString(), any())).thenReturn(new ShippingQuote(true, "ES", 750,
-                "Standard Shipping", "Standard Shipping", 5, 12, "EU"));
+        lenient().when(shipping.quote(anyString(), any()))
+                .thenReturn(new ShippingQuote(true, "ES", 750, "Standard Shipping", "Standard Shipping", 5, 12, "EU"));
 
         CheckoutPreviewService.Preview preview = previewCon("THPHR");
 
@@ -136,8 +137,8 @@ class CheckoutPreviewShippingOptionTest {
     @Test
     @DisplayName("un país sin cobertura no cobra envío aunque se pida un canal")
     void unPaisSinCoberturaNoCobraEnvio() {
-        lenient().when(shipping.quote(anyString(), any())).thenReturn(new ShippingQuote(false, "CU", 0,
-                null, null, 0, 0, null));
+        lenient().when(shipping.quote(anyString(), any()))
+                .thenReturn(new ShippingQuote(false, "CU", 0, null, null, 0, 0, null));
 
         previewCon("THPHR");
 
@@ -151,10 +152,11 @@ class CheckoutPreviewShippingOptionTest {
      * escondería justo el descuento que hoy forma parte del desglose.
      */
     private static com.nexaplatform.dropshipping.application.service.ProductSubsidyService subvenciones() {
-        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
-        org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
+        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa = org.mockito.Mockito
+                .mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
+        org.mockito.Mockito.lenient()
+                .when(divisa.toUsd(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new java.math.BigDecimal("5.85"));
         return new com.nexaplatform.dropshipping.application.service.ProductSubsidyService(divisa);
     }
 }

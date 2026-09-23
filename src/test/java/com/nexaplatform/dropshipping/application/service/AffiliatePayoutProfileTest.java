@@ -42,21 +42,35 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AffiliatePayoutProfileTest {
 
-    @Mock AffiliateJpaRepositoryAdapter affiliateRepo;
-    @Mock AffiliateReferralCodeRepository codeRepo;
-    @Mock AffiliateAttributionRepository attrRepo;
-    @Mock AffiliateConversionRepository conversionRepo;
-    @Mock AffiliateCommissionRepository commissionRepo;
-    @Mock AffiliateProgramConfigRepository configRepo;
-    @Mock AffiliatePayoutRepository payoutRepo;
-    @Mock UserRepository userRepository;
-    @Mock PasswordEncoder passwordEncoder;
-    @Mock NotificationJpaRepositoryAdapter notificationRepo;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock WalletUseCase walletUseCase;
-    @Mock AffiliateIndexer affiliateIndexer;
+    @Mock
+    AffiliateJpaRepositoryAdapter affiliateRepo;
+    @Mock
+    AffiliateReferralCodeRepository codeRepo;
+    @Mock
+    AffiliateAttributionRepository attrRepo;
+    @Mock
+    AffiliateConversionRepository conversionRepo;
+    @Mock
+    AffiliateCommissionRepository commissionRepo;
+    @Mock
+    AffiliateProgramConfigRepository configRepo;
+    @Mock
+    AffiliatePayoutRepository payoutRepo;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    PasswordEncoder passwordEncoder;
+    @Mock
+    NotificationJpaRepositoryAdapter notificationRepo;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    AffiliateIndexer affiliateIndexer;
 
-    @InjectMocks AffiliateProgramService service;
+    @InjectMocks
+    AffiliateProgramService service;
 
     private final UUID userId = UUID.randomUUID();
     private static final String STORED_HASH = "hashed-password";
@@ -70,8 +84,7 @@ class AffiliatePayoutProfileTest {
     }
 
     private AffiliateEntity affiliate() {
-        AffiliateEntity a = AffiliateEntity.builder().user(user()).code("ref-1").active(true).status("ACTIVE")
-                .build();
+        AffiliateEntity a = AffiliateEntity.builder().user(user()).code("ref-1").active(true).status("ACTIVE").build();
         a.setId(UUID.randomUUID());
         return a;
     }

@@ -81,7 +81,8 @@ class PaymentUseCaseImplTest {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, stripeService, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
+                currencyRateService, new OrderAmounts(currencyRateService), stockService,
+                mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
     }
 
     @Test
@@ -108,23 +109,21 @@ class PaymentUseCaseImplTest {
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
         PaymentUseCaseImpl svc = useCase();
 
-        assertThatThrownBy(() -> svc.getOrderPayment(orderId, paymentId))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.getOrderPayment(orderId, paymentId)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void rechargeOptions_standardCurrency_keepsBaseAmounts() {
         when(currencyRateService.symbolOf("EUR")).thenReturn("€");
-        when(currencyRateService.formatDisplay(any(), eq("EUR")))
-                .thenAnswer(inv -> inv.getArgument(0) + " €");
+        when(currencyRateService.formatDisplay(any(), eq("EUR"))).thenAnswer(inv -> inv.getArgument(0) + " €");
 
         RechargeOptions opts = useCase().rechargeOptions("eur");
 
         assertThat(opts.currency()).isEqualTo("EUR");
         assertThat(opts.symbol()).isEqualTo("€");
         // EUR conserva los importes estándar (no se convierten): 10/25/50/100/250/500.
-        assertThat(opts.presets()).extracting(p -> p.amount().intValueExact())
-                .containsExactly(10, 25, 50, 100, 250, 500);
+        assertThat(opts.presets()).extracting(p -> p.amount().intValueExact()).containsExactly(10, 25, 50, 100, 250,
+                500);
     }
 
     @Test
@@ -134,15 +133,14 @@ class PaymentUseCaseImplTest {
         when(currencyRateService.usdTo(any(), eq("COP")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).multiply(new BigDecimal("4123.45")));
         lenient().when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
-        when(currencyRateService.formatDisplay(any(), eq("COP")))
-                .thenAnswer(inv -> inv.getArgument(0) + " COP");
+        when(currencyRateService.formatDisplay(any(), eq("COP"))).thenAnswer(inv -> inv.getArgument(0) + " COP");
 
         RechargeOptions opts = useCase().rechargeOptions("COP");
 
         // $10→41 234,5→41 000; $25→103 086→100 000; $50→206 172→210 000; $100→412 345→410 000;
         // $250→1 030 862→1 000 000; $500→2 061 725→2 100 000. Todos redondos, sin decimales sucios.
-        assertThat(opts.presets()).extracting(p -> p.amount().longValueExact())
-                .containsExactly(41000L, 100000L, 210000L, 410000L, 1000000L, 2100000L);
+        assertThat(opts.presets()).extracting(p -> p.amount().longValueExact()).containsExactly(41000L, 100000L,
+                210000L, 410000L, 1000000L, 2100000L);
     }
 
     @Test
@@ -152,8 +150,7 @@ class PaymentUseCaseImplTest {
         String body = useCase().handleStripeEvent("customer.subscription.updated", payload);
 
         assertThat(body).isEqualTo("ok");
-        verify(partnerPlanSyncService).onSubscriptionEvent("sub_123", "active",
-                "customer.subscription.updated");
+        verify(partnerPlanSyncService).onSubscriptionEvent("sub_123", "active", "customer.subscription.updated");
     }
 
     @Test
@@ -174,12 +171,12 @@ class PaymentUseCaseImplTest {
         when(stripeService.isEnabled()).thenReturn(true);
         when(paymentRepository.findByIdempotencyKey("idem-2")).thenReturn(Optional.empty());
         com.nexaplatform.dropshipping.domain.model.Order order = com.nexaplatform.dropshipping.domain.model.Order
-                .builder().userId(userId).status(com.nexaplatform.dropshipping.domain.enums.OrderStatus.AWAITING_PAYMENT)
-                .totalCents(5000).build();
+                .builder().userId(userId)
+                .status(com.nexaplatform.dropshipping.domain.enums.OrderStatus.AWAITING_PAYMENT).totalCents(5000)
+                .build();
         order.setId(orderId);
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity user =
-                new com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity();
+        com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity user = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity();
         user.setStripeCustomerId("cus_1");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         // El Customer tiene OTRA tarjeta, no la pm_hack solicitada → IDOR bloqueado.
@@ -196,8 +193,8 @@ class PaymentUseCaseImplTest {
     void confirmSavedCardPayment_mismatchedUser_throwsNotFound() {
         UUID paymentId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
-        Payment p = Payment.builder().userId(UUID.randomUUID()).method(PaymentMethod.CARD)
-                .status(PaymentStatus.PENDING).amountUsdCents(5000).orderId(orderId).build();
+        Payment p = Payment.builder().userId(UUID.randomUUID()).method(PaymentMethod.CARD).status(PaymentStatus.PENDING)
+                .amountUsdCents(5000).orderId(orderId).build();
         p.setId(paymentId);
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
         PaymentUseCaseImpl svc = useCase();

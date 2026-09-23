@@ -175,8 +175,8 @@ class SupplierPurchaseServiceTest {
     @Test
     void registrarLaCompraGuardaElCosteRealYPasaAComprada() {
         UUID id = UUID.randomUUID();
-        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id)
-                .status(SupplierPurchaseStatus.PENDING).build();
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id).status(SupplierPurchaseStatus.PENDING)
+                .build();
         when(purchaseRepository.findById(id)).thenReturn(Optional.of(p));
         when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -193,8 +193,8 @@ class SupplierPurchaseServiceTest {
     void elSeguimientoNacionalSeGuardaSinEspaciosPeroSinCambiarleLasMayusculas() {
         // El almacén empareja por coincidencia exacta: normalizar el número rompería el emparejamiento.
         UUID id = UUID.randomUUID();
-        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id)
-                .status(SupplierPurchaseStatus.PURCHASED).build();
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id).status(SupplierPurchaseStatus.PURCHASED)
+                .build();
         when(purchaseRepository.findById(id)).thenReturn(Optional.of(p));
         when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -207,11 +207,11 @@ class SupplierPurchaseServiceTest {
     @Test
     void avisaDeLosBultosQueLlevanDemasiadoTiempoEnElAlmacen() {
         SupplierPurchaseEntity viejo = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .status(SupplierPurchaseStatus.AT_WAREHOUSE)
-                .receivedAt(Instant.now().minus(25, ChronoUnit.DAYS)).build();
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).receivedAt(Instant.now().minus(25, ChronoUnit.DAYS))
+                .build();
         SupplierPurchaseEntity reciente = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .status(SupplierPurchaseStatus.AT_WAREHOUSE)
-                .receivedAt(Instant.now().minus(3, ChronoUnit.DAYS)).build();
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).receivedAt(Instant.now().minus(3, ChronoUnit.DAYS))
+                .build();
         SupplierPurchaseEntity sinFecha = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
                 .status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
         when(purchaseRepository.findByStatusInOrderByCreatedAtAsc(anyCollection()))
@@ -224,8 +224,7 @@ class SupplierPurchaseServiceTest {
 
     @Test
     void elEstadoCanceladoNoGanaAUnoQueAvanza() {
-        assertThat(SupplierPurchaseStatus.CANCELLED.progress())
-                .isLessThan(SupplierPurchaseStatus.PENDING.progress());
+        assertThat(SupplierPurchaseStatus.CANCELLED.progress()).isLessThan(SupplierPurchaseStatus.PENDING.progress());
         assertThat(SupplierPurchaseStatus.IN_TRANSIT.merchandiseOnTheMove()).isTrue();
         assertThat(SupplierPurchaseStatus.PURCHASED.merchandiseOnTheMove()).isFalse();
         assertThat(SupplierPurchaseStatus.CANCELLED.merchandiseOnTheMove()).isFalse();
@@ -236,8 +235,7 @@ class SupplierPurchaseServiceTest {
         UUID id = UUID.randomUUID();
         // Exportada: el número de orden que se teclea al re-empaquetar lo devuelve el OMS al importar
         // el fichero, así que antes de eso no puede existir.
-        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id)
-                .status(SupplierPurchaseStatus.IN_TRANSIT)
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id).status(SupplierPurchaseStatus.IN_TRANSIT)
                 .exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z")).build();
         when(purchaseRepository.findById(id)).thenReturn(Optional.of(p));
         when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -259,12 +257,11 @@ class SupplierPurchaseServiceTest {
     @Test
     void noSePuedeReempaquetarSinHaberDescargadoElFichero() {
         UUID id = UUID.randomUUID();
-        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id)
-                .status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id).status(SupplierPurchaseStatus.AT_WAREHOUSE)
+                .build();
         when(purchaseRepository.findById(id)).thenReturn(Optional.of(p));
 
-        assertThatThrownBy(() -> service.markPacked(id, "PK-99", "REPACKAGING"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> service.markPacked(id, "PK-99", "REPACKAGING")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Descarga antes el fichero");
 
         assertThat(p.getStatus()).isEqualTo(SupplierPurchaseStatus.AT_WAREHOUSE);
@@ -316,8 +313,7 @@ class SupplierPurchaseServiceTest {
     void generarLasComprasDeUnPedidoQueNoExisteEsUn404() {
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.planForExistingOrder(ORDER_ID))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.planForExistingOrder(ORDER_ID)).isInstanceOf(NotFoundException.class);
     }
 
     /* ============================ exportación (anti-duplicado del .xls) ============================ */
@@ -325,10 +321,9 @@ class SupplierPurchaseServiceTest {
     /** La cola de exportación excluye lo ya volcado a un fichero (exported_at IS NULL). */
     @Test
     void laColaDeExportacionSoloTraeLoNoExportado() {
-        SupplierPurchaseEntity pend = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
-        when(purchaseRepository.findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(any()))
-                .thenReturn(List.of(pend));
+        SupplierPurchaseEntity pend = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
+        when(purchaseRepository.findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(any())).thenReturn(List.of(pend));
 
         assertThat(service.exportQueue()).containsExactly(pend);
         verify(purchaseRepository).findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(any());
@@ -337,17 +332,17 @@ class SupplierPurchaseServiceTest {
     /** Al descargar se marcan como exportadas las compras del pedido, una sola vez (idempotente). */
     @Test
     void marcarExportadoSellaLaFechaSoloUnaVez() {
-        SupplierPurchaseEntity sinExportar = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
-        SupplierPurchaseEntity yaExportada = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE)
-                .exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z")).build();
+        SupplierPurchaseEntity sinExportar = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
+        SupplierPurchaseEntity yaExportada = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z"))
+                .build();
         when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(sinExportar, yaExportada));
 
         service.markExported(List.of(ORDER_ID));
 
-        assertThat(sinExportar.getExportedAt()).isNotNull();          // se sella
-        assertThat(yaExportada.getExportedAt())                        // no se pisa la fecha previa
+        assertThat(sinExportar.getExportedAt()).isNotNull(); // se sella
+        assertThat(yaExportada.getExportedAt()) // no se pisa la fecha previa
                 .isEqualTo(java.time.Instant.parse("2026-08-01T00:00:00Z"));
         verify(purchaseRepository).save(sinExportar);
         verify(purchaseRepository, org.mockito.Mockito.never()).save(yaExportada);
@@ -356,9 +351,9 @@ class SupplierPurchaseServiceTest {
     /** «Volver a exportar» limpia la fecha para que la compra reentre en el próximo fichero. */
     @Test
     void volverAExportarLimpiaLaFecha() {
-        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE)
-                .exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z")).build();
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z"))
+                .build();
         when(purchaseRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
         when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -373,8 +368,8 @@ class SupplierPurchaseServiceTest {
     void cancelarElPedidoRetiraLasComprasQueAunNoSeHabianComprado() {
         // Un pedido cancelado dejaba sus compras en PENDING y el tablero las seguía pintando: el admin
         // acababa comprando en 1688 género de una venta que ya no existe, y ese dinero no se recupera.
-        SupplierPurchaseEntity porComprar = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.PENDING).build();
+        SupplierPurchaseEntity porComprar = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.PENDING).build();
         when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(porComprar));
         when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -389,10 +384,10 @@ class SupplierPurchaseServiceTest {
     void cancelarElPedidoNoRetiraLaMercanciaYaCompradaAlProveedor() {
         // Aquí hay género real pagado y en camino. Esconderlo del tablero es perder el rastro de un
         // bulto que el almacén DESTRUYE sin compensación a los 30 días si nadie da instrucciones.
-        SupplierPurchaseEntity yaComprada = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.PURCHASED).build();
-        SupplierPurchaseEntity enCamino = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.IN_TRANSIT).build();
+        SupplierPurchaseEntity yaComprada = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.PURCHASED).build();
+        SupplierPurchaseEntity enCamino = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.IN_TRANSIT).build();
         when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(yaComprada, enCamino));
 
         int retiradas = service.cancelUnbought(ORDER_ID, "pedido cancelado");
@@ -407,8 +402,8 @@ class SupplierPurchaseServiceTest {
     void cancelarDosVecesElMismoPedidoNoVuelveAContarLoYaRetirado() {
         // El admin puede cancelar un pedido ya cancelado (la operación es idempotente): no debe volver
         // a tocar lo que ya estaba retirado ni inflar el recuento.
-        SupplierPurchaseEntity yaRetirada = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
-                .orderId(ORDER_ID).status(SupplierPurchaseStatus.CANCELLED).build();
+        SupplierPurchaseEntity yaRetirada = SupplierPurchaseEntity.builder().id(UUID.randomUUID()).orderId(ORDER_ID)
+                .status(SupplierPurchaseStatus.CANCELLED).build();
         when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(yaRetirada));
 
         assertThat(service.cancelUnbought(ORDER_ID, "pedido cancelado")).isZero();

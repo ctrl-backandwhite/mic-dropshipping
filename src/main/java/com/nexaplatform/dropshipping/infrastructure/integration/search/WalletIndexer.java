@@ -46,12 +46,13 @@ public class WalletIndexer {
             if (client.indices().exists(b -> b.index(index)).value()) {
                 return;
             }
-            client.indices().create(CreateIndexRequest.of(b -> b.index(index)
-                    .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
-                            .properties("currency", Property.of(p -> p.keyword(k -> k)))
-                            .properties("createdAt", Property.of(p -> p.date(d -> d)))
-                            .properties("userEmail", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("userName", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
+            client.indices()
+                    .create(CreateIndexRequest.of(b -> b.index(index)
+                            .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
+                                    .properties("currency", Property.of(p -> p.keyword(k -> k)))
+                                    .properties("createdAt", Property.of(p -> p.date(d -> d)))
+                                    .properties("userEmail", Property.of(p -> p.text(t -> t.analyzer("standard"))))
+                                    .properties("userName", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (RuntimeException | IOException e) {
             // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
@@ -101,8 +102,8 @@ public class WalletIndexer {
      * Spring y su {@code @Transactional} nunca llegaba a aplicarse (java:S6809).
      */
     private int doReindexAll() {
-        int[] indexed = { 0 };
-        int[] failed = { 0 };
+        int[] indexed = {0};
+        int[] failed = {0};
         walletRepository.findAll().forEach(w -> {
             if (indexWallet(w)) {
                 indexed[0]++;

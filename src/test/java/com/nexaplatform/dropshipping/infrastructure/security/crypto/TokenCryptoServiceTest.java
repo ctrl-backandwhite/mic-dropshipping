@@ -79,8 +79,7 @@ class TokenCryptoServiceTest {
     @Test
     void decrypt_legacyEncPlaceholderIsBase64Decoded() {
         TokenCryptoService svc = service(kek());
-        String legacy = "enc:" + Base64.getEncoder()
-                .encodeToString("legacy-value".getBytes(StandardCharsets.UTF_8));
+        String legacy = "enc:" + Base64.getEncoder().encodeToString("legacy-value".getBytes(StandardCharsets.UTF_8));
 
         assertThat(svc.decrypt(legacy)).isEqualTo("legacy-value");
         assertThat(svc.isModern(legacy)).isFalse();
@@ -107,19 +106,16 @@ class TokenCryptoServiceTest {
         TokenCryptoService svc = service(kek());
         String encrypted = svc.encrypt("tamper-me");
         // Flip a Base64 char in the body so the GCM auth tag check fails.
-        String corrupted = "gcm:" + (encrypted.charAt(4) == 'A' ? "B" : "A")
-                + encrypted.substring(5);
+        String corrupted = "gcm:" + (encrypted.charAt(4) == 'A' ? "B" : "A") + encrypted.substring(5);
 
-        assertThatExceptionOfType(TokenCryptoService.CryptoException.class)
-                .isThrownBy(() -> svc.decrypt(corrupted));
+        assertThatExceptionOfType(TokenCryptoService.CryptoException.class).isThrownBy(() -> svc.decrypt(corrupted));
     }
 
     @Test
     void init_rejectsKekWithWrongLength() {
         String shortKek = Base64.getEncoder().encodeToString(new byte[16]);
 
-        assertThatExceptionOfType(IllegalStateException.class)
-                .isThrownBy(() -> service(shortKek))
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> service(shortKek))
                 .withMessageContaining("32 bytes");
     }
 

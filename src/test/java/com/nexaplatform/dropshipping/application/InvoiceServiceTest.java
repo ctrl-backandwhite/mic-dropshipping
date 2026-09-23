@@ -52,9 +52,8 @@ class InvoiceServiceTest {
                 .thenAnswer(i -> i.<BigDecimal>getArgument(0));
         lenient().when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
         service = new InvoiceService(templateEngine, currencyRateService, mock(EuComplianceService.class),
-                new OrderAmounts(currencyRateService),
-                mock(PaymentJpaRepositoryAdapter.class), mock(ProductRepository.class),
-                mock(ProductVariantRepository.class), mock(ObjectStorageService.class));
+                new OrderAmounts(currencyRateService), mock(PaymentJpaRepositoryAdapter.class),
+                mock(ProductRepository.class), mock(ProductVariantRepository.class), mock(ObjectStorageService.class));
     }
 
     private static Order order(String currency, OrderItem... items) {
@@ -86,8 +85,8 @@ class InvoiceServiceTest {
         when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(InvoiceServiceTest::display);
         // 1000c=10.00 x2 = 20.00 ; 550c=5.50 x1 = 5.50 ; subtotal 25.50 ; +ship 5.00 +tax 2.10 = 32.60
-        Map<String, Object> m = service.model(order("USD", item(1000, 2, "Camiseta"), item(550, 1, "Gorra")),
-                "es", "http://dl");
+        Map<String, Object> m = service.model(order("USD", item(1000, 2, "Camiseta"), item(550, 1, "Gorra")), "es",
+                "http://dl");
 
         // País con nombre completo (ISO "ES" → "España").
         assertThat(m).containsEntry("subtotal", "$25.50").containsEntry("shipping", "$5.00")
@@ -157,9 +156,10 @@ class InvoiceServiceTest {
         when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(InvoiceServiceTest::display);
 
-        Map<String, Object> m = service.model(order("USD",
-                itemWithImage(1000, 1, "Tee", "http://localhost:9100/product-images/a.jpg"),
-                itemWithImage(2000, 1, "Cap", "http://localhost:9100/product-images/b.jpg")), "es", "http://dl");
+        Map<String, Object> m = service.model(
+                order("USD", itemWithImage(1000, 1, "Tee", "http://localhost:9100/product-images/a.jpg"),
+                        itemWithImage(2000, 1, "Cap", "http://localhost:9100/product-images/b.jpg")),
+                "es", "http://dl");
 
         List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
         assertThat(items.get(0)).containsEntry("image", "cid:invitem-0");

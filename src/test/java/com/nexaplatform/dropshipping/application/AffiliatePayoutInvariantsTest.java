@@ -137,12 +137,10 @@ class AffiliatePayoutInvariantsTest {
     }
 
     private void config(long minPayoutCents) {
-        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(
-                AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
-                        .attributionWindowDays(30).returnPeriodDays(14).minPayoutCents(minPayoutCents)
-                        .currency("EUR").attributionModel("LAST_CLICK").build()));
+        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(AffiliateProgramConfigEntity.builder()
+                .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
+                .minPayoutCents(minPayoutCents).currency("EUR").attributionModel("LAST_CLICK").build()));
     }
-
 
     /**
      * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
@@ -176,8 +174,7 @@ class AffiliatePayoutInvariantsTest {
         affiliate();
         payout("REJECTED", "WALLET");
 
-        assertThatThrownBy(() -> subject.approvePayout(payoutId))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.approvePayout(payoutId)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("rechazado");
 
         verify(walletUseCase, never()).adminTopup(any(), anyLong(), anyString(), anyString());
@@ -187,8 +184,7 @@ class AffiliatePayoutInvariantsTest {
     void unPagoYaEjecutadoNoSePuedeRechazarDespues() {
         payout("PAID", "WALLET");
 
-        assertThatThrownBy(() -> subject.rejectPayout(payoutId, "me equivoqué"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.rejectPayout(payoutId, "me equivoqué")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("ya se ejecutó");
     }
 
@@ -196,7 +192,7 @@ class AffiliatePayoutInvariantsTest {
     void sinComisionesAprobadasElPagoSeRechazaEnVezDeAbonarCero() {
         affiliate();
         payout("APPROVED", "WALLET");
-        approvedCommissions();   // ninguna
+        approvedCommissions(); // ninguna
 
         AffiliatePayoutEntity result = service().approvePayout(payoutId);
 
@@ -217,8 +213,7 @@ class AffiliatePayoutInvariantsTest {
 
         AffiliatePayoutEntity result = service().approvePayout(payoutId);
 
-        verify(walletUseCase).adminTopup(userId, 5_500L, "Affiliate commission payout",
-                "affiliate-payout-" + payoutId);
+        verify(walletUseCase).adminTopup(userId, 5_500L, "Affiliate commission payout", "affiliate-payout-" + payoutId);
         assertThat(result.getStatus()).isEqualTo("PAID");
         assertThat(result.getAmountCents()).isEqualTo(5_500L);
         assertThat(result.getCommissionCount()).isEqualTo(2);
@@ -255,8 +250,8 @@ class AffiliatePayoutInvariantsTest {
 
         service().approvePayout(payoutId);
 
-        verify(commissionRepo).save(org.mockito.ArgumentMatchers.argThat(c ->
-                "PAID".equals(c.getStatus()) && payoutId.equals(c.getPayoutId()) && c.getPaidAt() != null));
+        verify(commissionRepo).save(org.mockito.ArgumentMatchers.argThat(
+                c -> "PAID".equals(c.getStatus()) && payoutId.equals(c.getPayoutId()) && c.getPaidAt() != null));
     }
 
     // ---------------------------------------------------------------- solicitud del afiliado
@@ -267,8 +262,7 @@ class AffiliatePayoutInvariantsTest {
         config(5_000L);
         approvedCommissions(1_000L);
 
-        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("mínimo");
 
         verify(payoutRepo, never()).save(any());
@@ -282,18 +276,16 @@ class AffiliatePayoutInvariantsTest {
         approvedCommissions(5_000L);
         when(payoutRepo.existsByAffiliateIdAndStatus(affiliateId, "REQUESTED")).thenReturn(true);
 
-        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("pendiente");
     }
 
     @Test
     void noSeSolicitaTransferenciaSinDatosBancarios() {
-        affiliate();   // sin IBAN ni titular
+        affiliate(); // sin IBAN ni titular
         config(1_000L);
 
-        assertThatThrownBy(() -> subject.requestPayout(userId, "BANK"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.requestPayout(userId, "BANK")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("datos bancarios");
     }
 
@@ -302,16 +294,14 @@ class AffiliatePayoutInvariantsTest {
         affiliate();
         config(1_000L);
 
-        assertThatThrownBy(() -> subject.requestPayout(userId, "PAYPAL"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.requestPayout(userId, "PAYPAL")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PayPal");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"CRYPTO", "cheque", "efectivo"})
     void unMetodoDeCobroDesconocidoSeRechaza(String method) {
-        assertThatThrownBy(() -> subject.requestPayout(userId, method))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.requestPayout(userId, method)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("no válido");
     }
 
@@ -339,8 +329,7 @@ class AffiliatePayoutInvariantsTest {
     void solicitarPagoSinSerAfiliadoNoCreaNada() {
         when(affiliateRepo.findByUser_Id(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET"))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET")).isInstanceOf(NotFoundException.class);
 
         verify(payoutRepo, never()).save(any());
     }

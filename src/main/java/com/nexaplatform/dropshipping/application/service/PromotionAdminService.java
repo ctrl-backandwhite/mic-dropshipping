@@ -76,24 +76,13 @@ public class PromotionAdminService {
             @CacheEvict(value = CACHE_SEARCH, allEntries = true)})
     public PromotionEntity create(AdminPromotionDtoIn req) {
         validate(req, null);
-        PromotionEntity p = PromotionEntity.builder()
-                .name(req.getName().trim())
-                .code(normalizeCode(req.getCode()))
-                .kind(parseKind(req.getKind()))
-                .scope(parseScope(req.getScope()))
-                .percentOff(req.getPercentOff())
-                .amountOffCents(req.getAmountOffCents())
-                .startsAt(req.getStartsAt())
-                .endsAt(req.getEndsAt())
+        PromotionEntity p = PromotionEntity.builder().name(req.getName().trim()).code(normalizeCode(req.getCode()))
+                .kind(parseKind(req.getKind())).scope(parseScope(req.getScope())).percentOff(req.getPercentOff())
+                .amountOffCents(req.getAmountOffCents()).startsAt(req.getStartsAt()).endsAt(req.getEndsAt())
                 .active(req.getActive() == null || req.getActive())
-                .priority(req.getPriority() == null ? 0 : req.getPriority())
-                .maxUses(req.getMaxUses())
-                .usedCount(0)
-                .minOrderCents(req.getMinOrderCents())
-                .userId(req.getUserId())
-                .maxUsesPerUser(req.getMaxUsesPerUser())
-                .createdAt(Instant.now())
-                .build();
+                .priority(req.getPriority() == null ? 0 : req.getPriority()).maxUses(req.getMaxUses()).usedCount(0)
+                .minOrderCents(req.getMinOrderCents()).userId(req.getUserId()).maxUsesPerUser(req.getMaxUsesPerUser())
+                .createdAt(Instant.now()).build();
         p = promotionRepository.save(p);
         replaceTargets(p, req);
         if (Boolean.TRUE.equals(req.getNotifyUsers())) {
@@ -218,12 +207,12 @@ public class PromotionAdminService {
         }
         List<PromotionTargetEntity> filas = new ArrayList<>();
         if (p.getScope() == PromotionScope.CATEGORY && req.getCategoryIds() != null) {
-            req.getCategoryIds().forEach(c -> filas.add(
-                    PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(c).build()));
+            req.getCategoryIds().forEach(
+                    c -> filas.add(PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(c).build()));
         }
         if (p.getScope() == PromotionScope.PRODUCT && req.getProductIds() != null) {
-            req.getProductIds().forEach(pr -> filas.add(
-                    PromotionTargetEntity.builder().promotionId(p.getId()).productId(pr).build()));
+            req.getProductIds().forEach(
+                    pr -> filas.add(PromotionTargetEntity.builder().promotionId(p.getId()).productId(pr).build()));
         }
         targetRepository.saveAll(filas);
     }
@@ -259,8 +248,7 @@ public class PromotionAdminService {
         String code = normalizeCode(req.getCode());
         if (code != null) {
             promotionRepository.findByCodeIgnoreCase(code)
-                    .filter(other -> existing == null || !other.getId().equals(existing.getId()))
-                    .ifPresent(other -> {
+                    .filter(other -> existing == null || !other.getId().equals(existing.getId())).ifPresent(other -> {
                         throw new BusinessException(BR, List.of("Ya existe un cupón con el código " + code));
                     });
         }
@@ -273,7 +261,8 @@ public class PromotionAdminService {
 
     private static PromotionKind parseKind(String v) {
         try {
-            return v == null || v.isBlank() ? PromotionKind.SEASONAL
+            return v == null || v.isBlank()
+                    ? PromotionKind.SEASONAL
                     : PromotionKind.valueOf(v.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new BusinessException(BR, List.of("Tipo de promoción no válido: " + v));
@@ -282,7 +271,8 @@ public class PromotionAdminService {
 
     private static PromotionScope parseScope(String v) {
         try {
-            return v == null || v.isBlank() ? PromotionScope.ALL
+            return v == null || v.isBlank()
+                    ? PromotionScope.ALL
                     : PromotionScope.valueOf(v.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new BusinessException(BR, List.of("Alcance no válido: " + v));
@@ -306,9 +296,9 @@ public class PromotionAdminService {
         }
         // Los nombres de las categorías, que es lo que el usuario reconoce: «5 categorías» no le dice
         // si la rebaja le interesa.
-        List<String> nombres = targets.stream().map(PromotionTargetEntity::getCategoryId)
-                .map(id -> categoryRepository.findById(id).map(c -> c.getNameZh() != null ? c.getNameZh()
-                        : c.getSlug()).orElse(null))
+        List<String> nombres = targets
+                .stream().map(PromotionTargetEntity::getCategoryId).map(id -> categoryRepository.findById(id)
+                        .map(c -> c.getNameZh() != null ? c.getNameZh() : c.getSlug()).orElse(null))
                 .filter(java.util.Objects::nonNull).limit(4).toList();
         return nombres.isEmpty() ? "categorías seleccionadas" : String.join(", ", nombres);
     }

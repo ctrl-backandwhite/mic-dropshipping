@@ -87,9 +87,9 @@ class Cov04NewProductsCampaignServiceTest {
     }
 
     private static ProductSummaryView producto(String titulo) {
-        return new ProductSummaryView(UUID.randomUUID(), "slug", titulo, "https://img/1.jpg",
-                BigDecimal.ONE, "CNY", BigDecimal.valueOf(4.5), 0, 10, BigDecimal.ONE, "ACTIVE",
-                BigDecimal.TEN, BigDecimal.TEN, "EUR", "€", "10,00 €", 5, 5, true);
+        return new ProductSummaryView(UUID.randomUUID(), "slug", titulo, "https://img/1.jpg", BigDecimal.ONE, "CNY",
+                BigDecimal.valueOf(4.5), 0, 10, BigDecimal.ONE, "ACTIVE", BigDecimal.TEN, BigDecimal.TEN, "EUR", "€",
+                "10,00 €", 5, 5, true);
     }
 
     private static CategoryView categoria(UUID id, String nombre) {
@@ -98,8 +98,8 @@ class Cov04NewProductsCampaignServiceTest {
 
     /** Deja el catálogo con UNA categoría que sí tiene novedades hoy. */
     private void catalogoConNovedades() {
-        when(productRepository.findCategoryIdsWithProductsIngestedSince(eq(ProductStatus.ACTIVE),
-                any(Instant.class))).thenReturn(List.of(categoriaId));
+        when(productRepository.findCategoryIdsWithProductsIngestedSince(eq(ProductStatus.ACTIVE), any(Instant.class)))
+                .thenReturn(List.of(categoriaId));
         when(storefrontRead.productsByCategory(eq(categoriaId.toString()), anyInt(), anyInt(), anyString(),
                 eq("newest"))).thenReturn(new PageResponse<>(List.of(producto("Camiseta")), 0, 3, 1, 1));
         when(storefrontRead.categoryDetail(eq(categoriaId.toString()), anyString()))
@@ -128,8 +128,8 @@ class Cov04NewProductsCampaignServiceTest {
 
     @Test
     void siHoyNoSeHaIngeridoNingunProductoNoHayCampana() {
-        when(productRepository.findCategoryIdsWithProductsIngestedSince(eq(ProductStatus.ACTIVE),
-                any(Instant.class))).thenReturn(List.of());
+        when(productRepository.findCategoryIdsWithProductsIngestedSince(eq(ProductStatus.ACTIVE), any(Instant.class)))
+                .thenReturn(List.of());
 
         assertThat(service.sendForCountries(Set.of("ES"))).isZero();
         verifyNoInteractions(emailQueue);
@@ -172,8 +172,8 @@ class Cov04NewProductsCampaignServiceTest {
         catalogoConNovedades();
         when(userRepository.findByActiveTrueAndMarketingOptOutFalse())
                 .thenReturn(List.of(usuario("es@test", "ES", "es")));
-        when(outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
-                eq("es@test"), eq(TEMPLATE), any(Instant.class))).thenReturn(true);
+        when(outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(eq("es@test"),
+                eq(TEMPLATE), any(Instant.class))).thenReturn(true);
 
         assertThat(service.sendForCountries(Set.of("ES"))).isZero();
         verifyNoInteractions(emailQueue);
@@ -181,8 +181,8 @@ class Cov04NewProductsCampaignServiceTest {
 
     @Test
     void siEnSuIdiomaNoHayNadaQueEnsenarNoSeMandaUnCorreoVacio() {
-        when(productRepository.findCategoryIdsWithProductsIngestedSince(eq(ProductStatus.ACTIVE),
-                any(Instant.class))).thenReturn(List.of(categoriaId));
+        when(productRepository.findCategoryIdsWithProductsIngestedSince(eq(ProductStatus.ACTIVE), any(Instant.class)))
+                .thenReturn(List.of(categoriaId));
         when(storefrontRead.productsByCategory(anyString(), anyInt(), anyInt(), anyString(), anyString()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 3, 0, 0));
         when(userRepository.findByActiveTrueAndMarketingOptOutFalse())
@@ -256,8 +256,7 @@ class Cov04NewProductsCampaignServiceTest {
                 .thenReturn(List.of(usuario("a@test", "ES", "es"), usuario("b@test", "ES", "es")));
 
         assertThat(service.sendForCountries(Set.of("ES"))).isEqualTo(2);
-        verify(storefrontRead, times(1)).productsByCategory(anyString(), anyInt(), anyInt(), anyString(),
-                anyString());
+        verify(storefrontRead, times(1)).productsByCategory(anyString(), anyInt(), anyInt(), anyString(), anyString());
     }
 
     // ── Correo de prueba del panel admin ─────────────────────────────────────────────────────────
@@ -265,10 +264,9 @@ class Cov04NewProductsCampaignServiceTest {
     @Test
     void elCorreoDePruebaIgnoraAudienciaYUsaLasPrimerasCategoriasConProductos() {
         when(storefrontRead.categoriesFlat("fr")).thenReturn(List.of(categoria(categoriaId, "Mode")));
-        when(storefrontRead.productsByCategory(eq(categoriaId.toString()), anyInt(), anyInt(), eq("fr"),
-                eq("newest"))).thenReturn(new PageResponse<>(List.of(producto("T-shirt")), 0, 3, 1, 1));
-        when(storefrontRead.categoryDetail(categoriaId.toString(), "fr"))
-                .thenReturn(categoria(categoriaId, "Mode"));
+        when(storefrontRead.productsByCategory(eq(categoriaId.toString()), anyInt(), anyInt(), eq("fr"), eq("newest")))
+                .thenReturn(new PageResponse<>(List.of(producto("T-shirt")), 0, 3, 1, 1));
+        when(storefrontRead.categoryDetail(categoriaId.toString(), "fr")).thenReturn(categoria(categoriaId, "Mode"));
         when(userRepository.findByEmail("qa@test")).thenReturn(Optional.empty());
 
         assertThat(service.sendTest("qa@test", "FR")).isTrue();

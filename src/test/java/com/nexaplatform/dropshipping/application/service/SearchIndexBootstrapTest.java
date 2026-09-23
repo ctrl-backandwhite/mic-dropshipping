@@ -170,8 +170,8 @@ class SearchIndexBootstrapTest {
     }
 
     private List<String> avisos() {
-        return anotador.list.stream().filter(e -> e.getLevel() == Level.WARN)
-                .map(ILoggingEvent::getFormattedMessage).toList();
+        return anotador.list.stream().filter(e -> e.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage)
+                .toList();
     }
 
     private void activar(boolean valor) {

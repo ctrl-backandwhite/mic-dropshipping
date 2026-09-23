@@ -134,8 +134,8 @@ class Cov07EmailQueueServiceTest {
 
     /** Facturación, soporte y el resto (sin plantilla) salen cada uno desde su alias. */
     @ParameterizedTest(name = "{0} → {1}")
-    @CsvSource(nullValues = "SIN_PLANTILLA", value = { "emails/invoice, billing@nexadrop.local",
-            "emails/contact-ack, support@nexadrop.local", "SIN_PLANTILLA, noreply@nexadrop.local" })
+    @CsvSource(nullValues = "SIN_PLANTILLA", value = {"emails/invoice, billing@nexadrop.local",
+            "emails/contact-ack, support@nexadrop.local", "SIN_PLANTILLA, noreply@nexadrop.local"})
     void elRemitenteLoDecideLaPlantillaDelCorreo(String plantilla, String remitenteEsperado) throws Exception {
         pending("<p>x</p>", plantilla, null, null);
 
@@ -174,7 +174,7 @@ class Cov07EmailQueueServiceTest {
         assertThat(email.getStatus()).isEqualTo("PENDING");
         assertThat(email.getAttemptCount()).isEqualTo(3);
         assertThat(email.getErrorMessage()).isEqualTo("SMTP caído");
-        assertThat(email.getNextAttemptAt()).isNotNull();     // aplazado, no descartado
+        assertThat(email.getNextAttemptAt()).isNotNull(); // aplazado, no descartado
         assertThat(email.getSentAt()).isNull();
         verify(repo).save(email);
     }
@@ -182,11 +182,10 @@ class Cov07EmailQueueServiceTest {
     @Test
     void unRateLimitDelProveedorAplazaElCorreoYNoLoDescartaNuncaPorMuchosIntentos() {
         OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
-        email.setAttemptCount(50);   // ya lleva muchísimos intentos...
-        doThrow(new RuntimeException(
-                "Failed messages: org.eclipse.angus.mail.smtp.SMTPSendFailedException: "
-                        + "451 4.7.1 Ratelimit \"hostinger_out_ratelimit\" exceeded"))
-                .when(mailSender).send(any(MimeMessage.class));
+        email.setAttemptCount(50); // ya lleva muchísimos intentos...
+        doThrow(new RuntimeException("Failed messages: org.eclipse.angus.mail.smtp.SMTPSendFailedException: "
+                + "451 4.7.1 Ratelimit \"hostinger_out_ratelimit\" exceeded")).when(mailSender)
+                .send(any(MimeMessage.class));
 
         service.dispatchPending();
 
@@ -199,8 +198,8 @@ class Cov07EmailQueueServiceTest {
     @Test
     void unErrorPermanenteDescartaElCorreoAlPrimerIntento() {
         OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
-        doThrow(new RuntimeException("550 5.1.1 <destino@example.com>: user unknown"))
-                .when(mailSender).send(any(MimeMessage.class));
+        doThrow(new RuntimeException("550 5.1.1 <destino@example.com>: user unknown")).when(mailSender)
+                .send(any(MimeMessage.class));
 
         service.dispatchPending();
 
@@ -213,9 +212,8 @@ class Cov07EmailQueueServiceTest {
     @Test
     void unFalloTemporalSeRindeCuandoElCorreoYaEsDemasiadoViejo() {
         OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
-        email.setCreatedAt(Instant.now().minus(Duration.ofHours(25)));   // lleva más de 24 h reintentando
-        doThrow(new RuntimeException("451 4.7.1 Ratelimit exceeded"))
-                .when(mailSender).send(any(MimeMessage.class));
+        email.setCreatedAt(Instant.now().minus(Duration.ofHours(25))); // lleva más de 24 h reintentando
+        doThrow(new RuntimeException("451 4.7.1 Ratelimit exceeded")).when(mailSender).send(any(MimeMessage.class));
 
         service.dispatchPending();
 
@@ -237,7 +235,7 @@ class Cov07EmailQueueServiceTest {
     @Test
     void unCidQueNoEsIconoSeResuelveContraLasImagenesDelStorage() {
         pending("<img src=\"cid:foto1\">", "emails/invoice", "{\"foto1\":\"http://cdn/1.jpg\"}", null);
-        when(storage.bytesFromPublicUrl("http://cdn/1.jpg")).thenReturn(new byte[] { 9, 9, 9 });
+        when(storage.bytesFromPublicUrl("http://cdn/1.jpg")).thenReturn(new byte[]{9, 9, 9});
 
         service.dispatchPending();
 
@@ -279,7 +277,7 @@ class Cov07EmailQueueServiceTest {
     void seRecogenTodosLosCidDistintosDelHtmlUnaSolaVez() {
         pending("<img src=\"cid:foto1\"><img src=\"cid:foto1\"><img src=\"cid:foto2\">", "emails/invoice",
                 "{\"foto1\":\"http://cdn/1.jpg\",\"foto2\":\"http://cdn/2.jpg\"}", null);
-        when(storage.bytesFromPublicUrl(anyString())).thenReturn(new byte[] { 1 });
+        when(storage.bytesFromPublicUrl(anyString())).thenReturn(new byte[]{1});
 
         service.dispatchPending();
 
@@ -302,9 +300,9 @@ class Cov07EmailQueueServiceTest {
 
     /** Deja en la cola un único correo PENDING con el cuerpo/plantilla indicados y lo devuelve. */
     private OutboundEmailEntity pending(String html, String template, String inlineImages, String replyTo) {
-        OutboundEmailEntity email = OutboundEmailEntity.builder().id(UUID.randomUUID())
-                .toAddress("destino@example.com").subject("Asunto").bodyHtml(html).template(template)
-                .inlineImages(inlineImages).replyTo(replyTo).status("PENDING").build();
+        OutboundEmailEntity email = OutboundEmailEntity.builder().id(UUID.randomUUID()).toAddress("destino@example.com")
+                .subject("Asunto").bodyHtml(html).template(template).inlineImages(inlineImages).replyTo(replyTo)
+                .status("PENDING").build();
         when(repo.findDispatchable(any(), any())).thenReturn(List.of(email));
         return email;
     }

@@ -44,7 +44,6 @@ public class CategorySearchService {
         this.searchUrl = base + "/" + index + "/_search";
     }
 
-
     /** A flattened category row read from the OpenSearch index (everything the admin table needs). */
     public record IndexedCategory(UUID id, String slug, String nameZh, String nameEs, String nameEn, String namePt,
             String icon, int position, boolean active, UUID parentId) {
@@ -65,8 +64,7 @@ public class CategorySearchService {
             String body = "{\"size\":" + MAX + ",\"query\":" + query
                     + ",\"sort\":[{\"position\":{\"order\":\"asc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+                    .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() / 100 != 2) {
                 log.warn("Category index read returned {} — falling back to DB", res.statusCode());

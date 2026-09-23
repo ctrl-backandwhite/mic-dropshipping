@@ -55,16 +55,15 @@ class PromotionShowcaseServiceTest {
     private static PageResponse<ProductSummaryView> pagina(int cuantos) {
         List<ProductSummaryView> items = new java.util.ArrayList<>();
         for (int i = 0; i < cuantos; i++) {
-            items.add(new ProductSummaryView(UUID.randomUUID(), "slug-" + i, "Producto " + i, null, null, null, null,
-                    0, 0, null, null, null, null, null, null, null, null, null, false));
+            items.add(new ProductSummaryView(UUID.randomUUID(), "slug-" + i, "Producto " + i, null, null, null, null, 0,
+                    0, null, null, null, null, null, null, null, null, null, false));
         }
         return new PageResponse<>(items, 0, cuantos, cuantos, 1);
     }
 
     private static PromotionEntity rebaja(String nombre, int porcentaje, PromotionScope alcance) {
-        return PromotionEntity.builder().id(UUID.randomUUID()).name(nombre).kind(PromotionKind.SEASONAL)
-                .scope(alcance).percentOff(BigDecimal.valueOf(porcentaje)).active(true)
-                .createdAt(Instant.now()).build();
+        return PromotionEntity.builder().id(UUID.randomUUID()).name(nombre).kind(PromotionKind.SEASONAL).scope(alcance)
+                .percentOff(BigDecimal.valueOf(porcentaje)).active(true).createdAt(Instant.now()).build();
     }
 
     @Test
@@ -123,8 +122,8 @@ class PromotionShowcaseServiceTest {
         when(promotionRepository.findAll()).thenReturn(List.of(p));
         when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of());
 
-        assertThat(service.live("es")).singleElement().extracting(v -> v.products()).asInstanceOf(
-                org.assertj.core.api.InstanceOfAssertFactories.LIST).isEmpty();
+        assertThat(service.live("es")).singleElement().extracting(v -> v.products())
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).isEmpty();
         verify(storefrontRead, never()).productList(anyInt(), anyInt(), anyString(), any(), any(), any(), any(), any(),
                 anyString());
     }

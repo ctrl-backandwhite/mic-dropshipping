@@ -52,8 +52,8 @@ class DeviceSessionRevocationFilterTest {
     }
 
     private void authenticate() {
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                "user@test.com", "n/a", AuthorityUtils.createAuthorityList("ROLE_USER"));
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken("user@test.com", "n/a",
+                AuthorityUtils.createAuthorityList("ROLE_USER"));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
@@ -86,8 +86,8 @@ class DeviceSessionRevocationFilterTest {
 
     @Test
     void anonymous_request_passes_through_without_querying_service() throws Exception {
-        SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
-                "key", "anonymous", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+        SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken("key", "anonymous",
+                AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
 
         filter.doFilter(req, res, chain);
 
@@ -119,16 +119,16 @@ class DeviceSessionRevocationFilterTest {
     void unDispositivoRevocadoSeRechazaSinInvalidarLaSesionEnCurso() throws Exception {
         authenticate();
         req.setSession(new org.springframework.mock.web.MockHttpSession());
-        org.springframework.mock.web.MockHttpSession sesion =
-                (org.springframework.mock.web.MockHttpSession) req.getSession(false);
+        org.springframework.mock.web.MockHttpSession sesion = (org.springframework.mock.web.MockHttpSession) req
+                .getSession(false);
         when(deviceSessionService.isRevoked(any())).thenReturn(true);
 
         filter.doFilter(req, res, chain);
 
         assertThat(res.getStatus()).isEqualTo(401);
         assertThat(sesion.isInvalid()).as("la sesión NO se invalida a mitad de petición").isFalse();
-        assertThat(SecurityContextHolder.getContext().getAuthentication())
-                .as("pero deja de estar autenticado").isNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).as("pero deja de estar autenticado")
+                .isNull();
         verifyNoInteractions(chain);
     }
 }

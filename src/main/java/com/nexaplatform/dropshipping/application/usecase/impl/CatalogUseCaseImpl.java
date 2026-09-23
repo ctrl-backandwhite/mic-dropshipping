@@ -285,8 +285,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     // caché.
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
-            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true) })
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public CategoryEntity createCategoryRejectingDuplicateSlug(IngestCategoryRequest req) {
         if (categoryRepository.findBySlug(req.slug()).isPresent()) {
             throw new BusinessException("Ya existe una categoría con slug \"" + req.slug() + "\"");
@@ -296,8 +296,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
-            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true) })
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public CategoryEntity upsertCategory(IngestCategoryRequest req) {
         return upsertCategoryInternal(req);
     }
@@ -434,8 +434,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             // como una imagen más. Se descartan aquí, en la puerta. La posición de las demás no se
             // recalcula: un hueco en la numeración no cambia el orden, y el orden viene de 1688.
             if (!BulkProductRules.isProductPhoto(img.sourceUrl())) {
-                log.info("Imagen descartada por ser un recurso de la interfaz del proveedor: {}",
-                        img.sourceUrl());
+                log.info("Imagen descartada por ser un recurso de la interfaz del proveedor: {}", img.sourceUrl());
                 continue;
             }
             ProductImageEntity antes = espejadas.get(img.sourceUrl());
@@ -443,10 +442,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     .role(img.role() != null ? img.role() : GALLERY).sourceUrl(img.sourceUrl())
                     // Se hereda lo que costó traer: la copia en el CDN, sus medidas y su huella. Lo
                     // que NO se hereda es la posición ni el papel: esos vienen de la ficha nueva.
-                    .cdnUrl(antes != null ? antes.getCdnUrl() : null)
-                    .width(antes != null ? antes.getWidth() : null)
-                    .height(antes != null ? antes.getHeight() : null)
-                    .bytes(antes != null ? antes.getBytes() : null)
+                    .cdnUrl(antes != null ? antes.getCdnUrl() : null).width(antes != null ? antes.getWidth() : null)
+                    .height(antes != null ? antes.getHeight() : null).bytes(antes != null ? antes.getBytes() : null)
                     .hash(antes != null ? antes.getHash() : null)
                     .mirroredAt(antes != null ? antes.getMirroredAt() : null)
                     .mirrorStatus(antes != null ? MirrorStatus.MIRRORED : MirrorStatus.PENDING).build());
@@ -464,9 +461,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     .position(optReq.position()).build();
             if (optReq.values() != null) {
                 for (IngestVariantValue v : optReq.values()) {
-                    opt.getValues().add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh())
-                            .position(v.position())
-                            .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl).build());
+                    opt.getValues()
+                            .add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh()).position(v.position())
+                                    .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl)
+                                    .build());
                 }
             }
             product.getVariantOptions().add(opt);
@@ -507,8 +505,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     ent = existentes.get(v.externalId());
                     vistos.add(v.externalId());
                 } else {
-                    ent = ProductVariantEntity.builder().product(product)
-                            .externalId(v.externalId()).build();
+                    ent = ProductVariantEntity.builder().product(product).externalId(v.externalId()).build();
                 }
                 ent.setSku(v.sku());
                 ent.setTitle(v.title());
@@ -542,10 +539,23 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (req.priceTiers() == null) {
             return;
         }
-        priceTierRepository.findByProductIdOrderByMinQtyAsc(product.getId()).forEach(priceTierRepository::delete);
+        List<ProductPriceTierEntity> previos = priceTierRepository.findByProductIdOrderByMinQtyAsc(product.getId());
+        // Los recargos que YA tenían, por tramo, antes de borrarlos.
+        //
+        // Se guardan porque esto borra y recrea: el scraper no manda recargo de tramo —y hace
+        // bien, lo fija el panel— así que el tramo renacía sin él y el trabajo del administrador
+        // duraba hasta la siguiente extracción, sin ningún error.
+        Map<Integer, BigDecimal> recargosPrevios = new HashMap<>();
+        for (ProductPriceTierEntity previo : previos) {
+            if (previo.getSurchargeCny() != null) {
+                recargosPrevios.put(previo.getMinQty(), previo.getSurchargeCny());
+            }
+        }
+        previos.forEach(priceTierRepository::delete);
         for (IngestPriceTier t : req.priceTiers()) {
             priceTierRepository.save(ProductPriceTierEntity.builder().product(product).minQty(t.minQty())
                     .maxQty(t.maxQty()).unitPrice(t.unitPrice())
+                    .surchargeCny(BulkProductFields.tierSurcharge(recargosPrevios, t.minQty(), t.surchargeCny()))
                     .currency(t.currency() != null ? t.currency() : "CNY").build());
         }
     }
@@ -580,8 +590,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // LIKE; la query usa
         // (:needle = '' OR ...). searchAdmin también sirve como ruta del filtro
         // `verified` (con o sin texto/categoría).
-        String needle = (query == null || query.isBlank()) ? ""
-                : Texts.escapeLikeWildcards(query.trim().toLowerCase());
+        String needle = (query == null || query.isBlank()) ? "" : Texts.escapeLikeWildcards(query.trim().toLowerCase());
         if (!needle.isEmpty() || verified != null) {
             // El fuzzy se acota al idioma que está viendo el admin (contra los 8 a la vez,
             // "botas" casaba
@@ -595,8 +604,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             Page<ProductEntity> found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, false,
                     minCost, maxCost, minSales, minTrend, null, null, pageable);
             if (!needle.isEmpty() && found.getTotalElements() == 0) {
-                found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true,
-                        minCost, maxCost, minSales, minTrend, null, null, pageable);
+                found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true, minCost, maxCost,
+                        minSales, minTrend, null, null, pageable);
             }
             return found.map(p -> productMapper.toSummary(p, language));
         }
@@ -608,10 +617,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
          */
         if (minCost != null || maxCost != null || minSales != null || minTrend != null) {
             String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
-            return productJpaRepository
-                    .searchAdmin(st, categoryId, "", null, lang, false, minCost, maxCost, minSales, minTrend, null, null,
-                            pageable)
-                    .map(p -> productMapper.toSummary(p, language));
+            return productJpaRepository.searchAdmin(st, categoryId, "", null, lang, false, minCost, maxCost, minSales,
+                    minTrend, null, null, pageable).map(p -> productMapper.toSummary(p, language));
         }
         if (categoryId == null) {
             return pageProducts(st, pageable, language);
@@ -690,8 +697,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional(readOnly = true)
     public Product getProductModelBySlug(String slug) {
-        return productRepository.findBySlug(slug)
-                .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + slug));
+        return productRepository.findBySlug(slug).orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + slug));
     }
 
     @Override
@@ -787,10 +793,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     // entrada caducaba.
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true) })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void updateStatus(UUID id, String status) {
         // valueOf crudo daba un 500 con un estado desconocido, mientras el listado del
         // mismo panel tolera
@@ -809,10 +815,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true) })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void updateStatus(UUID id, ProductStatus status) {
         applyStatus(id, status);
     }
@@ -954,9 +960,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deletePriceTier(UUID productId, int minQty) {
         if (!productJpaRepository.existsById(productId))
             throw new NotFoundException(PRODUCT_NOT_FOUND + productId);
@@ -968,9 +974,28 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public ProductDetailView updatePriceTierSurcharge(UUID productId, int minQty, BigDecimal surchargeCny,
+            String lang) {
+        ProductEntity p = productJpaRepository.findById(productId)
+                .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + productId));
+        ProductPriceTierEntity tramo = priceTierRepository.findByProductIdOrderByMinQtyAsc(productId).stream()
+                .filter(t -> t.getMinQty() == minQty).findFirst().orElseThrow(() -> new NotFoundException(
+                        "Price tier not found: product " + productId + ", minQty " + minQty));
+        tramo.setSurchargeCny(surchargeCny);
+        priceTierRepository.save(tramo);
+        // Se vuelve a leer la lista porque la que hay en memoria es la de ANTES de guardar, y lo que se
+        // devuelve es justamente el precio recalculado del tramo que se acaba de tocar.
+        return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(productId));
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
@@ -999,9 +1024,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      */
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public int bulkUpdateSurcharge(List<UUID> productIds, UUID categoryId, BigDecimal surchargeCny) {
         BigDecimal valor = surchargeCny != null ? surchargeCny : BigDecimal.ZERO;
         int actualizados;
@@ -1014,8 +1039,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         } else if (categoryId != null) {
             // Recargo para toda una categoría.
             actualizados = jdbcTemplate.update(
-                    "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?",
-                    valor, categoryId);
+                    "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?", valor,
+                    categoryId);
         } else {
             // Sin filtro: todo el catálogo (update masivo global).
             actualizados = jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", valor);
@@ -1035,9 +1060,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      */
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public int bulkUpdateSubsidy(List<UUID> productIds, UUID categoryId, BigDecimal shippingUserCny,
             BigDecimal dutyUserCny) {
         List<String> asignaciones = new ArrayList<>();
@@ -1060,17 +1085,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             List<Object> args = new ArrayList<>(valores);
             args.addAll(productIds);
             actualizados = jdbcTemplate.update(
-                    "UPDATE product SET " + sets + ", updated_at = now() WHERE id IN (" + in + ")",
-                    args.toArray());
+                    "UPDATE product SET " + sets + ", updated_at = now() WHERE id IN (" + in + ")", args.toArray());
         } else if (categoryId != null) {
             List<Object> args = new ArrayList<>(valores);
             args.add(categoryId);
             actualizados = jdbcTemplate.update(
-                    "UPDATE product SET " + sets + ", updated_at = now() WHERE category_id = ?",
-                    args.toArray());
+                    "UPDATE product SET " + sets + ", updated_at = now() WHERE category_id = ?", args.toArray());
         } else {
-            actualizados = jdbcTemplate.update(
-                    "UPDATE product SET " + sets + ", updated_at = now()", valores.toArray());
+            actualizados = jdbcTemplate.update("UPDATE product SET " + sets + ", updated_at = now()",
+                    valores.toArray());
         }
         // Las bolsas son componentes de lo que paga el cliente: los productos certificados afectados se
         // re-anuncian al bus para que el cambio llegue al destino (el export del bus las lleva).
@@ -1145,9 +1168,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
@@ -1313,8 +1336,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         ProductEntity saved = productJpaRepository.save(copy);
         for (ProductTranslationEntity tr : src.getTranslations()) {
             saved.getTranslations()
-                    .add(ProductTranslationEntity
-                            .builder().product(saved).language(tr.getLanguage())
+                    .add(ProductTranslationEntity.builder().product(saved).language(tr.getLanguage())
                             .title((tr.getTitle() != null ? tr.getTitle() : "") + " (copy)")
                             .shortDescription(tr.getShortDescription()).description(tr.getDescription())
                             .provider("admin-duplicate").build());
@@ -1499,8 +1521,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             boolean missing = p.getTranslations().stream().anyMatch(tr -> {
                 boolean zh = "zh".equalsIgnoreCase(tr.getLanguage());
                 return tr.getTitle() != null && !tr.getTitle().isBlank()
-                        && (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()
-                                || tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()
+                        && (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank() || tr.getMetaDescription() == null
+                                || tr.getMetaDescription().isBlank()
                 // DROP-686: meta contaminado con CJK en idioma no-chino → regenerar.
                                 || (!zh && (ProductSeoMetadata.hasCjk(tr.getMetaTitle())
                                         || ProductSeoMetadata.hasCjk(tr.getMetaDescription()))));
@@ -1531,10 +1553,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     // (Resumen) price
     // recomputes from the new variant — otherwise it shows the stale pre-edit
     // value.
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true) })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public VariantView createVariant(UUID productId, AdminVariantUpsertDtoIn req) {
         ProductEntity product = productJpaRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND_2));
@@ -1549,10 +1571,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true) })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public VariantView updateVariant(UUID variantId, AdminVariantUpsertDtoIn req) {
         ProductVariantEntity v = variantRepository.findById(variantId)
                 .orElseThrow(() -> new NotFoundException(VARIANT_NOT_FOUND));
@@ -1564,10 +1586,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true) })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public VariantView updateVariantPrice(UUID variantId, BigDecimal price) {
         if (price == null || price.signum() < 0) {
             throw new BusinessException("El precio de la variante debe ser ≥ 0");
@@ -1582,9 +1604,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void renameVariantValue(UUID valueId, String label) {
         VariantValueEntity v = variantValueRepository.findById(valueId)
                 .orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
@@ -1597,9 +1619,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteVariantValue(UUID valueId) {
         VariantValueEntity v = variantValueRepository.findById(valueId)
                 .orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
@@ -1643,9 +1665,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void setVariantValueImage(UUID valueId, String imageUrl) {
         VariantValueEntity v = variantValueRepository.findById(valueId)
                 .orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
@@ -1662,9 +1684,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void setVariantValueTranslation(UUID valueId, String language, String value) {
         if (language == null || language.isBlank()) {
             throw new BusinessException("language es obligatorio");
@@ -1675,8 +1697,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String val = value != null ? value.trim() : null;
         v.getTranslations().removeIf(tt -> lang.equalsIgnoreCase(tt.getLanguage()));
         if (val != null && !val.isEmpty()) {
-            v.getTranslations().add(VariantValueTranslationEntity
-                    .builder().variantValue(v).language(lang).value(val).build());
+            v.getTranslations()
+                    .add(VariantValueTranslationEntity.builder().variantValue(v).language(lang).value(val).build());
         }
         variantValueRepository.save(v);
         if (v.getOption() != null && v.getOption().getProduct() != null) {
@@ -1686,10 +1708,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true) })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void deleteVariant(UUID variantId) {
         ProductVariantEntity v = variantRepository.findById(variantId)
                 .orElseThrow(() -> new NotFoundException(VARIANT_NOT_FOUND));
@@ -1702,11 +1724,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
-    public ProductImageView addProductImage(UUID productId, String url,
-            String role) {
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public ProductImageView addProductImage(UUID productId, String url, String role) {
         if (url == null || url.isBlank()) {
             throw new BusinessException("La URL de imagen es obligatoria");
         }
@@ -1727,8 +1748,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // la descargue y la
         // suba a S3 (y deje de depender del hotlink). Persist vía el repo para devolver
         // el id generado.
-        boolean alreadyOurs = url != null && objectStorage.publicUrl() != null
-                && !objectStorage.publicUrl().isBlank() && url.startsWith(objectStorage.publicUrl());
+        boolean alreadyOurs = url != null && objectStorage.publicUrl() != null && !objectStorage.publicUrl().isBlank()
+                && url.startsWith(objectStorage.publicUrl());
         ProductImageEntity img = ProductImageEntity.builder().product(product).position(nextPos)
                 .role(asMain ? "MAIN" : GALLERY).sourceUrl(url).cdnUrl(alreadyOurs ? url : null)
                 .mirrorStatus(alreadyOurs ? MirrorStatus.MIRRORED : MirrorStatus.PENDING).build();
@@ -1744,9 +1765,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteProductVideo(UUID id) {
         ProductEntity product = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
@@ -1762,9 +1783,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteProductImage(UUID imageId) {
         ProductImageEntity img = imageRepository.findById(imageId)
                 .orElseThrow(() -> new NotFoundException("Image not found"));
@@ -1792,9 +1813,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void reorderProductImages(UUID productId, List<UUID> imageIds) {
         ProductEntity product = productJpaRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND_2));
@@ -1842,8 +1863,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private void reordenaElDetalle(ProductEntity product, List<UUID> imageIds) {
         List<ProductImageEntity> detalle = product.getImages().stream()
                 .filter(img -> DETAIL.equalsIgnoreCase(img.getRole()))
-                .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
-                .toList();
+                .sorted(Comparator.comparingInt(ProductImageEntity::getPosition)).toList();
         List<Integer> huecos = detalle.stream().map(ProductImageEntity::getPosition).toList();
 
         Map<UUID, ProductImageEntity> porId = new HashMap<>();
@@ -1916,9 +1936,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             return null;
         }
         return images.stream().filter(i -> i.sourceUrl() != null && !i.sourceUrl().isBlank())
-                .min(Comparator
-                        .comparingInt((IngestImage i) -> "MAIN"
-                                .equalsIgnoreCase(i.role()) ? 0 : 1)
+                .min(Comparator.comparingInt((IngestImage i) -> "MAIN".equalsIgnoreCase(i.role()) ? 0 : 1)
                         .thenComparingInt(IngestImage::position))
                 .map(IngestImage::sourceUrl).orElse(null);
     }
@@ -1931,8 +1949,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         return p.getImages().stream()
                 .filter(i -> (i.getCdnUrl() != null && !i.getCdnUrl().isBlank())
                         || (i.getSourceUrl() != null && !i.getSourceUrl().isBlank()))
-                .min(Comparator
-                        .comparingInt((ProductImageEntity i) -> "MAIN".equalsIgnoreCase(i.getRole()) ? 0 : 1)
+                .min(Comparator.comparingInt((ProductImageEntity i) -> "MAIN".equalsIgnoreCase(i.getRole()) ? 0 : 1)
                         .thenComparingInt(ProductImageEntity::getPosition))
                 .map(i -> i.getCdnUrl() != null && !i.getCdnUrl().isBlank() ? i.getCdnUrl() : i.getSourceUrl())
                 .orElse(null);
@@ -1941,11 +1958,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     /* ============ Bulk import (admin) ============ */
 
     @Override
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
-    public BulkResultDtoOut bulkCreateProducts(
-            List<BulkProductDtoIn> rows) {
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public BulkResultDtoOut bulkCreateProducts(List<BulkProductDtoIn> rows) {
         int created = 0;
         int failed = 0;
         List<String> errors = new ArrayList<>();
@@ -2002,8 +2018,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         ExportFilter f = filtro == null ? ExportFilter.todo() : filtro;
         ProductStatus estado = parseStatusTolerant(f.status());
         String needle = f.q() == null ? "" : f.q().trim().toLowerCase(Locale.ROOT);
-        return productJpaRepository.searchAdmin(estado, f.categoryId(), needle, f.verified(), "es", false,
-                f.minCost(), f.maxCost(), f.minSales(), f.minTrend(), f.createdFrom(), f.createdTo(), tramo);
+        return productJpaRepository.searchAdmin(estado, f.categoryId(), needle, f.verified(), "es", false, f.minCost(),
+                f.maxCost(), f.minSales(), f.minTrend(), f.createdFrom(), f.createdTo(), tramo);
     }
 
     /** Los hijos se traen POR LOTE con los ids de la página: uno por producto eran cinco consultas por fila. */
@@ -2012,21 +2028,26 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             return List.of();
         }
         List<UUID> ids = products.stream().map(ProductEntity::getId).toList();
-        Map<UUID, List<ProductAttributeEntity>> attributes = em.createQuery(
-                "SELECT a FROM ProductAttributeEntity a WHERE a.product.id IN :ids", ProductAttributeEntity.class)
+        Map<UUID, List<ProductAttributeEntity>> attributes = em
+                .createQuery("SELECT a FROM ProductAttributeEntity a WHERE a.product.id IN :ids",
+                        ProductAttributeEntity.class)
                 .setParameter("ids", ids).getResultList().stream()
                 .collect(Collectors.groupingBy(a -> a.getProduct().getId()));
-        Map<UUID, List<ProductSpecificationEntity>> specs = em.createQuery(
-                "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id IN :ids ORDER BY s.position",
-                ProductSpecificationEntity.class).setParameter("ids", ids).getResultList().stream()
+        Map<UUID, List<ProductSpecificationEntity>> specs = em
+                .createQuery(
+                        "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id IN :ids ORDER BY s.position",
+                        ProductSpecificationEntity.class)
+                .setParameter("ids", ids).getResultList().stream()
                 .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
-        Map<UUID, List<ProductPriceTierEntity>> tiers = em.createQuery(
-                "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id IN :ids ORDER BY t.minQty",
-                ProductPriceTierEntity.class).setParameter("ids", ids).getResultList().stream()
+        Map<UUID, List<ProductPriceTierEntity>> tiers = em
+                .createQuery("SELECT t FROM ProductPriceTierEntity t WHERE t.product.id IN :ids ORDER BY t.minQty",
+                        ProductPriceTierEntity.class)
+                .setParameter("ids", ids).getResultList().stream()
                 .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
-        Map<UUID, List<ProductReviewEntity>> reviews = em.createQuery(
-                "SELECT r FROM ProductReviewEntity r WHERE r.product.id IN :ids ORDER BY r.createdAt",
-                ProductReviewEntity.class).setParameter("ids", ids).getResultList().stream()
+        Map<UUID, List<ProductReviewEntity>> reviews = em
+                .createQuery("SELECT r FROM ProductReviewEntity r WHERE r.product.id IN :ids ORDER BY r.createdAt",
+                        ProductReviewEntity.class)
+                .setParameter("ids", ids).getResultList().stream()
                 .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
         List<BulkProductDtoIn> out = new ArrayList<>();
         for (ProductEntity p : products) {
@@ -2109,9 +2130,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     @Override
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public UUID createProductManual(BulkProductDtoIn req) {
         UUID id = buildAndWriteProduct(req, supplierRepository.findAll());
         productIndexer.indexProduct(id);
@@ -2207,9 +2228,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteProduct(UUID id) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND_2));
@@ -2235,10 +2256,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * Rellena el campo fijo de un idioma (título/descr.) desde el mapa
      * `translations` si está vacío.
      */
-    private void mergeTranslationField(String lang,
-            Map<String, BulkProductDtoIn.BulkTranslation> m,
-            Supplier<String> getTitle, Consumer<String> setTitle,
-            Supplier<String> getDesc, Consumer<String> setDesc) {
+    private void mergeTranslationField(String lang, Map<String, BulkProductDtoIn.BulkTranslation> m,
+            Supplier<String> getTitle, Consumer<String> setTitle, Supplier<String> getDesc, Consumer<String> setDesc) {
         BulkTranslation tr = m.get(lang);
         if (tr == null) {
             return;
@@ -2256,8 +2275,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * Builds the heavy ingest request from a friendly row, persists it (via the
      * writer) and returns its id.
      */
-    private UUID buildAndWriteProduct(BulkProductDtoIn r,
-            List<SupplierEntity> suppliers) {
+    private UUID buildAndWriteProduct(BulkProductDtoIn r, List<SupplierEntity> suppliers) {
         CategoryEntity cat = resolveBulkCategory(r);
         // DROP-670: si la categoría define atributos obligatorios, el producto debe
         // traerlos (integridad).
@@ -2299,8 +2317,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // reviewCount/rating en applyLogistics.
         IngestProductRequest req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc,
                 r.getManufacturer(), r.getMoq() != null ? r.getMoq() : 1, price, "CNY", r.getWeightGrams(),
-                r.getMonthlySales() != null ? r.getMonthlySales() : 0, null,
-                r.getRating(), 0,
+                r.getMonthlySales() != null ? r.getMonthlySales() : 0, null, r.getRating(), 0,
                 Texts.firstNonBlankOr("https://detail.1688.com/offer/" + externalId + ".html",
                         r.getSourceUrl() != null ? r.getSourceUrl().trim() : null),
                 supplierId, cat.getId(), images, options, variants, tiers);
@@ -2344,8 +2361,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (Texts.has(r.getTitleEs())) {
             return;
         }
-        BulkProductDtoIn.BulkTranslation any = m.values().stream()
-                .filter(t -> t != null && Texts.has(t.getTitle())).findFirst().orElse(null);
+        BulkProductDtoIn.BulkTranslation any = m.values().stream().filter(t -> t != null && Texts.has(t.getTitle()))
+                .findFirst().orElse(null);
         if (any == null) {
             return;
         }
@@ -2428,8 +2445,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * Crea las reseñas reales del producto desde la carga masiva (cada una con su
      * idioma).
      */
-    private void createBulkReviews(UUID productId,
-            List<BulkProductDtoIn.BulkReview> reviews) {
+    private void createBulkReviews(UUID productId, List<BulkProductDtoIn.BulkReview> reviews) {
         if (reviews == null || reviews.isEmpty()) {
             return;
         }
@@ -2454,13 +2470,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      */
     private static ProductReviewEntity toReviewEntity(ProductEntity product, BulkProductDtoIn.BulkReview rv) {
         short rating = rv.getRating() != null ? (short) Math.clamp(rv.getRating(), 1, 5) : 5;
-        return ProductReviewEntity.builder()
-                .product(product)
+        return ProductReviewEntity.builder().product(product)
                 .authorName(Texts.has(rv.getAuthorName()) ? rv.getAuthorName().trim() : "Anónimo")
-                .authorCountry(rv.getAuthorCountry())
-                .rating(rating)
-                .title(rv.getTitle())
-                .body(rv.getBody())
+                .authorCountry(rv.getAuthorCountry()).rating(rating).title(rv.getTitle()).body(rv.getBody())
                 .tags(rv.getTags() != null ? String.join(",", rv.getTags()) : null)
                 // Una reseña que llega en la carga del catálogo NO puede marcarse como compra
                 // verificada,
@@ -2472,11 +2484,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 // engañado.
                 // El distintivo se gana en ProductReviewUseCase, cuando escribe quien sí
                 // compró.
-                .verifiedPurchase(false)
-                .source(ReviewSource.SUPPLIER)
-                .approved(true)
-                .language(Texts.has(rv.getLanguage()) ? rv.getLanguage().trim().toLowerCase() : "es")
-                .build();
+                .verifiedPurchase(false).source(ReviewSource.SUPPLIER).approved(true)
+                .language(Texts.has(rv.getLanguage()) ? rv.getLanguage().trim().toLowerCase() : "es").build();
     }
 
     /**
@@ -2494,7 +2503,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // Ausente vale 0, NUNCA null: la columna es NOT NULL desde la v157, así que un JSON de carga
         // sin este campo —que es lo normal, es opcional— tumbaba el alta entera con un 23502 y el
         // producto no se creaba. Mismo cuidado que con las dos bolsas de abajo.
-        p.setSurchargeCny(r.getSurchargeCny() != null ? r.getSurchargeCny() : BigDecimal.ZERO);
+        BulkProductFields.applySurcharge(p, r);
         // Las bolsas de subvención llegan por el bulk y por el bus; ausentes valen 0, nunca null, que la
         // columna es NOT NULL y el cálculo del checkout las suma sin preguntar.
         p.setShippingUserCny(r.getShippingUserCny() != null ? r.getShippingUserCny() : BigDecimal.ZERO);
@@ -2511,8 +2520,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // medidas del paquete) se
         // completa con el perfil de la categoría: sin esos datos el envío no se puede
         // cotizar ni declarar.
-        customsProfileService.applyDefaults(p, p.getCategory() != null ? p.getCategory().getSlug()
-                : r.getCategorySlug());
+        customsProfileService.applyDefaults(p,
+                p.getCategory() != null ? p.getCategory().getSlug() : r.getCategorySlug());
         BulkProductFields.applyCommercialFields(p, r);
         BulkProductFields.applyRatingBreakdown(p, r);
         // supplierSkuId + peso/dimensiones por variante (DROP-675): se emparejan por
@@ -2572,9 +2581,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         for (BulkProductDtoIn.BulkSpec s : r.getSpecifications()) {
             if (Texts.has(s.getKey()) && Texts.has(s.getValue())) {
                 productSpecificationRepository.save(ProductSpecificationEntity.builder().product(p)
-                        .locale(Texts.firstNonBlankOr("es", s.getLocale()).trim().toLowerCase())
-                        .specKey(s.getKey()).specValue(s.getValue())
-                        .position(s.getPosition() != null ? s.getPosition() : fallbackPosition)
+                        .locale(Texts.firstNonBlankOr("es", s.getLocale()).trim().toLowerCase()).specKey(s.getKey())
+                        .specValue(s.getValue()).position(s.getPosition() != null ? s.getPosition() : fallbackPosition)
                         .createdAt(Instant.now()).build());
             }
             fallbackPosition++;
@@ -2582,10 +2590,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     @Override
-    @Caching(evict = { @CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
-            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true) })
-    public BulkResultDtoOut bulkCreateCategories(
-            List<BulkCategoryDtoIn> rows) {
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
+    public BulkResultDtoOut bulkCreateCategories(List<BulkCategoryDtoIn> rows) {
         int created = 0;
         int failed = 0;
         List<String> errors = new ArrayList<>();
@@ -2623,8 +2630,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     .orElseThrow(() -> new BusinessException("Categoría padre no encontrada: " + r.getParentSlug()));
         }
         self.upsertCategory(new IngestCategoryRequest(r.getSlug(), parentId, "1688", null, zh, position,
-                r.getIcon() != null ? r.getIcon() : "tag",
-                Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
+                r.getIcon() != null ? r.getIcon() : "tag", Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
     }
 
     /**
@@ -2668,8 +2674,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .orElseThrow(() -> new NotFoundException(CATEGORY_NOT_FOUND + categoryId));
         Optional<Category1688MappingEntity> existing = category1688MappingRepository
                 .findByExternal1688Id(external1688Id.trim());
-        Category1688MappingEntity m = existing.orElseGet(
-                Category1688MappingEntity::new);
+        Category1688MappingEntity m = existing.orElseGet(Category1688MappingEntity::new);
         m.setExternal1688Id(external1688Id.trim());
         m.setExternal1688Name(external1688Name != null && !external1688Name.isBlank() ? external1688Name.trim() : null);
         m.setCategory(cat);
@@ -2680,8 +2685,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional(readOnly = true)
     public List<Category1688MappingDtoOut> listCategory1688Mappings() {
         return category1688MappingRepository.findAll().stream()
-                .map(m -> new Category1688MappingDtoOut(m.getId(),
-                        m.getExternal1688Id(), m.getExternal1688Name(),
+                .map(m -> new Category1688MappingDtoOut(m.getId(), m.getExternal1688Id(), m.getExternal1688Name(),
                         m.getCategory() != null ? m.getCategory().getId() : null,
                         m.getCategory() != null ? m.getCategory().getSlug() : null,
                         categoryDisplayName(m.getCategory())))
@@ -2696,8 +2700,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
-            UUID categoryId) {
+    public List<CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(UUID categoryId) {
         return categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(categoryId).stream()
                 .map(s -> new CategoryAttributeSchemaDtoOut(s.getId(),
                         s.getCategory() != null ? s.getCategory().getId() : null, s.getAttrKey(), s.getLabel(),
@@ -2716,8 +2719,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .orElseThrow(() -> new NotFoundException(CATEGORY_NOT_FOUND + categoryId));
         Optional<CategoryAttributeSchemaEntity> existing = categoryAttributeSchemaRepository
                 .findByCategory_IdAndAttrKey(categoryId, attrKey.trim());
-        CategoryAttributeSchemaEntity s = existing.orElseGet(
-                CategoryAttributeSchemaEntity::new);
+        CategoryAttributeSchemaEntity s = existing.orElseGet(CategoryAttributeSchemaEntity::new);
         s.setCategory(cat);
         s.setAttrKey(attrKey.trim());
         s.setLabel(label != null && !label.isBlank() ? label.trim() : null);
@@ -2740,13 +2742,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             return null;
         }
         return c.getTranslations().stream().filter(tr -> "es".equalsIgnoreCase(tr.getLanguage())).findFirst()
-                .map(CategoryTranslationEntity::getName)
-                .filter(n -> n != null && !n.isBlank())
+                .map(CategoryTranslationEntity::getName).filter(n -> n != null && !n.isBlank())
                 .orElse(c.getNameZh() != null ? c.getNameZh() : c.getSlug());
     }
 
-    private UUID resolveBulkSupplier(List<SupplierEntity> suppliers, String supplierExternalId,
-            String supplierName) {
+    private UUID resolveBulkSupplier(List<SupplierEntity> suppliers, String supplierExternalId, String supplierName) {
         if (supplierExternalId != null && !supplierExternalId.isBlank()) {
             String ext = supplierExternalId.trim();
             Optional<SupplierEntity> existing = supplierRepository.findBySourceAndExternalId("1688", ext);
@@ -2757,13 +2757,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             // disponible
             // (supplierName/manufacturer) en vez de rechazar la fila. Así el import es
             // autosuficiente.
-            String name = (supplierName != null && !supplierName.isBlank()) ? supplierName.trim()
+            String name = (supplierName != null && !supplierName.isBlank())
+                    ? supplierName.trim()
                     : ("Proveedor " + ext);
             String extId = ext.length() > 100 ? ext.substring(0, 100) : ext;
-            return supplierRepository
-                    .save(SupplierEntity.builder().source("1688").externalId(extId).name(name).country("CN")
-                            .verified(false).trustPass(false).build())
-                    .getId();
+            return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(extId).name(name)
+                    .country("CN").verified(false).trustPass(false).build()).getId();
         }
         // Si se da el nombre del proveedor/fábrica, buscar o CREAR uno con ese nombre —
         // no reutilizar
@@ -2776,10 +2775,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 if (ext.length() > 100) {
                     ext = ext.substring(0, 100);
                 }
-                return supplierRepository
-                        .save(SupplierEntity.builder().source("1688").externalId(ext).name(name).country("CN")
-                                .verified(false).trustPass(false).build())
-                        .getId();
+                return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(ext).name(name)
+                        .country("CN").verified(false).trustPass(false).build()).getId();
             });
         }
         if (suppliers.isEmpty())

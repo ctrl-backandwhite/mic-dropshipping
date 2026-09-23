@@ -91,13 +91,12 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         else if (low.contains("amazon."))
             src = SRC_AMAZON;
         if (src == null) {
-            throw new BusinessException(
-                    "Marketplace no soportado. Usa 1688, Taobao, AliExpress, eBay o Amazon.");
+            throw new BusinessException("Marketplace no soportado. Usa 1688, Taobao, AliExpress, eBay o Amazon.");
         }
 
         SourcingRequest model = SourcingRequest.builder().userId(userId).sourceUrl(url.trim()).source(src)
-                .externalId(externalIdFrom(src, url.trim()))
-                .status("PENDING").titleHint(titleHint).notes(notes).planQuota(plan).build();
+                .externalId(externalIdFrom(src, url.trim())).status("PENDING").titleHint(titleHint).notes(notes)
+                .planQuota(plan).build();
         return withQuotesCount(sourcingRequestRepository.save(model));
     }
 
@@ -234,7 +233,8 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
     /** Identificador del producto dentro de la URL de cada mercado (la URL llega tal cual la pegó el usuario). */
     private static final Pattern OFFER_1688 = Pattern.compile("/offer/(\\d+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern ITEM_ID_QUERY = Pattern.compile("[?&]id=(\\d+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ITEM_ALIEXPRESS = Pattern.compile("/item/(?:[^/]*?-)?(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_ALIEXPRESS = Pattern.compile("/item/(?:[^/]*?-)?(\\d+)",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern ITEM_EBAY = Pattern.compile("/itm/(?:[^/]+/)?(\\d+)", Pattern.CASE_INSENSITIVE);
     // El patrón ya es CASE_INSENSITIVE, así que "A-Z" dentro de la clase sobraba (java:S5869).
     private static final Pattern ASIN_AMAZON = Pattern.compile("/(?:dp|gp/product)/([a-z0-9]{10})",

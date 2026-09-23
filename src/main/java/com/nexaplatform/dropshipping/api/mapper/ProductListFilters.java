@@ -16,9 +16,9 @@ import java.util.UUID;
  * un valor falso: {@code hasVideo = null} devuelve todos los productos y {@code hasVideo = false} sólo
  * los que NO tienen vídeo.
  */
-public record ProductListFilters(String q, UUID categoryId, UUID supplierId, BigDecimal minPrice,
-        BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo,
-        Integer minRating, Integer inventoryMin, String certification, Boolean verified, UUID promotionId,
+public record ProductListFilters(String q, UUID categoryId, UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice,
+        String shipFrom, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo, Integer minRating,
+        Integer inventoryMin, String certification, Boolean verified, UUID promotionId,
         // Grupos de declaración: «ver los que no suman arancel». Filtra por la TERNA de cada grupo
         // (partida, material y uso), que es lo que de verdad hace que dos productos compartan línea de
         // aduana.
@@ -52,7 +52,7 @@ public record ProductListFilters(String q, UUID categoryId, UUID supplierId, Big
     /** Sólo búsqueda de texto, categoría, proveedor y rango de precio (lo que expone el listado simple). */
     public static ProductListFilters basic(String q, UUID categoryId, UUID supplierId, BigDecimal minPrice,
             BigDecimal maxPrice) {
-        return new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null, null,
-                null, null, null, null, null);
+        return new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null, null, null,
+                null, null, null, null);
     }
 }

@@ -94,9 +94,10 @@ public class MeAffiliateController {
         List<AffiliateReferralCodeEntity> codes = service.listCodes(a.getId());
         List<AffiliateConversionEntity> convs = service.conversionsForAffiliate(a.getId());
         List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(a.getId());
-        Map<UUID,AffiliateConversionEntity> convById = mapper.indexByConversionId(convs);
+        Map<UUID, AffiliateConversionEntity> convById = mapper.indexByConversionId(convs);
         AffiliateProgramConfigEntity config = service.config();
-        BigDecimal pct = a.getCommissionPercentOverride() != null ? a.getCommissionPercentOverride()
+        BigDecimal pct = a.getCommissionPercentOverride() != null
+                ? a.getCommissionPercentOverride()
                 : config.getDefaultPercent();
         AffiliateStats stats = mapper.stats(codes, convs, comms, config.getCurrency());
         boolean joined = a.getAcceptedTermsAt() != null;
@@ -105,6 +106,7 @@ public class MeAffiliateController {
         boolean canRequestPayout = !payoutRequested && stats.approvedCents() >= config.getMinPayoutCents();
         return new AffiliateDashboardView(a.getId(), a.getStatus(), pct, joined, canRequestPayout,
                 config.getMinPayoutCents(), payoutRequested, codes.stream().map(mapper::toCodeView).toList(), stats,
-                comms.stream().limit(20).map(c -> mapper.toCommissionView(c, convById, config.getReturnPeriodDays())).toList());
+                comms.stream().limit(20).map(c -> mapper.toCommissionView(c, convById, config.getReturnPeriodDays()))
+                        .toList());
     }
 }

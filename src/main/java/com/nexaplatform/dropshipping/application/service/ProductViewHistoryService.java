@@ -107,8 +107,7 @@ public class ProductViewHistoryService {
                 return PrecioDeLaVisita.SIN_PRECIO;
             }
             PricedAmount precio = pricingService.priceFor(producto);
-            return new PrecioDeLaVisita(precio.displayAmount(), precio.displayCurrency(),
-                    precio.displayFormatted());
+            return new PrecioDeLaVisita(precio.displayAmount(), precio.displayCurrency(), precio.displayFormatted());
         } catch (Exception e) {
             // Que no se pueda calcular el precio no puede impedir que quede constancia de la visita: el
             // historial sirve para reencontrar el producto, y el precio es un adorno útil, no el dato.

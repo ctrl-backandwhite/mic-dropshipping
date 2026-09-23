@@ -44,7 +44,8 @@ class YunExpressDeclarationSourcesTest {
     ProductRepository productRepository;
 
     private YunExpressFulfillmentService service() {
-        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), productRepository, null, null, null);
+        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), productRepository,
+                null, null, null);
     }
 
     private final UUID productId = UUID.randomUUID();
@@ -114,7 +115,7 @@ class YunExpressDeclarationSourcesTest {
         ProductEntity p = product();
         p.setTranslations(List.of(translation("zh", "男士石英手表")));
         OrderItem it = item();
-        it.setProductTitleZh("Reloj de pulsera");   // latino: no sirve para la aduana china
+        it.setProductTitleZh("Reloj de pulsera"); // latino: no sirve para la aduana china
 
         assertThat(declare(orderWith(it)).cName()).isEqualTo("男士石英手表");
     }
@@ -129,8 +130,7 @@ class YunExpressDeclarationSourcesTest {
         ParcelDeclaration d = declare(orderWith(item()));
 
         assertThat(d.cName()).isNull();
-        assertThat(service().customsGaps(List.of(d)))
-                .anyMatch(g -> g.startsWith("sin nombre en chino"));
+        assertThat(service().customsGaps(List.of(d))).anyMatch(g -> g.startsWith("sin nombre en chino"));
     }
 
     // ---------------------------------------------------------------- nombre inglés
@@ -189,7 +189,7 @@ class YunExpressDeclarationSourcesTest {
         UUID variantId = UUID.randomUUID();
         ProductVariantEntity v = new ProductVariantEntity();
         v.setId(variantId);
-        v.setWeightGrams(250);          // sin peso de embalaje, pero sí peso propio
+        v.setWeightGrams(250); // sin peso de embalaje, pero sí peso propio
         p.setVariants(List.of(v));
         OrderItem it = item();
         it.setVariantId(variantId);
@@ -224,7 +224,7 @@ class YunExpressDeclarationSourcesTest {
         ParcelDeclaration d = declare(o);
 
         assertThat(d.unitPrice()).isEqualTo(12.5);
-        assertThat(d.currencyCode()).isEqualTo("EUR");     // normalizada a mayúsculas
+        assertThat(d.currencyCode()).isEqualTo("EUR"); // normalizada a mayúsculas
         assertThat(d.quantity()).isEqualTo(2);
     }
 

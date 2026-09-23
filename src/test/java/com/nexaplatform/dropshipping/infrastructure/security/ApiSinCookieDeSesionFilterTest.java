@@ -43,8 +43,8 @@ class ApiSinCookieDeSesionFilterTest {
     @Test
     @DisplayName("en la API la cookie de sesión no llega: ni en getCookies, ni en la cabecera, ni como id pedido")
     void escondeLaCookieEnLaApi() throws Exception {
-        HttpServletRequest visto = through(peticion("/api/catalog/products",
-                new Cookie("SESSION", "abc"), new Cookie("XSRF-TOKEN", "xyz")));
+        HttpServletRequest visto = through(
+                peticion("/api/catalog/products", new Cookie("SESSION", "abc"), new Cookie("XSRF-TOKEN", "xyz")));
 
         assertThat(visto.getCookies()).extracting(Cookie::getName).containsExactly("XSRF-TOKEN");
         assertThat(visto.getHeader("Cookie")).isEqualTo("XSRF-TOKEN=xyz");

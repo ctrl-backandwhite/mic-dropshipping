@@ -37,61 +37,35 @@ class OrderEntityMapperTest {
     @Test
     void roundTrip_preservesScalarFields() {
         UUID id = UUID.randomUUID();
-        Order source = Order.builder()
-                .id(id)
-                .orderNumber("ORD-1001")
-                .partnerAppId(UUID.randomUUID())
-                .userId(UUID.randomUUID())
-                .externalOrderId("EXT-77")
-                .status(OrderStatus.PAID)
-                .subtotalCents(1000)
-                .shippingCents(200)
-                .taxCents(80)
-                .totalCents(1280)
-                .currency("EUR")
-                .notes("handle with care")
-                .placedAt(Instant.parse("2026-01-01T10:00:00Z"))
-                .forwardedAt(Instant.parse("2026-01-02T10:00:00Z"))
-                .shippedAt(Instant.parse("2026-01-03T10:00:00Z"))
-                .deliveredAt(Instant.parse("2026-01-04T10:00:00Z"))
-                .cancelledAt(null)
-                .items(new ArrayList<>())
-                .build();
+        Order source = Order.builder().id(id).orderNumber("ORD-1001").partnerAppId(UUID.randomUUID())
+                .userId(UUID.randomUUID()).externalOrderId("EXT-77").status(OrderStatus.PAID).subtotalCents(1000)
+                .shippingCents(200).taxCents(80).totalCents(1280).currency("EUR").notes("handle with care")
+                .placedAt(Instant.parse("2026-01-01T10:00:00Z")).forwardedAt(Instant.parse("2026-01-02T10:00:00Z"))
+                .shippedAt(Instant.parse("2026-01-03T10:00:00Z")).deliveredAt(Instant.parse("2026-01-04T10:00:00Z"))
+                .cancelledAt(null).items(new ArrayList<>()).build();
 
         CustomerOrderEntity entity = mapper.toEntity(source);
         Order result = mapper.toDomain(entity);
 
-        assertThat(result).usingRecursiveComparison()
-                .ignoringFields(
-                        // auditoría resuelta por JPA / ignorada en toEntity
-                        "createdAt", "updatedAt", "createdBy", "updatedBy",
-                        // relaciones gestionadas / sub-entidades sin contraparte escalar
-                        "items", "shippingAddressId", "billingAddressId",
-                        // campos solo-modelo (sin columna en la entidad)
-                        "source", "carrier", "trackingNumber", "fulfillmentRef", "trackingStatus",
-                        "estimatedDeliveryAt", "lastTrackedAt",
-                        "customerEmail", "shopName", "shopHandle", "supplierName",
-                        "shippingFullName", "shippingPhone", "shippingEmail", "shippingLine1",
-                        "shippingLine2", "shippingCity", "shippingState", "shippingPostalCode",
-                        "shippingCountry",
-                        "billingFullName", "billingPhone", "billingEmail", "billingLine1",
-                        "billingLine2", "billingCity", "billingState", "billingPostalCode",
-                        "billingCountry")
+        assertThat(result).usingRecursiveComparison().ignoringFields(
+                // auditoría resuelta por JPA / ignorada en toEntity
+                "createdAt", "updatedAt", "createdBy", "updatedBy",
+                // relaciones gestionadas / sub-entidades sin contraparte escalar
+                "items", "shippingAddressId", "billingAddressId",
+                // campos solo-modelo (sin columna en la entidad)
+                "source", "carrier", "trackingNumber", "fulfillmentRef", "trackingStatus", "estimatedDeliveryAt",
+                "lastTrackedAt", "customerEmail", "shopName", "shopHandle", "supplierName", "shippingFullName",
+                "shippingPhone", "shippingEmail", "shippingLine1", "shippingLine2", "shippingCity", "shippingState",
+                "shippingPostalCode", "shippingCountry", "billingFullName", "billingPhone", "billingEmail",
+                "billingLine1", "billingLine2", "billingCity", "billingState", "billingPostalCode", "billingCountry")
                 .isEqualTo(source);
     }
 
     @Test
     void toEntity_ignoresAuditAndManagedRelations() {
-        Order source = Order.builder()
-                .id(UUID.randomUUID())
-                .orderNumber("ORD-2002")
-                .status(OrderStatus.PENDING)
-                .currency("USD")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .createdBy("someone")
-                .updatedBy("someone-else")
-                .items(List.of(OrderItem.builder().id(UUID.randomUUID()).quantity(3).build()))
+        Order source = Order.builder().id(UUID.randomUUID()).orderNumber("ORD-2002").status(OrderStatus.PENDING)
+                .currency("USD").createdAt(Instant.now()).updatedAt(Instant.now()).createdBy("someone")
+                .updatedBy("someone-else").items(List.of(OrderItem.builder().id(UUID.randomUUID()).quantity(3).build()))
                 .build();
 
         CustomerOrderEntity entity = mapper.toEntity(source);
@@ -108,22 +82,12 @@ class OrderEntityMapperTest {
 
     @Test
     void toDomain_mapsItemListWithFields() {
-        OrderItemEntity itemEntity = OrderItemEntity.builder()
-                .id(UUID.randomUUID())
-                .titleSnapshot("Widget")
-                .skuSnapshot("SKU-9")
-                .unitPriceCents(500)
-                .costCents(200)
-                .costCnyCents(1500L)
-                .quantity(4)
-                .lineTotalCents(2000)
-                .build();
+        OrderItemEntity itemEntity = OrderItemEntity.builder().id(UUID.randomUUID()).titleSnapshot("Widget")
+                .skuSnapshot("SKU-9").unitPriceCents(500).costCents(200).costCnyCents(1500L).quantity(4)
+                .lineTotalCents(2000).build();
 
-        CustomerOrderEntity entity = CustomerOrderEntity.builder()
-                .orderNumber("ORD-3003")
-                .status(OrderStatus.PAID)
-                .items(new ArrayList<>(List.of(itemEntity)))
-                .build();
+        CustomerOrderEntity entity = CustomerOrderEntity.builder().orderNumber("ORD-3003").status(OrderStatus.PAID)
+                .items(new ArrayList<>(List.of(itemEntity))).build();
         entity.setId(UUID.randomUUID());
 
         Order result = mapper.toDomain(entity);
@@ -162,9 +126,7 @@ class OrderEntityMapperTest {
         v.setOptions(opts);
 
         ProductEntity product = new ProductEntity();
-        product.setVariantOptions(List.of(
-                optionWith(valueWith("黑色", "Negro")),
-                optionWith(valueWith("M", "M"))));
+        product.setVariantOptions(List.of(optionWith(valueWith("黑色", "Negro")), optionWith(valueWith("M", "M"))));
 
         LocaleHolder.set("es");
         try {

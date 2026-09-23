@@ -70,7 +70,7 @@ class GeolocalizacionDelCdnTest {
     @Test
     @DisplayName("país desconocido o Tor se ignoran")
     void paisDesconocidoSeIgnora() {
-        for (String valor : new String[] { "XX", "T1", "E", "ESP", "" }) {
+        for (String valor : new String[]{"XX", "T1", "E", "ESP", ""}) {
             MockHttpServletRequest req = new MockHttpServletRequest();
             req.addHeader(GeolocalizacionDelCdn.HEADER_CDN, SECRETO);
             req.addHeader("CF-IPCountry", valor);
@@ -82,7 +82,7 @@ class GeolocalizacionDelCdnTest {
     @Test
     @DisplayName("sirve cualquiera de las cabeceras de geolocalización conocidas")
     void sirveCualquieraDeLasCabecerasConocidas() {
-        for (String h : new String[] { "CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country", "X-Country-Code" }) {
+        for (String h : new String[]{"CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country", "X-Country-Code"}) {
             MockHttpServletRequest req = new MockHttpServletRequest();
             req.addHeader(GeolocalizacionDelCdn.HEADER_CDN, SECRETO);
             req.addHeader(h, "FR");

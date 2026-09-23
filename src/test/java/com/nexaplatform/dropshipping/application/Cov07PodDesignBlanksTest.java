@@ -55,8 +55,8 @@ class Cov07PodDesignBlanksTest {
         ProductEntity podApagado = product(false, "fashion-apparel");
         ProductEntity podNulo = product(null, "fashion-apparel");
         ProductEntity sinCategoria = product(true, null);
-        when(productRepository.findAll()).thenReturn(
-                List.of(valido, categoriaNoImprimible, podApagado, podNulo, sinCategoria));
+        when(productRepository.findAll())
+                .thenReturn(List.of(valido, categoriaNoImprimible, podApagado, podNulo, sinCategoria));
 
         List<PodBlankProduct> blanks = useCase.blanks("es");
 
@@ -189,8 +189,10 @@ class Cov07PodDesignBlanksTest {
         when(productRepository.existsById(productId)).thenReturn(true);
         when(podDesignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        PodDesign uno = useCase.create(UUID.randomUUID(), PodDesign.builder().productId(productId).name("gatos").build());
-        PodDesign dos = useCase.create(UUID.randomUUID(), PodDesign.builder().productId(productId).name("gatos").build());
+        PodDesign uno = useCase.create(UUID.randomUUID(),
+                PodDesign.builder().productId(productId).name("gatos").build());
+        PodDesign dos = useCase.create(UUID.randomUUID(),
+                PodDesign.builder().productId(productId).name("gatos").build());
 
         // Determinista a propósito: el diseño tiene que conservar su mockup entre recargas.
         assertThat(uno.getMockupUrl()).isEqualTo(dos.getMockupUrl()).startsWith("https://images.unsplash.com/");
@@ -200,15 +202,14 @@ class Cov07PodDesignBlanksTest {
     void laGeneracionPorIaConPromptNuloDevuelveUnPromptVacio() {
         assertThat(useCase.aiGenerate(null).getPrompt()).isEmpty();
         assertThat(useCase.aiGenerate(null).getMockupUrl()).isNotNull();
-        assertThat(useCase.aiGenerate("gatos").getMockupUrl())
-                .isEqualTo(useCase.aiGenerate("gatos").getMockupUrl());
+        assertThat(useCase.aiGenerate("gatos").getMockupUrl()).isEqualTo(useCase.aiGenerate("gatos").getMockupUrl());
     }
 
     /* ==================== helpers ==================== */
 
     private static ProductEntity product(Boolean podEnabled, String categorySlug) {
-        ProductEntity p = ProductEntity.builder().slug("camisa-lino").titleZh("亚麻衬衫")
-                .basePrice(new BigDecimal("9.99")).podEnabled(podEnabled).build();
+        ProductEntity p = ProductEntity.builder().slug("camisa-lino").titleZh("亚麻衬衫").basePrice(new BigDecimal("9.99"))
+                .podEnabled(podEnabled).build();
         p.setId(UUID.randomUUID());
         if (categorySlug != null) {
             CategoryEntity category = new CategoryEntity();

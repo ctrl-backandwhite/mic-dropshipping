@@ -33,23 +33,9 @@ class CategoryEntityMapperTest {
         names.put("es", "Electrónica");
         names.put("en", "Electronics");
 
-        Category model = Category.builder()
-                .id(id)
-                .slug("electronica")
-                .source("1688")
-                .externalId("EXT-9")
-                .nameZh("电子产品")
-                .position(3)
-                .active(true)
-                .icon("bolt")
-                .parentId(parentId)
-                .names(names)
-                .productCount(42L)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .createdBy("seed")
-                .updatedBy("editor")
-                .build();
+        Category model = Category.builder().id(id).slug("electronica").source("1688").externalId("EXT-9").nameZh("电子产品")
+                .position(3).active(true).icon("bolt").parentId(parentId).names(names).productCount(42L)
+                .createdAt(Instant.now()).updatedAt(Instant.now()).createdBy("seed").updatedBy("editor").build();
 
         CategoryEntity entity = mapper.toEntity(model);
 
@@ -66,13 +52,13 @@ class CategoryEntityMapperTest {
         // Round-trip de escalares: ignoramos lo que el mapper no transporta por diseño
         // (auditoría, parentId/names/productCount sin contraparte resuelta en este camino).
         assertThat(back).usingRecursiveComparison()
-                .ignoringFields("createdAt", "updatedAt", "createdBy", "updatedBy",
-                        "parentId", "names", "productCount")
+                .ignoringFields("createdAt", "updatedAt", "createdBy", "updatedBy", "parentId", "names", "productCount")
                 .isEqualTo(model);
 
         // Saneado null -&gt; 0 / false del toEntity sobre position/active
         Category empty = mapper.toEntity(Category.builder().slug("s").build()) == null
-                ? null : mapper.toDomain(mapper.toEntity(Category.builder().slug("s").build()));
+                ? null
+                : mapper.toDomain(mapper.toEntity(Category.builder().slug("s").build()));
         assertThat(empty).isNotNull();
         assertThat(empty.getPosition()).isZero();
         assertThat(empty.getActive()).isFalse();
@@ -84,28 +70,17 @@ class CategoryEntityMapperTest {
         CategoryEntity parent = CategoryEntity.builder().slug("root").build();
         parent.setId(parentId);
 
-        CategoryTranslationEntity esTr = CategoryTranslationEntity.builder()
-                .language("es").name("Hogar").build();
-        CategoryTranslationEntity enTr = CategoryTranslationEntity.builder()
-                .language("en").name("Home").build();
+        CategoryTranslationEntity esTr = CategoryTranslationEntity.builder().language("es").name("Hogar").build();
+        CategoryTranslationEntity enTr = CategoryTranslationEntity.builder().language("en").name("Home").build();
         List<CategoryTranslationEntity> translations = new ArrayList<>(List.of(esTr, enTr));
 
-        CategoryEntity entity = CategoryEntity.builder()
-                .slug("hogar")
-                .nameZh("家居")
-                .position(1)
-                .active(true)
-                .parent(parent)
-                .translations(translations)
-                .build();
+        CategoryEntity entity = CategoryEntity.builder().slug("hogar").nameZh("家居").position(1).active(true)
+                .parent(parent).translations(translations).build();
         entity.setId(UUID.randomUUID());
 
         Category model = mapper.toDomain(entity);
 
         assertThat(model.getParentId()).isEqualTo(parentId);
-        assertThat(model.getNames())
-                .hasSize(2)
-                .containsEntry("es", "Hogar")
-                .containsEntry("en", "Home");
+        assertThat(model.getNames()).hasSize(2).containsEntry("es", "Hogar").containsEntry("en", "Home");
     }
 }

@@ -44,8 +44,8 @@ class BaseRepositoryUpdateContractTest {
 
         Warehouse result = repo.update(model);
 
-        verify(jpa).save(any());                    // lo que faltaba: antes no se llamaba a JPA en absoluto
-        assertThat(result).isSameAs(model);         // y el caso de uso recibía null
+        verify(jpa).save(any()); // lo que faltaba: antes no se llamaba a JPA en absoluto
+        assertThat(result).isSameAs(model); // y el caso de uso recibía null
     }
 
     @Test
@@ -63,8 +63,7 @@ class BaseRepositoryUpdateContractTest {
         // Un adaptador que no implemente update ya no devuelve null en silencio.
         BaseRepository<String, String, UUID> sinImplementar = new BaseRepository<>() {
         };
-        assertThatThrownBy(() -> sinImplementar.update("algo"))
-                .isInstanceOf(UnsupportedOperationException.class)
+        assertThatThrownBy(() -> sinImplementar.update("algo")).isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("update()");
     }
 

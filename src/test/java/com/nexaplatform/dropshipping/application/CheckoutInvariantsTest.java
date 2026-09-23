@@ -28,6 +28,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerO
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -97,6 +98,9 @@ class CheckoutInvariantsTest {
     NotificationsPublisher notificationsPublisher;
     @Mock
     PricingService pricingService;
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
     @Mock
     AffiliateProgramService affiliateProgramService;
     @Mock
@@ -127,11 +131,10 @@ class CheckoutInvariantsTest {
     com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
 
     @org.mockito.Spy
-    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService = new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(
+            null);
     @org.mockito.Mock
     com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
-
 
     @InjectMocks
     private OrderUseCaseImpl subject;
@@ -149,8 +152,8 @@ class CheckoutInvariantsTest {
     }
 
     private static AddressInput address(String country) {
-        return new AddressInput("Nombre Apellido", "+34600000000", "cliente@example.com", "Calle 1", null,
-                "Madrid", "Madrid", "28001", country);
+        return new AddressInput("Nombre Apellido", "+34600000000", "cliente@example.com", "Calle 1", null, "Madrid",
+                "Madrid", "28001", country);
     }
 
     private MeCheckoutDtoIn request(String method, UUID savedAddressId) {
@@ -176,9 +179,9 @@ class CheckoutInvariantsTest {
         p.setImages(new ArrayList<>());
         p.setStatus(ProductStatus.ACTIVE);
         when(productRepository.findById(productId)).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
-                new BigDecimal("10.00"), new BigDecimal("40.00"), null, "USD", "$", null, null, null,
-                null, null, null, null, null, null));
+        when(pricingService.priceFor(any(), any(), anyInt(), any()))
+                .thenReturn(new PricingService.PricedAmount(new BigDecimal("10.00"), new BigDecimal("40.00"), null,
+                        "USD", "$", null, null, null, null, null, null, null, null, null));
         when(router.cotizar(anyString(), any(), anyList()))
                 .thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
@@ -218,9 +221,8 @@ class CheckoutInvariantsTest {
         MeCheckoutDtoIn req = request("WALLET", null);
         req.setShippingAddressInline(address("ES"));
 
-        assertThatThrownBy(() -> subject.checkout(userId, req, null))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getCode()).isEqualTo("PRODUCT_UNAVAILABLE"));
+        assertThatThrownBy(() -> subject.checkout(userId, req, null)).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getCode()).isEqualTo("PRODUCT_UNAVAILABLE"));
 
         verify(orderRepository, never()).save(any());
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
@@ -235,8 +237,7 @@ class CheckoutInvariantsTest {
         MeCheckoutDtoIn req = request("WALLET", null);
         req.setShippingAddressInline(address("XX"));
 
-        assertThatThrownBy(() -> subject.checkout(userId, req, null))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.checkout(userId, req, null)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("No realizamos envíos");
 
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
@@ -247,8 +248,7 @@ class CheckoutInvariantsTest {
         MeCheckoutDtoIn req = request("WALLET", null);
         req.setShippingAddressInline(null);
 
-        assertThatThrownBy(() -> subject.checkout(userId, req, null))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.checkout(userId, req, null)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Shipping address");
     }
 
@@ -314,10 +314,8 @@ class CheckoutInvariantsTest {
     void conPaypalYConCriptoElPedidoTambienQuedaPendiente() {
         happyPath(9540);
 
-        assertThat(subject.checkout(userId, request("PAYPAL", null), null).getStatus())
-                .isEqualTo(OrderStatus.PENDING);
-        assertThat(subject.checkout(userId, request("USDT", null), null).getStatus())
-                .isEqualTo(OrderStatus.PENDING);
+        assertThat(subject.checkout(userId, request("PAYPAL", null), null).getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(subject.checkout(userId, request("USDT", null), null).getStatus()).isEqualTo(OrderStatus.PENDING);
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
     }
 
@@ -337,29 +335,29 @@ class CheckoutInvariantsTest {
         pendiente.setTotalCents(9540);
         pendiente.setSubtotalCents(9540);
         pendiente.setCurrency("USD");
-        when(orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
-                eq(userId), eq("carrito-1"), any())).thenReturn(Optional.of(existente));
+        when(orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(eq(userId),
+                eq("carrito-1"), any())).thenReturn(Optional.of(existente));
         when(orderRepository.findById(existenteId)).thenReturn(Optional.of(pendiente));
 
         Order o = subject.checkout(userId, request("CARD", null), "carrito-1");
 
         assertThat(o.getId()).isEqualTo(existenteId);
         // Ni se vuelve a avisar al comprador ni se devenga otra comisión de afiliado por el mismo pedido.
-        verify(notificationsPublisher, never())
-                .orderPlaced(any(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(notificationsPublisher, never()).orderPlaced(any(), anyString(), anyString(), anyString(), anyString(),
+                anyString());
         verify(affiliateProgramService, never()).onOrderPlaced(any(), any(), anyLong(), anyString());
     }
 
     @Test
     void unPedidoNuevoSiAvisaAlCompradorYDevengaComision() {
         happyPath(9540);
-        when(orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
-                any(), anyString(), any())).thenReturn(Optional.empty());
+        when(orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(any(), anyString(),
+                any())).thenReturn(Optional.empty());
 
         subject.checkout(userId, request("CARD", null), "carrito-nuevo");
 
-        verify(notificationsPublisher)
-                .orderPlaced(any(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(notificationsPublisher).orderPlaced(any(), anyString(), anyString(), anyString(), anyString(),
+                anyString());
         verify(affiliateProgramService).onOrderPlaced(any(), eq(userId), anyLong(), anyString());
     }
 
@@ -370,8 +368,8 @@ class CheckoutInvariantsTest {
 
         subject.checkout(userId, request("CARD", null), null);
 
-        verify(orderEntityRepository, never()).findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
-                any(), anyString(), any());
+        verify(orderEntityRepository, never()).findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(any(),
+                anyString(), any());
     }
 
     // ---------------------------------------------------------------- comisión de afiliado

@@ -119,11 +119,9 @@ public class StripeService {
                 .setSuccessUrl(successUrl + "?session_id={CHECKOUT_SESSION_ID}").setCancelUrl(cancelUrl)
                 .setCustomerEmail(customerEmail)
                 .addLineItem(SessionCreateParams.LineItem.builder().setPrice(stripePriceId).setQuantity(1L).build())
-                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
-                .putMetadata(PURPOSE, SUBSCRIPTION)
-                .setSubscriptionData(SessionCreateParams.SubscriptionData.builder()
-                        .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
-                        .putMetadata(PURPOSE, SUBSCRIPTION).build())
+                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv).putMetadata(PURPOSE, SUBSCRIPTION)
+                .setSubscriptionData(SessionCreateParams.SubscriptionData.builder().putMetadata(PLATFORM, platformId)
+                        .putMetadata("env", platformEnv).putMetadata(PURPOSE, SUBSCRIPTION).build())
                 .build();
         return Session.create(params);
     }
@@ -133,22 +131,19 @@ public class StripeService {
     // =================================================================================================
 
     /** Devuelve el Customer existente o crea uno nuevo (con metadata de plataforma + user_id). */
-    public Customer getOrCreateCustomer(String existingCustomerId, String email, String userId)
-            throws StripeException {
+    public Customer getOrCreateCustomer(String existingCustomerId, String email, String userId) throws StripeException {
         if (existingCustomerId != null && !existingCustomerId.isBlank()) {
             return Customer.retrieve(existingCustomerId);
         }
-        CustomerCreateParams params = CustomerCreateParams.builder().setEmail(email)
-                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
-                .putMetadata("user_id", userId).build();
+        CustomerCreateParams params = CustomerCreateParams.builder().setEmail(email).putMetadata(PLATFORM, platformId)
+                .putMetadata("env", platformEnv).putMetadata("user_id", userId).build();
         return Customer.create(params);
     }
 
     /** Crea un SetupIntent para guardar una tarjeta con Stripe Elements; devuelve su client_secret. */
     public SetupIntent createSetupIntent(String customerId) throws StripeException {
         SetupIntentCreateParams params = SetupIntentCreateParams.builder().setCustomer(customerId)
-                .addPaymentMethodType("card").putMetadata(PLATFORM, platformId)
-                .putMetadata("env", platformEnv).build();
+                .addPaymentMethodType("card").putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv).build();
         return SetupIntent.create(params);
     }
 
@@ -160,10 +155,10 @@ public class StripeService {
 
     /** Fija la tarjeta por defecto del Customer (la que cobrará las suscripciones). */
     public void setDefaultPaymentMethod(String customerId, String paymentMethodId) throws StripeException {
-        Customer.retrieve(customerId).update(CustomerUpdateParams.builder()
-                .setInvoiceSettings(CustomerUpdateParams.InvoiceSettings.builder()
-                        .setDefaultPaymentMethod(paymentMethodId).build())
-                .build());
+        Customer.retrieve(customerId)
+                .update(CustomerUpdateParams.builder().setInvoiceSettings(
+                        CustomerUpdateParams.InvoiceSettings.builder().setDefaultPaymentMethod(paymentMethodId).build())
+                        .build());
     }
 
     /** Desvincula (borra) una tarjeta guardada. */
@@ -200,16 +195,10 @@ public class StripeService {
      */
     public OffSessionResult chargeSavedCardOffSession(String customerId, String paymentMethodId, long amountMinor,
             String currency, String orderId) throws StripeException {
-        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                .setCustomer(customerId)
-                .setPaymentMethod(paymentMethodId)
-                .setAmount(amountMinor)
-                .setCurrency(currency.toLowerCase())
-                .setConfirm(true)
-                .setOffSession(true)
-                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
-                .putMetadata(PURPOSE, "order").putMetadata("orderId", orderId)
-                .build();
+        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder().setCustomer(customerId)
+                .setPaymentMethod(paymentMethodId).setAmount(amountMinor).setCurrency(currency.toLowerCase())
+                .setConfirm(true).setOffSession(true).putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
+                .putMetadata(PURPOSE, "order").putMetadata("orderId", orderId).build();
         try {
             PaymentIntent pi = PaymentIntent.create(params);
             return new OffSessionResult(pi.getId(), pi.getStatus(), pi.getClientSecret());
@@ -278,8 +267,8 @@ public class StripeService {
         }
         TaxRateCreateParams.Builder b = TaxRateCreateParams.builder()
                 .setDisplayName("IVA" + (country != null && !country.isBlank() ? " " + country.toUpperCase() : ""))
-                .setPercentage(BigDecimal.valueOf(bps).movePointLeft(2)).setInclusive(false)
-                .putMetadata("nx_tag", tag).putMetadata(PLATFORM, platformId);
+                .setPercentage(BigDecimal.valueOf(bps).movePointLeft(2)).setInclusive(false).putMetadata("nx_tag", tag)
+                .putMetadata(PLATFORM, platformId);
         if (country != null && country.trim().length() == 2) {
             b.setCountry(country.trim().toUpperCase());
         }
@@ -298,9 +287,9 @@ public class StripeService {
                 .addItem(SubscriptionCreateParams.Item.builder().setPrice(priceId).build())
                 .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.CREATE_PRORATIONS)
                 .setPaymentBehavior(SubscriptionCreateParams.PaymentBehavior.ERROR_IF_INCOMPLETE)
-                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
-                .putMetadata(PURPOSE, SUBSCRIPTION).putMetadata(PLAN_CODE, planCode)
-                .putMetadata("user_id", userId).putMetadata("subscription_id", localSubscriptionId);
+                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv).putMetadata(PURPOSE, SUBSCRIPTION)
+                .putMetadata(PLAN_CODE, planCode).putMetadata("user_id", userId)
+                .putMetadata("subscription_id", localSubscriptionId);
         if (defaultPaymentMethodId != null && !defaultPaymentMethodId.isBlank()) {
             b.setDefaultPaymentMethod(defaultPaymentMethodId);
         }
@@ -325,8 +314,7 @@ public class StripeService {
         String itemId = sub.getItems().getData().get(0).getId();
         return toResult(sub.update(SubscriptionUpdateParams.builder()
                 .addItem(SubscriptionUpdateParams.Item.builder().setId(itemId).setPrice(newPriceId).build())
-                .setProrationBehavior(proration)
-                .putMetadata(PLAN_CODE, planCode).build()));
+                .setProrationBehavior(proration).putMetadata(PLAN_CODE, planCode).build()));
     }
 
     /** Cancela una suscripción: al final del periodo (atPeriodEnd=true) o de inmediato. */
@@ -349,10 +337,9 @@ public class StripeService {
 
     /** Facturas del Customer (las más recientes primero), para el historial de facturación del perfil. */
     public List<InvoiceInfo> listInvoices(String customerId, int limit) throws StripeException {
-        return Invoice.list(InvoiceListParams.builder().setCustomer(customerId).setLimit((long) Math.max(1, limit))
-                .build()).getData().stream()
-                .map(this::toInvoiceInfo)
-                .toList();
+        return Invoice
+                .list(InvoiceListParams.builder().setCustomer(customerId).setLimit((long) Math.max(1, limit)).build())
+                .getData().stream().map(this::toInvoiceInfo).toList();
     }
 
     /** Mapea una factura de Stripe al resumen propio, extrayendo subtotal, IVA, periodo y descripción de línea. */
@@ -380,8 +367,7 @@ public class StripeService {
     // =================================================================================================
 
     /** Verifica la firma del webhook y construye el evento. Lanza si la firma no es válida (fail-closed). */
-    public Event constructWebhookEvent(String payload, String signatureHeader)
-            throws SignatureVerificationException {
+    public Event constructWebhookEvent(String payload, String signatureHeader) throws SignatureVerificationException {
         return Webhook.constructEvent(payload, signatureHeader, webhookSecret);
     }
 

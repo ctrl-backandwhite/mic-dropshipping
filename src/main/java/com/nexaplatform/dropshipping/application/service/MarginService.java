@@ -54,10 +54,8 @@ public class MarginService {
     private static final Comparator<PriceRuleEntity> MOST_SPECIFIC = Comparator
             // Una regla CON país es más específica que la equivalente sin país (margen por país gana).
             .comparingInt((PriceRuleEntity r) -> r.getCountryCode() == null ? 1 : 0)
-            .thenComparing(MarginService::rangeWidth)
-            .thenComparingInt(PriceRuleEntity::getPosition)
-            .thenComparing(r -> r.getCreatedAt() != null ? r.getCreatedAt() : Instant.EPOCH,
-                    Comparator.reverseOrder())
+            .thenComparing(MarginService::rangeWidth).thenComparingInt(PriceRuleEntity::getPosition)
+            .thenComparing(r -> r.getCreatedAt() != null ? r.getCreatedAt() : Instant.EPOCH, Comparator.reverseOrder())
             .thenComparing(r -> r.getId() != null ? r.getId().toString() : "");
 
     private static BigDecimal rangeWidth(PriceRuleEntity r) {
@@ -170,9 +168,8 @@ public class MarginService {
             case SUPPLIER -> singletonOrEmpty(ids.supplierId());
             case CATEGORY -> singletonOrEmpty(ids.categoryId());
             // Una regla CATEGORY_GROUP aplica si la categoría del producto pertenece a alguno de sus grupos.
-            case CATEGORY_GROUP -> (ids.categoryId() != null && hasCategoryGroupRules())
-                    ? categoryGroupIdsOf(ids.categoryId())
-                    : Set.of();
+            case CATEGORY_GROUP ->
+                (ids.categoryId() != null && hasCategoryGroupRules()) ? categoryGroupIdsOf(ids.categoryId()) : Set.of();
             case GLOBAL -> Set.of();
         };
     }
@@ -189,10 +186,8 @@ public class MarginService {
      */
     private Optional<PriceRuleEntity> bestMatch(PriceRuleScope scope, Set<UUID> targets, PriceRuleChannel channel,
             String country, BigDecimal costUsd) {
-        return cache.stream().filter(PriceRuleEntity::isActive)
-                .filter(r -> r.getChannel() == channel)
-                .filter(r -> countryMatches(r, country))
-                .filter(r -> r.getScope() == scope)
+        return cache.stream().filter(PriceRuleEntity::isActive).filter(r -> r.getChannel() == channel)
+                .filter(r -> countryMatches(r, country)).filter(r -> r.getScope() == scope)
                 .filter(r -> scope == PriceRuleScope.GLOBAL
                         || (r.getScopeId() != null && targets.contains(r.getScopeId())))
                 .filter(r -> matchesCostRange(r, costUsd)).min(MOST_SPECIFIC);
@@ -268,7 +263,8 @@ public class MarginService {
     /* ============ Ajuste MOQ (margen a la mitad para productos con MOQ > 1) ============ */
 
     /** Vista del ajuste MOQ: si está activo y a qué % se reduce el margen que corresponda. */
-    public record MoqMarginView(boolean enabled, BigDecimal factorPercent) {}
+    public record MoqMarginView(boolean enabled, BigDecimal factorPercent) {
+    }
 
     public MoqMarginView getMoqMargin() {
         ensureFresh();

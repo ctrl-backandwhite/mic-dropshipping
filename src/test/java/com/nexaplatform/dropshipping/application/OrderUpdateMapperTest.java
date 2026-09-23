@@ -24,13 +24,13 @@ class OrderUpdateMapperTest {
         UUID id = UUID.randomUUID();
         Instant created = Instant.parse("2024-01-01T00:00:00Z");
 
-        Order target = Order.builder().id(id).orderNumber("NX-001").status(OrderStatus.PENDING)
-                .totalCents(1000).currency("EUR").notes("old").trackingNumber("OLDTRACK")
-                .trackingStatus("PENDING").createdAt(created).createdBy("creator").build();
+        Order target = Order.builder().id(id).orderNumber("NX-001").status(OrderStatus.PENDING).totalCents(1000)
+                .currency("EUR").notes("old").trackingNumber("OLDTRACK").trackingStatus("PENDING").createdAt(created)
+                .createdBy("creator").build();
 
-        Order source = Order.builder().orderNumber("NX-999").status(OrderStatus.SHIPPED)
-                .totalCents(2500).currency("USD").notes("new").trackingNumber("NEWTRACK")
-                .trackingStatus("IN_TRANSIT").carrier("Cainiao").build();
+        Order source = Order.builder().orderNumber("NX-999").status(OrderStatus.SHIPPED).totalCents(2500)
+                .currency("USD").notes("new").trackingNumber("NEWTRACK").trackingStatus("IN_TRANSIT").carrier("Cainiao")
+                .build();
 
         mapper.updateFromModel(source, target);
 

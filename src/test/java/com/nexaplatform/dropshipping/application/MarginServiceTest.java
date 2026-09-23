@@ -41,8 +41,8 @@ class MarginServiceTest {
     @InjectMocks
     MarginService service;
 
-    private static PriceRuleEntity rule(PriceRuleScope scope, UUID scopeId, MarginType type, String value,
-            String min, String max) {
+    private static PriceRuleEntity rule(PriceRuleScope scope, UUID scopeId, MarginType type, String value, String min,
+            String max) {
         return PriceRuleEntity.builder().scope(scope).scopeId(scopeId).channel(PriceRuleChannel.STOREFRONT)
                 .marginType(type).marginValue(new BigDecimal(value)).active(true)
                 .minCostUsd(min == null ? null : new BigDecimal(min))

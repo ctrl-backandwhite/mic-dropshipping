@@ -69,15 +69,16 @@ public interface CatalogUseCase {
      * llega cuando se migren de golpe el controlador de admin y sus pruebas.
      */
     @SuppressWarnings("java:S107")
-    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page,
-            int size, String language, String sort, Boolean verified, BigDecimal minCost,
-            BigDecimal maxCost, Integer minSales, BigDecimal minTrend);
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page, int size,
+            String language, String sort, Boolean verified, BigDecimal minCost, BigDecimal maxCost, Integer minSales,
+            BigDecimal minTrend);
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
 
     /** Estado de un reindexado: si hay uno en curso, si esta llamada acaba de lanzarlo y el último recuento. */
-    record ReindexStatus(boolean running, boolean started, int lastIndexed) {}
+    record ReindexStatus(boolean running, boolean started, int lastIndexed) {
+    }
 
     /**
      * Lanza el reindexado completo en SEGUNDO PLANO y responde al instante (no bloquea la petición HTTP,
@@ -105,8 +106,7 @@ public interface CatalogUseCase {
 
     /* ============ DROP-670: esquema de atributos por categoría ============ */
 
-    List<CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
-            UUID categoryId);
+    List<CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(UUID categoryId);
 
     UUID upsertCategoryAttributeSchema(UUID categoryId, String attrKey, String label, boolean required, int position);
 
@@ -140,8 +140,7 @@ public interface CatalogUseCase {
     void deleteVariant(UUID variantId);
 
     /** Adds an image (by URL) to a product's gallery. */
-    ProductImageView addProductImage(UUID productId, String url,
-            String role);
+    ProductImageView addProductImage(UUID productId, String url, String role);
 
     /** Removes a product image and reindexes its product. */
     void deleteProductImage(UUID imageId);
@@ -153,8 +152,7 @@ public interface CatalogUseCase {
     void reorderProductImages(UUID productId, List<UUID> imageIds);
 
     /** Bulk-creates products from friendly JSON rows; returns created/failed counts and errors. */
-    BulkResultDtoOut bulkCreateProducts(
-            List<BulkProductDtoIn> rows);
+    BulkResultDtoOut bulkCreateProducts(List<BulkProductDtoIn> rows);
 
     /**
      * Exports products in the given 1-based inclusive range (ordered deterministically by id) as the same
@@ -164,7 +162,8 @@ public interface CatalogUseCase {
     List<BulkProductDtoIn> exportProducts(int from, int to, ExportFilter filtro);
 
     /** Una página del volcado: las filas ya mapeadas y si queda alguna más detrás. */
-    record ProductExportBatch(List<BulkProductDtoIn> items, boolean hayMas) {}
+    record ProductExportBatch(List<BulkProductDtoIn> items, boolean hayMas) {
+    }
 
     /**
      * Una página del volcado continuo, ordenada por id y con los hijos traídos por lote (sin N+1).
@@ -195,8 +194,7 @@ public interface CatalogUseCase {
      * que después se descarga.
      */
     record ExportFilter(String status, UUID categoryId, String q, Boolean verified, BigDecimal minCost,
-            BigDecimal maxCost, Integer minSales, BigDecimal minTrend, Instant createdFrom,
-            Instant createdTo) {
+            BigDecimal maxCost, Integer minSales, BigDecimal minTrend, Instant createdFrom, Instant createdTo) {
 
         /** Sin ningún filtro: la exportación completa. */
         public static ExportFilter todo() {
@@ -236,8 +234,7 @@ public interface CatalogUseCase {
     BulkOutcome bulkUpdateStatus(List<UUID> ids, String status);
 
     /** Bulk-creates categories from friendly JSON rows. */
-    BulkResultDtoOut bulkCreateCategories(
-            List<BulkCategoryDtoIn> rows);
+    BulkResultDtoOut bulkCreateCategories(List<BulkCategoryDtoIn> rows);
 
     ProductSummaryView toSummaryView(Product product, String language);
 
@@ -293,6 +290,15 @@ public interface CatalogUseCase {
 
     /** Elimina un tramo de precio (price break) de un producto, identificado por su cantidad mínima. */
     void deletePriceTier(UUID productId, int minQty);
+
+    /**
+     * Fija el recargo de UN tramo y devuelve la ficha ya recalculada (23-sep-2026).
+     *
+     * <p>{@code surchargeCny} nulo devuelve el tramo a heredar el recargo del producto; cero es un
+     * recargo de cero, que es otra cosa. El envio y el arancel no se tocan: siguen siendo uno por
+     * producto porque esos si escalan con el bulto.
+     */
+    ProductDetailView updatePriceTierSurcharge(UUID productId, int minQty, BigDecimal surchargeCny, String lang);
 
     ProductDetailView duplicateProduct(UUID id, String lang);
 

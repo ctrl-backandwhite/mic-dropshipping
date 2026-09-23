@@ -159,8 +159,8 @@ class Cov10CustomsProfileServiceTest {
     }
 
     private static CategoryCustomsProfileEntity perfilCompleto() {
-        return CategoryCustomsProfileEntity.builder().categorySlug("moda-muj-*").hsCode("6104.43")
-                .material("Polyester").usageText("Daily wear").batteryType("BUILT_IN").packLengthMm(300)
-                .packWidthMm(200).packHeightMm(50).build();
+        return CategoryCustomsProfileEntity.builder().categorySlug("moda-muj-*").hsCode("6104.43").material("Polyester")
+                .usageText("Daily wear").batteryType("BUILT_IN").packLengthMm(300).packWidthMm(200).packHeightMm(50)
+                .build();
     }
 }

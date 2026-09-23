@@ -77,15 +77,14 @@ class InvoiceEuResponsibleRenderTest {
     }
 
     private static ResponsiblePersonView operador() {
-        return new ResponsiblePersonView("Jesus Enrique Finol Finol", "Calle Castelví 7, 1D", "50004",
-                "Zaragoza", "Zaragoza", "ES", "jfinol02@gmail.com", null, "IMPORTER", "Importador",
-                true, true);
+        return new ResponsiblePersonView("Jesus Enrique Finol Finol", "Calle Castelví 7, 1D", "50004", "Zaragoza",
+                "Zaragoza", "ES", "jfinol02@gmail.com", null, "IMPORTER", "Importador", true, true);
     }
 
     private static Order pedido() {
         return Order.builder().orderNumber("NX-100").currency("EUR").shippingCents(500).taxCents(210)
-                .items(List.of(OrderItem.builder().unitPriceCents(4000).quantity(2)
-                        .titleSnapshot("Blazer de mujer").skuSnapshot("SKU-1").build()))
+                .items(List.of(OrderItem.builder().unitPriceCents(4000).quantity(2).titleSnapshot("Blazer de mujer")
+                        .skuSnapshot("SKU-1").build()))
                 .shippingCountry("ES").placedAt(Instant.parse("2026-07-15T10:30:00Z")).build();
     }
 
@@ -127,8 +126,7 @@ class InvoiceEuResponsibleRenderTest {
     @ParameterizedTest(name = "en {0} el bloque se titula «{1}»")
     @CsvSource({"es,Operador económico responsable en la UE", "en,Responsible economic operator in the EU",
             "pt,Operador económico responsável na UE", "fr,Opérateur économique responsable dans",
-            "de,Verantwortlicher Wirtschaftsakteur in der EU",
-            "it,Operatore economico responsabile nell",
+            "de,Verantwortlicher Wirtschaftsakteur in der EU", "it,Operatore economico responsabile nell",
             "nl,Verantwoordelijke marktdeelnemer in de EU"})
     @DisplayName("el bloque se imprime en el idioma de la factura")
     void tituloTraducidoEnLaFactura(String lang, String esperado) {

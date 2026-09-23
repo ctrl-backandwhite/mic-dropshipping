@@ -81,9 +81,7 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration cfg)
- {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) {
         return cfg.getAuthenticationManager();
     }
 }

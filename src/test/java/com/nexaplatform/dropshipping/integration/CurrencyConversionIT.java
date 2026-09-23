@@ -104,8 +104,7 @@ class CurrencyConversionIT extends BaseIntegration {
      * cable se compara tal cual viaja.
      */
     private static final ObjectMapper JSON = JsonMapper.builder()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-            .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     @Autowired
     private CurrencyRateService currencyRateService;
@@ -174,8 +173,8 @@ class CurrencyConversionIT extends BaseIntegration {
 
         // El canónico USD es el MISMO en todas: la divisa es presentación, no negocio.
         for (String divisa : List.of("EUR", "CNY", "SEK", "MXN", "PLN", "JPY")) {
-            assertThat(fichaAdmin(divisa).get("retailUsd").decimalValue())
-                    .as("retailUsd con X-Currency=%s", divisa).isEqualByComparingTo("20.00");
+            assertThat(fichaAdmin(divisa).get("retailUsd").decimalValue()).as("retailUsd con X-Currency=%s", divisa)
+                    .isEqualByComparingTo("20.00");
         }
     }
 
@@ -287,10 +286,8 @@ class CurrencyConversionIT extends BaseIntegration {
         assertThat(preview.get("taxRateBps").asInt()).isZero();
 
         // (5) Importe CANÓNICO que se cobra: 2.000 céntimos de dólar.
-        CheckoutPreviewService.Preview canonico = enDivisa("EUR",
-                () -> checkoutPreviewService.compute("ES", null,
-                        List.of(new CheckoutPreviewService.Line(referencia.id(), referencia.variantId(), 1)),
-                        comprador));
+        CheckoutPreviewService.Preview canonico = enDivisa("EUR", () -> checkoutPreviewService.compute("ES", null,
+                List.of(new CheckoutPreviewService.Line(referencia.id(), referencia.variantId(), 1)), comprador));
         assertThat(canonico.subtotalUsdCents()).isEqualTo(2000);
         assertThat(canonico.totalDisplay()).isEqualByComparingTo("18.40");
 
@@ -299,8 +296,7 @@ class CurrencyConversionIT extends BaseIntegration {
         JsonNode detallePedido = json(get("/api/me/orders/" + pedido, "EUR", comprador));
         assertThat(detallePedido.get("total").decimalValue()).isEqualByComparingTo("18.40");
         assertThat(detallePedido.get("totalFormatted").asText()).isEqualTo(esperadoEur);
-        assertThat(detallePedido.get("items").get(0).get("unitPrice").decimalValue())
-                .isEqualByComparingTo("18.40");
+        assertThat(detallePedido.get("items").get(0).get("unitPrice").decimalValue()).isEqualByComparingTo("18.40");
     }
 
     @Test
@@ -449,8 +445,9 @@ class CurrencyConversionIT extends BaseIntegration {
     @DisplayName("Cabecera X-Currency vacía, ausente o en minúsculas: se normaliza sin romper")
     void cabeceraXCurrency_vaciaAusenteOEnMinusculas() {
         // Ausente → USD por defecto.
-        assertThat(json(get(DETALLE.replace("{id}", referencia.id().toString()), null))
-                .get("displayFormatted").asText()).isEqualTo("$20.00");
+        assertThat(
+                json(get(DETALLE.replace("{id}", referencia.id().toString()), null)).get("displayFormatted").asText())
+                .isEqualTo("$20.00");
         // Vacía → USD por defecto (no revienta ni deja el importe a cero).
         assertThat(fichaEnDivisa("").get("displayFormatted").asText()).isEqualTo("$20.00");
         // En minúsculas → se normaliza a mayúsculas: es la misma divisa.
@@ -529,10 +526,8 @@ class CurrencyConversionIT extends BaseIntegration {
         // ORIGEN es configuración ausente en el servidor, no un recurso que el cliente haya pedido mal:
         // como IllegalStateException sale con 500 y queda en el log de errores, que es donde se mira.
         assertThatThrownBy(() -> currencyRateService.toUsd(new BigDecimal("80.00"), "CHF"))
-                .isInstanceOf(IllegalStateException.class)
-                .isNotInstanceOf(NotFoundException.class)
-                .hasMessageContaining("CHF")
-                .hasMessageContaining("currency_rate");
+                .isInstanceOf(IllegalStateException.class).isNotInstanceOf(NotFoundException.class)
+                .hasMessageContaining("CHF").hasMessageContaining("currency_rate");
         // Y hacia el display nunca devuelve null ni cero: devuelve el importe canónico.
         assertThat(currencyRateService.usdTo(new BigDecimal("80.00"), "CHF")).isEqualByComparingTo("80.00");
     }
@@ -554,10 +549,8 @@ class CurrencyConversionIT extends BaseIntegration {
 
         // Determinismo: la misma entrada da SIEMPRE la misma salida (nada de acumular estado).
         for (int i = 0; i < 5; i++) {
-            assertThat(currencyRateService.toUsd(new BigDecimal("100.00"), "MXN"))
-                    .isEqualByComparingTo("33.3333");
-            assertThat(currencyRateService.usdTo(new BigDecimal("100.00"), "PLN"))
-                    .isEqualByComparingTo("33.33");
+            assertThat(currencyRateService.toUsd(new BigDecimal("100.00"), "MXN")).isEqualByComparingTo("33.3333");
+            assertThat(currencyRateService.usdTo(new BigDecimal("100.00"), "PLN")).isEqualByComparingTo("33.33");
         }
 
         // Y un único redondeo al final: 240 CNY → 30 USD → margen 100 % → 60 USD → 60 × 0,33333333
@@ -575,8 +568,7 @@ class CurrencyConversionIT extends BaseIntegration {
     void importesDeUnCentimoCeroYMuyGrandes() {
         // Un céntimo de dólar en euros: 0,0092 → 0,01 (HALF_UP redondea hacia arriba desde 0,005).
         assertThat(currencyRateService.usdTo(new BigDecimal("0.01"), "EUR")).isEqualByComparingTo("0.01");
-        assertThat(currencyRateService.formatDisplay(new BigDecimal("0.01"), "EUR"))
-                .isEqualTo("0,01" + NBSP + "€");
+        assertThat(currencyRateService.formatDisplay(new BigDecimal("0.01"), "EUR")).isEqualTo("0,01" + NBSP + "€");
 
         // Un céntimo de dólar en yenes: 1,50 ¥ → 2 (el yen no admite decimales; HALF_UP sube el 0,5).
         assertThat(currencyRateService.usdTo(new BigDecimal("0.01"), "JPY")).isEqualByComparingTo("2");
@@ -594,8 +586,7 @@ class CurrencyConversionIT extends BaseIntegration {
 
         // Muy grande: 99.999.999,99 × 0,92 = 91.999.999,9908 → 91.999.999,99 (sin desbordar ni perder
         // precisión: BigDecimal, no double).
-        assertThat(currencyRateService.usdTo(new BigDecimal("99999999.99"), "EUR"))
-                .isEqualByComparingTo("91999999.99");
+        assertThat(currencyRateService.usdTo(new BigDecimal("99999999.99"), "EUR")).isEqualByComparingTo("91999999.99");
         assertThat(currencyRateService.formatDisplay(new BigDecimal("91999999.99"), "EUR"))
                 .isEqualTo("91.999.999,99" + NBSP + "€");
     }
@@ -619,8 +610,7 @@ class CurrencyConversionIT extends BaseIntegration {
         assertThat(unidad).isEqualByComparingTo("3000");
         assertThat(linea).isEqualByComparingTo("12000");
         assertThat(linea).isEqualByComparingTo(unidad.multiply(new BigDecimal("4")));
-        assertThat(carrito.get("items").get(0).get("lineTotalFormatted").asText())
-                .isEqualTo(YEN_ANCHO + "12,000");
+        assertThat(carrito.get("items").get(0).get("lineTotalFormatted").asText()).isEqualTo(YEN_ANCHO + "12,000");
         // Y sin parte decimal en ninguno de los dos: el yen no tiene céntimos.
         assertThat(carrito.get("items").get(0).get("unitFormatted").asText()).doesNotContain(".");
     }
@@ -632,14 +622,12 @@ class CurrencyConversionIT extends BaseIntegration {
         // exactamente 100 × 18,40 = 1.840,00 €, sin arrastrar ni un céntimo por el camino.
         JsonNode carrito = json(cotizarCarrito("EUR", referencia, 100));
         assertThat(carrito.get("items").get(0).get("unit").decimalValue()).isEqualByComparingTo("18.40");
-        assertThat(carrito.get("items").get(0).get("lineTotal").decimalValue())
-                .isEqualByComparingTo("1840.00");
+        assertThat(carrito.get("items").get(0).get("lineTotal").decimalValue()).isEqualByComparingTo("1840.00");
         assertThat(carrito.get("subtotal").decimalValue()).isEqualByComparingTo("1840.00");
         assertThat(carrito.get("subtotalFormatted").asText()).isEqualTo("1.840,00" + NBSP + "€");
 
         // Y el canónico en dólares convertido de una sola vez da lo MISMO: 2.000,00 USD × 0,92.
-        assertThat(currencyRateService.usdTo(new BigDecimal("2000.00"), "EUR"))
-                .isEqualByComparingTo("1840.00");
+        assertThat(currencyRateService.usdTo(new BigDecimal("2000.00"), "EUR")).isEqualByComparingTo("1840.00");
     }
 
     @Test
@@ -673,10 +661,8 @@ class CurrencyConversionIT extends BaseIntegration {
 
         // Canónico: 100 × 15 céntimos = 1.500 céntimos = 15,00 USD = 13,80 €.
         UUID comprador = UUID.randomUUID();
-        CheckoutPreviewService.Preview canonico = enDivisa("EUR",
-                () -> checkoutPreviewService.compute("ES", null,
-                        List.of(new CheckoutPreviewService.Line(barato.id(), barato.variantId(), 100)),
-                        comprador));
+        CheckoutPreviewService.Preview canonico = enDivisa("EUR", () -> checkoutPreviewService.compute("ES", null,
+                List.of(new CheckoutPreviewService.Line(barato.id(), barato.variantId(), 100)), comprador));
         assertThat(canonico.subtotalUsdCents()).isEqualTo(1500);
         assertThat(currencyRateService.usdTo(new BigDecimal("15.00"), "EUR")).isEqualByComparingTo("13.80");
 
@@ -717,18 +703,15 @@ class CurrencyConversionIT extends BaseIntegration {
         // Sin país configurado no hay impuesto ni despacho: el desglose es 0 + 0 y el total es el
         // subtotal. Lo que se comprueba es que la resta/suma se hace con los MISMOS componentes ya
         // redondeados que se enseñan, y no con otros calculados aparte.
-        CheckoutTotalsService.CheckoutTotals totales =
-                checkoutTotalsService.compute("ES", null, 2000, 0, List.of());
+        CheckoutTotalsService.CheckoutTotals totales = checkoutTotalsService.compute("ES", null, 2000, 0, List.of());
         assertThat(totales.taxCents()).isZero();
         assertThat(totales.customsHandlingCents()).isZero();
         assertThat(totales.shippingCents()).isZero();
         assertThat(totales.totalCents(2000)).isEqualTo(2000);
 
         UUID comprador = UUID.randomUUID();
-        CheckoutPreviewService.Preview preview = enDivisa("EUR",
-                () -> checkoutPreviewService.compute("ES", null,
-                        List.of(new CheckoutPreviewService.Line(referencia.id(), referencia.variantId(), 3)),
-                        comprador));
+        CheckoutPreviewService.Preview preview = enDivisa("EUR", () -> checkoutPreviewService.compute("ES", null,
+                List.of(new CheckoutPreviewService.Line(referencia.id(), referencia.variantId(), 3)), comprador));
 
         assertThat(preview.subtotalDisplay()).isEqualByComparingTo("55.20"); // 3 × 18,40
         assertThat(preview.discountDisplay()).isEqualByComparingTo("0.00");
@@ -757,8 +740,7 @@ class CurrencyConversionIT extends BaseIntegration {
      * margen), así que los importes canónicos solo se pueden comprobar con este rol.
      */
     private JsonNode fichaAdmin(UUID productId, String divisa) {
-        return json(get(DETALLE.replace("{id}", productId.toString()), divisa,
-                bearer(jwt.userToken("ADMIN"))));
+        return json(get(DETALLE.replace("{id}", productId.toString()), divisa, bearer(jwt.userToken("ADMIN"))));
     }
 
     private JsonNode fichaAdmin(String divisa) {
@@ -783,8 +765,7 @@ class CurrencyConversionIT extends BaseIntegration {
         if (autorizacion != null) {
             peticion = peticion.header("Authorization", autorizacion);
         }
-        return peticion.exchange().expectStatus().isOk().expectBody(String.class).returnResult()
-                .getResponseBody();
+        return peticion.exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
     }
 
     /** POST a /api/catalog/cart-quote (permitAll) con una única línea. */
@@ -793,9 +774,9 @@ class CurrencyConversionIT extends BaseIntegration {
         linea.put("productId", producto.id().toString());
         linea.put("variantId", producto.variantId().toString());
         linea.put("quantity", cantidad);
-        return client.post().uri(CARRITO).header(CABECERA_DIVISA, divisa)
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(List.of(linea)).exchange()
-                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+        return client.post().uri(CARRITO).header(CABECERA_DIVISA, divisa).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(List.of(linea)).exchange().expectStatus().isOk().expectBody(String.class).returnResult()
+                .getResponseBody();
     }
 
     /** POST a /api/shipping/quote (requiere autenticación) con una única línea. */
@@ -811,8 +792,8 @@ class CurrencyConversionIT extends BaseIntegration {
         return client.post().uri(CHECKOUT).header(CABECERA_DIVISA, divisa)
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .header("Authorization", bearer(jwt.userToken(comprador, "comprador@nx036.local", "USER")))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isOk()
+                .expectBody(String.class).returnResult().getResponseBody();
     }
 
     private static JsonNode json(String cuerpo) {
@@ -854,8 +835,7 @@ class CurrencyConversionIT extends BaseIntegration {
     /** Divisa ACTIVA asociada a un país en {@code currency_rate}, o USD si no hay ninguna. */
     private String divisaActivaDePais(String codigoPais) {
         List<String> codigos = jdbcTemplate.queryForList(
-                "SELECT code FROM currency_rate WHERE country_code = ? AND active = true", String.class,
-                codigoPais);
+                "SELECT code FROM currency_rate WHERE country_code = ? AND active = true", String.class, codigoPais);
         return codigos.isEmpty() ? "USD" : codigos.get(0);
     }
 
@@ -878,8 +858,8 @@ class CurrencyConversionIT extends BaseIntegration {
         // CHF NO se siembra: es el caso «tasa ausente en currency_rate».
     }
 
-    private void insertarDivisa(String codigo, String nombre, String simbolo, String pais, String locale,
-            String tasa, boolean activa) {
+    private void insertarDivisa(String codigo, String nombre, String simbolo, String pais, String locale, String tasa,
+            boolean activa) {
         jdbcTemplate.update("""
                 INSERT INTO currency_rate (id, code, name, symbol, country_code, locale, rate_vs_usd, active,
                                            last_synced_at, created_at, updated_at)
@@ -993,8 +973,8 @@ class CurrencyConversionIT extends BaseIntegration {
                                             total_cents, currency, source, fulfillment_attempts,
                                             placed_at, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'PAID', ?, 0, 0, 0, ?, 'USD', 'PLATFORM', 0, now(), now(), now())
-                """, pedidoId, "TEST-" + pedidoId.toString().substring(0, 8), comprador, direccionId,
-                totalUsdCents, totalUsdCents);
+                """, pedidoId, "TEST-" + pedidoId.toString().substring(0, 8), comprador, direccionId, totalUsdCents,
+                totalUsdCents);
 
         jdbcTemplate.update("""
                 INSERT INTO order_item (id, order_id, product_id, variant_id, title_snapshot, sku_snapshot,

@@ -28,7 +28,7 @@ class CorsConfigTest {
         CorsConfiguration cfg = ((UrlBasedCorsConfigurationSource) source).getCorsConfigurations().get("/**");
 
         assertThat(cfg).isNotNull();
-        assertThat(cfg.getAllowedHeaders())
-                .contains("Authorization", "X-Currency", "X-Country", "X-Lang", "Idempotency-Key");
+        assertThat(cfg.getAllowedHeaders()).contains("Authorization", "X-Currency", "X-Country", "X-Lang",
+                "Idempotency-Key");
     }
 }

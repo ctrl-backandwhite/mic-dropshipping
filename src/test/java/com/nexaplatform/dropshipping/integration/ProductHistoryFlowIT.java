@@ -36,9 +36,8 @@ class ProductHistoryFlowIT extends EmailITSupport {
     private static final String VIEWS = "/api/me/product-views";
     private static final String CORREO = "yo@example.com";
 
-    private static final ParameterizedTypeReference<Map<String, Object>> PAGINA =
-            new ParameterizedTypeReference<>() {
-            };
+    private static final ParameterizedTypeReference<Map<String, Object>> PAGINA = new ParameterizedTypeReference<>() {
+    };
 
     @Autowired
     private ViewedProductsDigestService digestService;
@@ -134,8 +133,8 @@ class ProductHistoryFlowIT extends EmailITSupport {
     @Test
     @DisplayName("un producto que no existe se rechaza (404) y no ensucia el historial")
     void unProductoInexistenteSeRechaza() {
-        client.post().uri(VIEWS + "/" + UUID.randomUUID()).header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .exchange().expectStatus().isNotFound();
+        client.post().uri(VIEWS + "/" + UUID.randomUUID()).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
+                .expectStatus().isNotFound();
 
         assertThat(filasEnBd(userId)).isZero();
     }
@@ -193,8 +192,8 @@ class ProductHistoryFlowIT extends EmailITSupport {
         MimeMessage correo = unicoCorreoPara(CORREO);
         assertThat(asuntoDe(correo)).isEqualTo("Lo que has estado mirando en NX036");
         String html = cuerpoHtml(correo);
-        assertThat(html).contains("Camiseta").contains("Pantalón")
-                .contains("src=\"cid:vp0\"").contains("src=\"cid:vp1\"")
+        assertThat(html).contains("Camiseta").contains("Pantalón").contains("src=\"cid:vp0\"")
+                .contains("src=\"cid:vp1\"")
                 // Enlace de baja: es comunicación comercial y tiene que poder cortarse de un clic.
                 .contains("/api/campaigns/unsubscribe");
         // Y las dos referencias tienen su parte incrustada de verdad, no un hueco.
@@ -268,8 +267,8 @@ class ProductHistoryFlowIT extends EmailITSupport {
     /* ============================== Utilidades ============================== */
 
     private void visitar(String tokenUsuario, UUID productId) {
-        client.post().uri(VIEWS + "/" + productId).header(HttpHeaders.AUTHORIZATION, bearer(tokenUsuario))
-                .exchange().expectStatus().isOk();
+        client.post().uri(VIEWS + "/" + productId).header(HttpHeaders.AUTHORIZATION, bearer(tokenUsuario)).exchange()
+                .expectStatus().isOk();
     }
 
     /** Títulos del historial, en el orden en que los devuelve la API (visita más reciente primero). */
@@ -290,15 +289,16 @@ class ProductHistoryFlowIT extends EmailITSupport {
 
     private int visitasContadas(UUID usuario, UUID producto) {
         Integer veces = jdbcTemplate.queryForObject(
-                "SELECT view_count FROM product_view WHERE user_id = ? AND product_id = ?", Integer.class,
-                usuario, producto);
+                "SELECT view_count FROM product_view WHERE user_id = ? AND product_id = ?", Integer.class, usuario,
+                producto);
         return veces == null ? 0 : veces;
     }
 
     /** Retrasa TODAS las visitas del usuario los días indicados (para salir de la ventana o caducarlas). */
     private void envejecerVisitas(UUID usuario, int dias) {
-        jdbcTemplate.update("UPDATE product_view SET viewed_at = now() - make_interval(days => ?) "
-                + "WHERE user_id = ?", dias, usuario);
+        jdbcTemplate.update(
+                "UPDATE product_view SET viewed_at = now() - make_interval(days => ?) " + "WHERE user_id = ?", dias,
+                usuario);
     }
 
     private void envejecerVisita(UUID usuario, UUID producto, int dias) {
@@ -322,15 +322,17 @@ class ProductHistoryFlowIT extends EmailITSupport {
     private UUID crearProducto(String slug, String titulo) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, weight_grams, created_at, updated_at)"
-                + " VALUES (?, ?, ?, 'TEST', ?, 'ACTIVE', 1, 10.0000, 'CNY', 500, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                        + " base_price, currency, weight_grams, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, 'TEST', ?, 'ACTIVE', 1, 10.0000, 'CNY', 500, now(), now())",
                 id, slug + "-" + sufijo, "ext-" + sufijo, titulo);
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, description) "
                 + "VALUES (gen_random_uuid(), ?, 'es', ?, ?)", id, titulo, titulo + " — descripción");
-        jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
-                + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)", id,
-                "https://origen.test/" + slug + ".jpg", "https://cdn.test/" + slug + ".jpg");
+        jdbcTemplate.update(
+                "INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
+                        + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)",
+                id, "https://origen.test/" + slug + ".jpg", "https://cdn.test/" + slug + ".jpg");
         return id;
     }
 
@@ -347,8 +349,7 @@ class ProductHistoryFlowIT extends EmailITSupport {
         vaciarCaches();
     }
 
-    private void insertarDivisa(String codigo, String nombre, String simbolo, String pais, String locale,
-            String tasa) {
+    private void insertarDivisa(String codigo, String nombre, String simbolo, String pais, String locale, String tasa) {
         jdbcTemplate.update("""
                 INSERT INTO currency_rate (id, code, name, symbol, country_code, locale, rate_vs_usd, active,
                                            last_synced_at, created_at, updated_at)

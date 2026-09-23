@@ -12,8 +12,8 @@ import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
  */
 public final class PricingChannelHolder {
 
-    private static final ThreadLocal<PriceRuleChannel> CURRENT =
-            ThreadLocal.withInitial(() -> PriceRuleChannel.STOREFRONT);
+    private static final ThreadLocal<PriceRuleChannel> CURRENT = ThreadLocal
+            .withInitial(() -> PriceRuleChannel.STOREFRONT);
 
     private PricingChannelHolder() {
     }

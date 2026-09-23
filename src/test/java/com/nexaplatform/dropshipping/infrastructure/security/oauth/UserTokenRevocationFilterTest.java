@@ -50,8 +50,8 @@ class UserTokenRevocationFilterTest {
     }
 
     private String token(String sub, long iatEpochSeconds) {
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject(sub).issueTime(new Date(iatEpochSeconds * 1000L)).build();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder().subject(sub).issueTime(new Date(iatEpochSeconds * 1000L))
+                .build();
         return new PlainJWT(claims).serialize();
     }
 

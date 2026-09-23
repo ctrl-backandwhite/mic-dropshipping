@@ -40,8 +40,7 @@ public class ResourceServerConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain partnerApiFilterChain(HttpSecurity http, JwtRevocationFilter revocationFilter,
-            JWKSource<SecurityContext> jwkSource, @Value("${nexadrop.oauth.issuer}") String issuer)
- {
+            JWKSource<SecurityContext> jwkSource, @Value("${nexadrop.oauth.issuer}") String issuer) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("scope");
@@ -59,7 +58,8 @@ public class ResourceServerConfig {
                         .hasAuthority("SCOPE_catalog.read").requestMatchers("/api/v1/partner/orders/**")
                         .hasAuthority("SCOPE_orders.write").requestMatchers("/api/v1/partner/shop/**")
                         .hasAuthority("SCOPE_shop.sync").anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)));
+                .oauth2ResourceServer(
+                        oauth -> oauth.jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)));
 
         return http.build();
     }

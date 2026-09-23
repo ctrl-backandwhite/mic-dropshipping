@@ -56,10 +56,8 @@ class PlanInvoiceRenderTest {
         // El formateo de importes va aparte (locale-aware, "29,00 €"); aquí sólo importa que devuelva
         // algo imprimible, porque el modelo de la factura lo mete en un Map.of que no admite nulos.
         CurrencyRateService currency = mock(CurrencyRateService.class);
-        when(currency.formatDisplay(any(), anyString()))
-                .thenAnswer(i -> i.getArgument(0) + " " + i.getArgument(1));
-        service = new InvoiceService(engine, currency, mock(EuComplianceService.class),
-                new OrderAmounts(currency),
+        when(currency.formatDisplay(any(), anyString())).thenAnswer(i -> i.getArgument(0) + " " + i.getArgument(1));
+        service = new InvoiceService(engine, currency, mock(EuComplianceService.class), new OrderAmounts(currency),
                 mock(PaymentJpaRepositoryAdapter.class), mock(ProductRepository.class),
                 mock(ProductVariantRepository.class), mock(ObjectStorageService.class));
         ReflectionTestUtils.setField(service, "issuerLegalName", "NX036 Dropshipping S.L.");
@@ -71,8 +69,8 @@ class PlanInvoiceRenderTest {
         return new PlanInvoiceData("F-2026-0001", currency, subtotal, tax, total, "Plan Pro mensual",
                 Instant.parse("2026-07-01T00:00:00Z").getEpochSecond(),
                 Instant.parse("2026-08-01T00:00:00Z").getEpochSecond(),
-                Instant.parse("2026-07-15T10:30:00Z").getEpochSecond(),
-                "Nombre Apellido", "cliente@example.com", true, "https://pagos.example.com/f/1");
+                Instant.parse("2026-07-15T10:30:00Z").getEpochSecond(), "Nombre Apellido", "cliente@example.com", true,
+                "https://pagos.example.com/f/1");
     }
 
     private String htmlOf(PlanInvoiceData d, String locale) {
@@ -90,11 +88,10 @@ class PlanInvoiceRenderTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "2900, 609,  21",     // 21% español
-            "2900, 290,  10",     // tipo reducido
-            "2900,   0,   0",     // exento
-            "   0,   0,   0"      // importe cero: no se divide por cero
+    @CsvSource({"2900, 609,  21", // 21% español
+            "2900, 290,  10", // tipo reducido
+            "2900,   0,   0", // exento
+            "   0,   0,   0" // importe cero: no se divide por cero
     })
     void elTipoDeIvaSeDeduceDelImporteYNuncaDivideEntreCero(long subtotal, long tax, int expectedRate) {
         // El tipo no viaja en el dato: se deduce del impuesto sobre la base. Con base 0 la división
@@ -108,16 +105,16 @@ class PlanInvoiceRenderTest {
     @Test
     void unaFacturaSinPeriodoNiFechaSeEmiteIgual() {
         // Stripe no siempre manda periodo; la factura tiene que salir de todas formas.
-        PlanInvoiceData sinDatos = new PlanInvoiceData("F-2026-0002", null, 1000, 0, 1000, null,
-                null, null, null, null, null, false, null);
+        PlanInvoiceData sinDatos = new PlanInvoiceData("F-2026-0002", null, 1000, 0, 1000, null, null, null, null, null,
+                null, false, null);
 
         assertThat(service.renderPlanInvoicePdf(sinDatos, null)).isNotEmpty();
     }
 
     @Test
     void sinDivisaSeFacturaEnDolares() {
-        PlanInvoiceData sinDivisa = new PlanInvoiceData("F-2026-0003", "  ", 1000, 0, 1000, "Plan",
-                null, null, null, "Cliente", "c@example.com", true, null);
+        PlanInvoiceData sinDivisa = new PlanInvoiceData("F-2026-0003", "  ", 1000, 0, 1000, "Plan", null, null, null,
+                "Cliente", "c@example.com", true, null);
 
         assertThat(htmlOf(sinDivisa, "en")).isNotEmpty();
     }
@@ -147,8 +144,8 @@ class PlanInvoiceRenderTest {
 
     @Test
     void laFacturaSinEnlaceDeVerificacionNoLlevaCodigoQr() {
-        PlanInvoiceData sinEnlace = new PlanInvoiceData("F-2026-0004", "EUR", 1000, 0, 1000, "Plan",
-                null, null, null, "Cliente", "c@example.com", true, null);
+        PlanInvoiceData sinEnlace = new PlanInvoiceData("F-2026-0004", "EUR", 1000, 0, 1000, "Plan", null, null, null,
+                "Cliente", "c@example.com", true, null);
 
         assertThat(service.renderPlanInvoicePdf(sinEnlace, "es")).isNotEmpty();
     }

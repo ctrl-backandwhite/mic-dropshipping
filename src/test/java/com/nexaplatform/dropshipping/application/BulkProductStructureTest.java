@@ -63,8 +63,7 @@ class BulkProductStructureTest {
     @Test
     void losEjesDeclaradosConservanSuOrdenYLaFotoDeCadaValor() {
         BulkProductDtoIn r = row();
-        r.setVariantAxes(List.of(
-                axis("Color", List.of("Rojo", "Azul"), Map.of("Rojo", "https://cdn/rojo.jpg")),
+        r.setVariantAxes(List.of(axis("Color", List.of("Rojo", "Azul"), Map.of("Rojo", "https://cdn/rojo.jpg")),
                 axis("Talla", List.of("M", "L"), null)));
 
         List<IngestVariantOption> options = BulkProductStructure.variantOptionsOf(r);
@@ -94,8 +93,7 @@ class BulkProductStructureTest {
         // Sin esto, un alta que sólo trae variantes se queda sin selector en la ficha y el comprador no
         // puede elegir color ni talla.
         BulkProductDtoIn r = row();
-        r.setVariants(List.of(
-                variant("SKU-R-M", "70.00", 5, Map.of("Color", "Rojo")),
+        r.setVariants(List.of(variant("SKU-R-M", "70.00", 5, Map.of("Color", "Rojo")),
                 variant("SKU-A-M", "70.00", 5, Map.of("Color", "Azul")),
                 variant("SKU-R-L", "70.00", 5, Map.of("Color", "Rojo"))));
 
@@ -113,8 +111,7 @@ class BulkProductStructureTest {
         r.setVariantAxes(List.of(axis("Talla", List.of("M", "L"), null)));
         r.setVariants(List.of(variant("SKU-1", "70.00", 1, Map.of("Color", "Rojo"))));
 
-        assertThat(BulkProductStructure.variantOptionsOf(r)).singleElement()
-                .extracting("nameZh").isEqualTo("Talla");
+        assertThat(BulkProductStructure.variantOptionsOf(r)).singleElement().extracting("nameZh").isEqualTo("Talla");
     }
 
     @Test
@@ -201,7 +198,7 @@ class BulkProductStructureTest {
         assertThat(tiers).hasSize(2);
         assertThat(tiers.get(0).minQty()).isEqualTo(1);
         assertThat(tiers.get(0).maxQty()).isEqualTo(9);
-        assertThat(tiers.get(1).maxQty()).isNull();          // el último tramo es abierto
+        assertThat(tiers.get(1).maxQty()).isNull(); // el último tramo es abierto
         assertThat(tiers.get(1).unitPrice()).isEqualByComparingTo("62.50");
     }
 
@@ -223,6 +220,6 @@ class BulkProductStructureTest {
 
         assertThat(t.minQty()).isEqualTo(1);
         assertThat(t.unitPrice()).isEqualByComparingTo("70.00");
-        assertThat(t.currency()).isEqualTo("CNY");    // los productos se persisten en yuanes
+        assertThat(t.currency()).isEqualTo("CNY"); // los productos se persisten en yuanes
     }
 }

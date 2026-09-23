@@ -44,15 +44,14 @@ class YunExpressMockGuardTest {
         CustomsValuationService customs = mock(CustomsValuationService.class);
         YunExpressClient client = mock(YunExpressClient.class);
         lenient().when(zones.findByCountryCodeIgnoreCase(anyString())).thenReturn(Optional.empty());
-        lenient().when(customs.valuate(anyString(), anyInt(), anyInt(), anyList()))
-                .thenReturn(new CustomsValuation("ES", TaxMode.DDP, 1000, false,
-                        OverThresholdPolicy.ALLOW, 0, false, "", false));
+        lenient().when(customs.valuate(anyString(), anyInt(), anyInt(), anyList())).thenReturn(
+                new CustomsValuation("ES", TaxMode.DDP, 1000, false, OverThresholdPolicy.ALLOW, 0, false, "", false));
         lenient().when(client.hasCredentials()).thenReturn(false);
 
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles(activeProfiles);
-        YunExpressFulfillmentService service =
-                new YunExpressFulfillmentService(zones, client, customs, new CustomsDutyLinesService(null), null, null, environment, null);
+        YunExpressFulfillmentService service = new YunExpressFulfillmentService(zones, client, customs,
+                new CustomsDutyLinesService(null), null, null, environment, null);
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "mockStageMinutes", 2L);
         return service;
@@ -72,8 +71,7 @@ class YunExpressMockGuardTest {
         YunExpressFulfillmentService service = serviceOn("pro");
         Order pedido = pedido();
 
-        assertThatThrownBy(() -> service.createShipment(pedido))
-                .isInstanceOf(FulfillmentFailure.class)
+        assertThatThrownBy(() -> service.createShipment(pedido)).isInstanceOf(FulfillmentFailure.class)
                 .hasMessageContaining("no se generan envíos simulados");
     }
 
@@ -93,8 +91,7 @@ class YunExpressMockGuardTest {
         // Transitorio a propósito: si mañana se arreglan las credenciales, el envío debe salir sin que
         // nadie tenga que rehabilitarlo a mano.
         assertThatThrownBy(() -> service.createShipment(pedido))
-                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class))
-                .matches(f -> !f.isPermanent());
+                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class)).matches(f -> !f.isPermanent());
     }
 
     @Test

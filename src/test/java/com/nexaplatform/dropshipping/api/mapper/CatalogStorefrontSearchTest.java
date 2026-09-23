@@ -91,8 +91,8 @@ class CatalogStorefrontSearchTest {
     void elTextoLibreLoResuelveElBuscadorYNoElBarridoSql() {
         ProductEntity botas = producto("botas");
         when(productSearchService.searchRelevantIds("botas", "es")).thenReturn(Optional.of(List.of(botas.getId())));
-        when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(botas.getId())), any(),
-                any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(botas));
+        when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(botas.getId())), any(), any(),
+                any(), any(), any(), any(), any(), any())).thenReturn(List.of(botas));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros("botas"), null);
 
@@ -113,8 +113,8 @@ class CatalogStorefrontSearchTest {
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros("botas"), null);
 
-        assertThat(pagina.items()).extracting(ProductSummaryView::slug)
-                .containsExactly("mas-relevante", "menos-relevante");
+        assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("mas-relevante",
+                "menos-relevante");
     }
 
     /** Si el usuario elige "precio más bajo", su elección gana a la relevancia. */
@@ -164,7 +164,7 @@ class CatalogStorefrontSearchTest {
         when(productSearchService.searchRelevantIds("botas", "es")).thenReturn(Optional.empty());
         when(productRepository.searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(botas)));
+                .thenReturn(new PageImpl<>(List.of(botas)));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros("botas"), null);
 
@@ -189,7 +189,7 @@ class CatalogStorefrontSearchTest {
     void sinTextoNoSeUsaElBuscador() {
         when(productRepository.searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(producto("cualquiera"))));
+                .thenReturn(new PageImpl<>(List.of(producto("cualquiera"))));
 
         service.productListFull(0, 20, "es", ProductListFilters.none(), null);
 
@@ -205,8 +205,8 @@ class CatalogStorefrontSearchTest {
     void elFiltroPorGrupoDeDeclaracionListaSoloLosDeSuTerna() {
         ProductEntity vestido = producto("vestido");
         UUID grupo = UUID.randomUUID();
-        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity
-                .builder().id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
+        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                .id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
         when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS", null))
                 .thenReturn(List.of(vestido.getId()));
         when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(vestido.getId())), any(),
@@ -239,17 +239,18 @@ class CatalogStorefrontSearchTest {
         UUID grupo = UUID.randomUUID();
         when(productSearchService.searchRelevantIds("azul", "es"))
                 .thenReturn(Optional.of(List.of(fueraDelGrupo.getId(), delGrupo.getId())));
-        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity
-                .builder().id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
+        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                .id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
         when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS", null))
                 .thenReturn(List.of(delGrupo.getId()));
         when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(delGrupo.getId())), any(),
                 any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(delGrupo));
 
-        PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es",
-                new ProductListFilters("azul", null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, List.of(new ProductListFilters.DutyLine(grupo, null))),
-                null);
+        PageResponse<ProductSummaryView> pagina = service
+                .productListFull(
+                        0, 20, "es", new ProductListFilters("azul", null, null, null, null, null, null, null, null,
+                                null, null, null, null, null, List.of(new ProductListFilters.DutyLine(grupo, null))),
+                        null);
 
         assertThat(pagina.totalElements()).isEqualTo(1);
     }

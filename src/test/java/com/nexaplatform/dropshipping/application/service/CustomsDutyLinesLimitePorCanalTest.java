@@ -68,8 +68,7 @@ class CustomsDutyLinesLimitePorCanalTest {
 
     /** Cinco abrigos de 4 kg: 20 kg de una sola partida arancelaria. */
     private static List<Line> cincoAbrigos() {
-        return List.of(new Line(UUID.randomUUID(), "620293", "Winter coat", "CN", 5, 3000, 4000,
-                0, 0, 0, false));
+        return List.of(new Line(UUID.randomUUID(), "620293", "Winter coat", "CN", 5, 3000, 4000, 0, 0, 0, false));
     }
 
     @Test
@@ -79,8 +78,7 @@ class CustomsDutyLinesLimitePorCanalTest {
         List<DutyParcel> dinamarca = service.parcelsOf(cincoAbrigos(), ROPA, "DK");
 
         assertThat(espana).hasSize(1);
-        assertThat(dinamarca).as("dos declaraciones, y por tanto dos veces el derecho de esa partida")
-                .hasSize(2);
+        assertThat(dinamarca).as("dos declaraciones, y por tanto dos veces el derecho de esa partida").hasSize(2);
     }
 
     @Test

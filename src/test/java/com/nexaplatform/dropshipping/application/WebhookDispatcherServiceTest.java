@@ -104,9 +104,8 @@ class WebhookDispatcherServiceTest {
     }
 
     private static WebhookDeliveryEntity delivery(int attempt) {
-        return WebhookDeliveryEntity.builder().eventType("order.created").eventId("evt-1")
-                .payload(Map.of("k", "v")).signature("sig").targetUrl("http://127.0.0.1:1/hook")
-                .status("PENDING").attempt(attempt).build();
+        return WebhookDeliveryEntity.builder().eventType("order.created").eventId("evt-1").payload(Map.of("k", "v"))
+                .signature("sig").targetUrl("http://127.0.0.1:1/hook").status("PENDING").attempt(attempt).build();
     }
 
     private static String hmac(String body, String secret) throws Exception {

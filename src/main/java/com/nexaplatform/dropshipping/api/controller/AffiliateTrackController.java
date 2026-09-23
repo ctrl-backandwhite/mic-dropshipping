@@ -25,7 +25,8 @@ public class AffiliateTrackController {
 
     @PostMapping("/track")
     public ResponseEntity<TrackResponse> track(@RequestBody TrackRequest req) {
-        String token = req.visitorToken() != null && !req.visitorToken().isBlank() ? req.visitorToken()
+        String token = req.visitorToken() != null && !req.visitorToken().isBlank()
+                ? req.visitorToken()
                 : UUID.randomUUID().toString();
         boolean attributed = affiliateProgramService.recordClick(req.ref(), token).isPresent();
         return ResponseEntity.ok(new TrackResponse(token, attributed));

@@ -109,9 +109,13 @@ class PaymentSettlementInvariantsTest {
 
     private PaymentUseCaseImpl useCase(List<PaymentGateway> gateways) {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
-                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
-                stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
+                orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class),
+                mock(CartService.class));
     }
 
     private Payment recharge(PaymentStatus status, String providerRef) {
@@ -155,7 +159,6 @@ class PaymentSettlementInvariantsTest {
         return o;
     }
 
-
     /**
      * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
      * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
@@ -177,7 +180,7 @@ class PaymentSettlementInvariantsTest {
         Payment p = recharge(PaymentStatus.PENDING, "cs_mock_1");
 
         useCase().confirmSucceeded(p.getId(), Map.of());
-        useCase().confirmSucceeded(p.getId(), Map.of());   // reintento del webhook, doble clic, reenvío
+        useCase().confirmSucceeded(p.getId(), Map.of()); // reintento del webhook, doble clic, reenvío
 
         verify(walletUseCase).deposit(eq(userId), eq(2500L), eq(p.getId()), anyString(), anyString());
     }
@@ -215,8 +218,8 @@ class PaymentSettlementInvariantsTest {
         useCase().confirmSucceeded(p.getId(), Map.of());
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);
 
-        useCase().confirmSucceeded(p.getId(), Map.of());   // segunda confirmación
-        verify(stockService).deductForOrder(any());        // pero una sola deducción
+        useCase().confirmSucceeded(p.getId(), Map.of()); // segunda confirmación
+        verify(stockService).deductForOrder(any()); // pero una sola deducción
     }
 
     @Test
@@ -239,8 +242,7 @@ class PaymentSettlementInvariantsTest {
         // Sin esta comprobación cualquiera inicia una recarga y la "confirma" sin pagar: dinero libre.
         recharge(PaymentStatus.PENDING, realRef);
 
-        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("pasarela de pago real");
 
         verify(walletUseCase, never()).deposit(any(), anyLong(), any(), anyString(), anyString());
@@ -263,8 +265,7 @@ class PaymentSettlementInvariantsTest {
 
         assertThatThrownBy(() -> subject.confirmMockRecharge(otherUserId, paymentId))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> subject.confirmRecharge(otherUserId, paymentId))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> subject.confirmRecharge(otherUserId, paymentId)).isInstanceOf(NotFoundException.class);
 
         verify(walletUseCase, never()).deposit(any(), anyLong(), any(), anyString(), anyString());
     }
@@ -287,8 +288,7 @@ class PaymentSettlementInvariantsTest {
         orderPayment(PaymentStatus.valueOf(status), "pi_3Abc");
 
         assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 100L))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("succeeded");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("succeeded");
     }
 
     @Test
@@ -321,8 +321,8 @@ class PaymentSettlementInvariantsTest {
         Wallet wallet = new Wallet();
         wallet.setId(UUID.randomUUID());
         when(walletUseCase.getOrCreate(userId)).thenReturn(wallet);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(
-                mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
+        when(userRepository.findById(userId)).thenReturn(
+                Optional.of(mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
         when(paymentRepository.save(any())).thenAnswer(i -> {
             Payment saved = i.getArgument(0);
             if (saved.getId() == null) {
@@ -350,10 +350,10 @@ class PaymentSettlementInvariantsTest {
         Wallet wallet = new Wallet();
         wallet.setId(UUID.randomUUID());
         when(walletUseCase.getOrCreate(userId)).thenReturn(wallet);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(
-                mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
-        doThrow(new BusinessException("Saldo insuficiente"))
-                .when(walletUseCase).charge(any(), anyLong(), any(), anyString(), anyString());
+        when(userRepository.findById(userId)).thenReturn(
+                Optional.of(mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
+        doThrow(new BusinessException("Saldo insuficiente")).when(walletUseCase).charge(any(), anyLong(), any(),
+                anyString(), anyString());
 
         assertThatThrownBy(() -> subject.chargeWalletForOrder(orderId, userId, "idem-1"))
                 .isInstanceOf(BusinessException.class);
@@ -385,7 +385,7 @@ class PaymentSettlementInvariantsTest {
 
         assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(failed.getErrorMessage()).isEqualTo("card_declined");
-        assertThat(failed.getProviderResponse()).containsEntry("intent", "pi_3Abc")
-                .containsEntry("code", "insufficient_funds");
+        assertThat(failed.getProviderResponse()).containsEntry("intent", "pi_3Abc").containsEntry("code",
+                "insufficient_funds");
     }
 }

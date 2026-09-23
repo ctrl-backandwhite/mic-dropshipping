@@ -32,10 +32,8 @@ class ContratoDeIdempotenciaDelCheckoutTest {
      * propósito: son contrato con terceros y no se les puede endurecer sin avisar.
      */
     private static Stream<Arguments> endpointsQueMuevenDinero() {
-        return Stream.of(Arguments.of(MeOrderApi.class, "checkout"),
-                Arguments.of(MeOrderPaymentApi.class, "initiate"),
-                Arguments.of(MeOrderPaymentApi.class, "paySavedCard"),
-                Arguments.of(MeWalletApi.class, "recharge"));
+        return Stream.of(Arguments.of(MeOrderApi.class, "checkout"), Arguments.of(MeOrderPaymentApi.class, "initiate"),
+                Arguments.of(MeOrderPaymentApi.class, "paySavedCard"), Arguments.of(MeWalletApi.class, "recharge"));
     }
 
     @ParameterizedTest(name = "{0}.{1} exige la clave de idempotencia")
@@ -57,9 +55,7 @@ class ContratoDeIdempotenciaDelCheckoutTest {
             }
         }
         assertThat(cabecera).as("%s.%s debe declarar la cabecera", api.getSimpleName(), metodo).isNotNull();
-        assertThat(cabecera.required())
-                .as("sin clave obligatoria, un reintento del cliente vuelve a cobrar")
-                .isTrue();
+        assertThat(cabecera.required()).as("sin clave obligatoria, un reintento del cliente vuelve a cobrar").isTrue();
     }
 
     @Test

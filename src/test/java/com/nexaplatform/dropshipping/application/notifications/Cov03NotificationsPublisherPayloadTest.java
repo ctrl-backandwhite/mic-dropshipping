@@ -48,12 +48,9 @@ class Cov03NotificationsPublisherPayloadTest {
         publisher.orderDelivered(userId, "cliente@example.com", "NX-9", "en");
 
         Map<String, Object> body = cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_ORDER_DELIVERED);
-        assertThat(body).containsEntry("kind", "ORDER_DELIVERED")
-                .containsEntry("userId", userId.toString())
-                .containsEntry("userEmail", "cliente@example.com")
-                .containsEntry("locale", "en")
-                .containsEntry("source", "nx036-dropshipping")
-                .containsEntry("orderNumber", "NX-9")
+        assertThat(body).containsEntry("kind", "ORDER_DELIVERED").containsEntry("userId", userId.toString())
+                .containsEntry("userEmail", "cliente@example.com").containsEntry("locale", "en")
+                .containsEntry("source", "nx036-dropshipping").containsEntry("orderNumber", "NX-9")
                 .containsKey("emittedAt");
     }
 
@@ -70,18 +67,15 @@ class Cov03NotificationsPublisherPayloadTest {
         // El consumidor no sabe convertir ni formatear: si no le llega el texto, el correo dice "null €".
         publisher.orderPlaced(userId, "cliente@example.com", "NX-1", "85,81 €", "EUR", "es");
 
-        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_ORDER_PLACED))
-                .containsEntry("orderNumber", "NX-1")
-                .containsEntry("totalDisplay", "85,81 €")
-                .containsEntry("currency", "EUR");
+        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_ORDER_PLACED)).containsEntry("orderNumber", "NX-1")
+                .containsEntry("totalDisplay", "85,81 €").containsEntry("currency", "EUR");
     }
 
     @Test
     void elEnvioViajaConTransportistaYNumeroDeSeguimiento() {
         publisher.orderShipped(userId, "cliente@example.com", "NX-2", "YunExpress", "YT262110", "es");
 
-        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_ORDER_SHIPPED))
-                .containsEntry("carrier", "YunExpress")
+        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_ORDER_SHIPPED)).containsEntry("carrier", "YunExpress")
                 .containsEntry("trackingNumber", "YT262110");
     }
 
@@ -91,8 +85,7 @@ class Cov03NotificationsPublisherPayloadTest {
         // que interpretar un decimal con separadores de otro idioma.
         publisher.walletRecharged(userId, "cliente@example.com", 2500L, "STRIPE", "es");
 
-        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_WALLET_RECHARGED))
-                .containsEntry("amountUsdCents", 2500L)
+        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_WALLET_RECHARGED)).containsEntry("amountUsdCents", 2500L)
                 .containsEntry("method", "STRIPE");
     }
 
@@ -100,8 +93,7 @@ class Cov03NotificationsPublisherPayloadTest {
     void elCobroDelMonederoDiceContraQuePedidoVa() {
         publisher.walletCharged(userId, "cliente@example.com", 999L, "NX-3", "es");
 
-        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_WALLET_CHARGED))
-                .containsEntry("amountUsdCents", 999L)
+        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_WALLET_CHARGED)).containsEntry("amountUsdCents", 999L)
                 .containsEntry("orderNumber", "NX-3");
     }
 
@@ -109,10 +101,8 @@ class Cov03NotificationsPublisherPayloadTest {
     void losEventosDeAutenticacionAdmitenDatosExtraSinNuevosTopics() {
         publisher.authEvent(userId, "cliente@example.com", "PASSWORD_RESET", Map.of("ip", "10.0.0.1"), "fr");
 
-        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_AUTH))
-                .containsEntry("kind", "PASSWORD_RESET")
-                .containsEntry("ip", "10.0.0.1")
-                .containsEntry("locale", "fr");
+        assertThat(cuerpoPublicadoEn(NexaTopics.NOTIFICATIONS_AUTH)).containsEntry("kind", "PASSWORD_RESET")
+                .containsEntry("ip", "10.0.0.1").containsEntry("locale", "fr");
     }
 
     @Test

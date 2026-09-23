@@ -54,6 +54,7 @@ import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShippingRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
@@ -131,19 +132,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private BigDecimal platformCommissionPct;
 
     /* =========================== VIEW RECORDS =========================== */
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     /* =========================== CATEGORIES (shared read) =========================== */
 
@@ -272,7 +260,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         }
         List<ProductSummaryView> conArancel = pagina.items().stream().map(v -> {
             CatalogDutyBadgeService.DutyBadge badge = badges.get(v.id());
-            return badge == null ? v
+            return badge == null
+                    ? v
                     : v.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId(),
                             badge.dutyCovered());
         }).toList();
@@ -326,7 +315,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         }
         CatalogDutyBadgeService.DutyBadge badge = dutyBadges
                 .badgesFor(cartProductIds, List.of(ficha.id()), PricingCountryHolder.get()).get(ficha.id());
-        return badge == null ? ficha
+        return badge == null
+                ? ficha
                 : ficha.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId(),
                         badge.dutyCovered());
     }
@@ -355,8 +345,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Override
     @Transactional(readOnly = true)
     public List<ProductSummaryView> relatedProducts(UUID id, String lang, int limit) {
-        return productDetailQuery.relatedProducts(id, limit).stream()
-                .map(x -> productMapper.toSummary(x, lang)).toList();
+        return productDetailQuery.relatedProducts(id, limit).stream().map(x -> productMapper.toSummary(x, lang))
+                .toList();
     }
 
     @Override
@@ -492,7 +482,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         int unitGrams = effectiveWeight(p);
         int totalGrams = unitGrams * Math.max(1, req.quantity());
 
-        List<ShippingRateEntity> rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(), req.country().toUpperCase());
+        List<ShippingRateEntity> rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(),
+                req.country().toUpperCase());
         return rates.stream().filter(r -> r.getMaxWeightGrams() == null || totalGrams <= r.getMaxWeightGrams())
                 .filter(r -> r.getMinWeightGrams() == null || totalGrams >= r.getMinWeightGrams()).map(r -> {
                     double kg = totalGrams / 1000.0;
@@ -504,9 +495,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     }
 
     /* =========================== CART QUOTE (precio actual = el que se cobra) =========================== */
-
-
-
 
     /**
      * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día) en la moneda activa
@@ -526,8 +514,22 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         BigDecimal subtotal = BigDecimal.ZERO;
         int pesoTotal = 0;
         boolean faltaAlgunPeso = false;
+        // Unidades de cada producto en TODA la cesta, para resolver el tramo por cantidad. Se cuenta por
+        // producto y no por línea, igual que el pedido mínimo: el lote se compone mezclando variantes y
+        // el proveedor solo mira cuántas unidades van en total.
+        Map<UUID, Integer> unidadesPorProducto = new HashMap<>();
         for (CartQuoteItemIn it : items == null ? List.<CartQuoteItemIn>of() : items) {
-            CartQuoteLineOut line = quoteLine(it, displayCode);
+            if (it != null && it.productId() != null) {
+                unidadesPorProducto.merge(it.productId(), Math.max(1, it.quantity()), Integer::sum);
+            }
+        }
+        // Las escaleras de todos los productos de golpe: una consulta en vez de una por línea.
+        Map<UUID, List<ProductPriceTierEntity>> escaleras = unidadesPorProducto.isEmpty()
+                ? Map.of()
+                : priceTierRepository.findByProductIdInOrderByMinQtyAsc(unidadesPorProducto.keySet()).stream()
+                        .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        for (CartQuoteItemIn it : items == null ? List.<CartQuoteItemIn>of() : items) {
+            CartQuoteLineOut line = quoteLine(it, displayCode, unidadesPorProducto, escaleras);
             if (line != null) {
                 lines.add(line);
                 subtotal = subtotal.add(line.lineTotal());
@@ -564,7 +566,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
      * existe o sin precio). Esas líneas se descartan en silencio a propósito: el carrito guardado en el
      * navegador puede arrastrar productos retirados del catálogo y no debe tumbar la cotización entera.
      */
-    private CartQuoteLineOut quoteLine(CartQuoteItemIn it, String displayCode) {
+    private CartQuoteLineOut quoteLine(CartQuoteItemIn it, String displayCode, Map<UUID, Integer> unidadesPorProducto,
+            Map<UUID, List<ProductPriceTierEntity>> escaleras) {
         if (it == null || it.productId() == null) {
             return null;
         }
@@ -572,9 +575,13 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         if (p == null) {
             return null;
         }
-        ProductVariantEntity v = it.variantId() == null ? null
+        ProductVariantEntity v = it.variantId() == null
+                ? null
                 : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-        PricedAmount priced = pricingService.priceFor(p, v);
+        // Con el tramo que corresponde a las unidades de este producto: la cesta tiene que anunciar el
+        // mismo precio que se va a cobrar, y hasta ahora tarificaba sin mirar la cantidad.
+        int unidades = unidadesPorProducto.getOrDefault(p.getId(), Math.max(1, it.quantity()));
+        PricedAmount priced = pricingService.priceFor(p, v, unidades, escaleras.getOrDefault(p.getId(), List.of()));
         BigDecimal unit = priced.displayAmount();
         if (unit == null) {
             return null;
@@ -586,13 +593,11 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         // cliente eligió, pero ya no es la base de la cuenta.
         BigDecimal lineTotal = orderAmounts.lineSubtotal(priced.retailUsd(), it.quantity(), displayCode);
         return new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
-                currencyService.formatDisplay(unit, displayCode),
-                currencyService.formatDisplay(lineTotal, displayCode), pesoNetoDe(p, v));
+                currencyService.formatDisplay(unit, displayCode), currencyService.formatDisplay(lineTotal, displayCode),
+                pesoNetoDe(p, v));
     }
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
-
-
 
     /*
      * La portada entera se cachea, no solo sus partes.
@@ -615,13 +620,15 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     public HomeSectionsResponse homeSections(String lang, int perSection) {
         Pageable p = PageRequest.of(0, Math.min(perSection, 24));
         List<ProductSummaryView> trending = catalogUseCase.listBestsellers(null, p, lang).getContent();
-        List<ProductSummaryView> newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, NEWEST).items();
-        List<ProductSummaryView> topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
+        List<ProductSummaryView> newest = storefrontRead
+                .productList(0, perSection, lang, null, null, null, null, null, NEWEST).items();
+        List<ProductSummaryView> topSales = storefrontRead
+                .productList(0, perSection, lang, null, null, null, null, null, "sales").items();
         // Filtrado en BD por hasVideo=true (antes traía 500 y filtraba en memoria: con el catálogo repoblado
         // los productos con vídeo caían fuera del lote y la sección salía vacía). Reutiliza el pageable ya
         // acotado (perSection topado a 24) para no dejar el tamaño de página a merced del cliente.
-        List<ProductSummaryView> video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, p)
-                .getContent().stream().map(x -> productMapper.toSummary(x, lang)).toList();
+        List<ProductSummaryView> video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, p).getContent()
+                .stream().map(x -> productMapper.toSummary(x, lang)).toList();
 
         List<HomeSection> sections = new ArrayList<>();
         sections.add(new HomeSection("trending", "Trending Now", trending));
@@ -670,21 +677,23 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                 continue;
             }
             ProductSummaryView resumen = productMapper.toSummary(p, lang);
-            ejemplos.add(new StorefrontViews.WelcomeExample(p.getId(), p.getSlug(),
-                    resumen.title(), resumen.mainImage(), priced.displayFormatted(), priced.displayAmount(),
+            ejemplos.add(new StorefrontViews.WelcomeExample(p.getId(), p.getSlug(), resumen.title(),
+                    resumen.mainImage(), priced.displayFormatted(), priced.displayAmount(),
                     p.getWeightGrams() == null ? 0 : p.getWeightGrams(), welcomeExamples.dutyGroupOf(p),
-                    priced.supplierShippingUsd() == null ? BigDecimal.ZERO
+                    priced.supplierShippingUsd() == null
+                            ? BigDecimal.ZERO
                             : currencyService.usdToDisplay(priced.supplierShippingUsd())));
         }
         int derechoUsdCents = customsValuation.perArticleFeeUsdCents(pais);
-        String derecho = derechoUsdCents <= 0 ? ""
-                : currencyService.formatDisplay(currencyService.usdToDisplay(
-                        BigDecimal.valueOf(derechoUsdCents).movePointLeft(2)), divisa);
+        String derecho = derechoUsdCents <= 0
+                ? ""
+                : currencyService.formatDisplay(
+                        currencyService.usdToDisplay(BigDecimal.valueOf(derechoUsdCents).movePointLeft(2)), divisa);
         int topeUsdCents = customsValuation.deMinimisUsdCentsFor(pais);
-        return new StorefrontViews.WelcomeExamplesResponse(ejemplos, derecho,
-                countryTaxService.rateBpsFor(pais),
+        return new StorefrontViews.WelcomeExamplesResponse(ejemplos, derecho, countryTaxService.rateBpsFor(pais),
                 customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel(),
-                topeUsdCents <= 0 ? BigDecimal.ZERO
+                topeUsdCents <= 0
+                        ? BigDecimal.ZERO
                         : currencyService.usdToDisplay(BigDecimal.valueOf(topeUsdCents).movePointLeft(2)));
     }
 
@@ -707,31 +716,28 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         String divisa = CurrencyHolder.get();
         Set<UUID> permitidos = welcomeExamples.examples().stream().map(ProductEntity::getId)
                 .collect(Collectors.toSet());
-        List<CheckoutPreviewService.Line> items = (lines == null ? List.<StorefrontViews.WelcomeSimulationLine>of()
-                : lines).stream()
-                .filter(l -> l != null && l.productId() != null && permitidos.contains(l.productId()))
+        List<CheckoutPreviewService.Line> items = (lines == null
+                ? List.<StorefrontViews.WelcomeSimulationLine>of()
+                : lines).stream().filter(l -> l != null && l.productId() != null && permitidos.contains(l.productId()))
                 .filter(l -> l.quantity() > 0)
-                .map(l -> new CheckoutPreviewService.Line(l.productId(), null, Math.min(6, l.quantity())))
-                .toList();
+                .map(l -> new CheckoutPreviewService.Line(l.productId(), null, Math.min(6, l.quantity()))).toList();
         if (items.isEmpty()) {
             String cero = currencyService.formatDisplay(BigDecimal.ZERO, divisa);
-            return new StorefrontViews.WelcomeSimulationResponse(cero, cero, 0, cero, "", cero, "", cero,
-                    cero, 0, cero, 0, false, "");
+            return new StorefrontViews.WelcomeSimulationResponse(cero, cero, 0, cero, "", cero, "", cero, cero, 0, cero,
+                    0, false, "");
         }
         CheckoutPreviewService.Preview p = checkoutPreview.compute(pais, null, items, null);
         CheckoutTotalsService.CheckoutTotals t = p.totals();
         int pesoGramos = items.stream().mapToInt(i -> productRepository.findById(i.productId())
                 .map(pr -> ParcelAggregator.unitWeightGrams(pr, null) * i.quantity()).orElse(0)).sum();
-        return new StorefrontViews.WelcomeSimulationResponse(
-                currencyService.formatDisplay(p.subtotalDisplay(), divisa),
+        return new StorefrontViews.WelcomeSimulationResponse(currencyService.formatDisplay(p.subtotalDisplay(), divisa),
                 enDivisa(t.customsHandlingCents(), divisa), partidasDe(t, pais),
                 enDivisa(t.shippingBaseCents(), divisa),
                 t.shippingSubsidyCents() > 0 ? enDivisa(t.shippingSubsidyCents(), divisa) : "",
                 enDivisa(t.shippingNetCents(), divisa),
                 t.customsSubsidyCents() > 0 ? enDivisa(t.customsSubsidyCents(), divisa) : "",
-                enDivisa(t.customsNetCents(), divisa),
-                currencyService.formatDisplay(p.taxDisplay(), divisa), p.taxRateBps(),
-                currencyService.formatDisplay(p.totalDisplay(), divisa), pesoGramos,
+                enDivisa(t.customsNetCents(), divisa), currencyService.formatDisplay(p.taxDisplay(), divisa),
+                p.taxRateBps(), currencyService.formatDisplay(p.totalDisplay(), divisa), pesoGramos,
                 t.customs().blocked() || t.customs().deMinimisExceeded(),
                 customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel());
     }
@@ -753,8 +759,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /** Un importe en céntimos de dólar, ya convertido y formateado en la divisa del visitante. */
     private String enDivisa(int usdCents, String divisa) {
-        return currencyService.formatDisplay(currencyService.usdToDisplay(
-                BigDecimal.valueOf(Math.max(0, usdCents)).movePointLeft(2)), divisa);
+        return currencyService.formatDisplay(
+                currencyService.usdToDisplay(BigDecimal.valueOf(Math.max(0, usdCents)).movePointLeft(2)), divisa);
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */
@@ -769,8 +775,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     }
 
     /* =========================== IMPORT BY URL (DROP-15) =========================== */
-
-
 
     @Override
     @Transactional(readOnly = true)
@@ -821,8 +825,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== IMAGE SEARCH MOCK (DROP-16) =========================== */
 
-
-
     @Override
     @Transactional(readOnly = true)
     public List<ImageSearchResult> searchByImage(ImageSearchRequest req, String lang) {
@@ -852,7 +854,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== PRICE/STOCK HISTORY (DROP-25) =========================== */
 
-
     @Override
     @Transactional(readOnly = true)
     public List<HistoryPoint> priceHistory(UUID id, int days) {
@@ -868,17 +869,16 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== MARGIN ESTIMATE (DROP-24) =========================== */
 
-
     @Override
     @Transactional(readOnly = true)
     public MarginEstimate marginEstimate(UUID id, String country, int quantity, UUID variantId) {
-        ProductEntity p = productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product"));
+        ProductEntity p = productRepository.findById(id).orElseThrow(() -> new NotFoundException("Product"));
         int qty = Math.max(1, quantity);
         RoundingMode halfUp = RoundingMode.HALF_UP;
         // DROP-675: si se indica una variante, el envío usa su peso/dimensiones reales (no el del producto).
-        ProductVariantEntity variant = variantId == null ? null : p.getVariants().stream()
-                .filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
+        ProductVariantEntity variant = variantId == null
+                ? null
+                : p.getVariants().stream().filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
         CostBasis basis = costBasis(p, qty);
         BigDecimal costUsd = basis.unitSource() != null
                 ? currencyService.toUsd(basis.unitSource(), basis.sourceCurrency())
@@ -898,14 +898,12 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                         .multiply(BigDecimal.valueOf(100));
         // Presentar en la moneda activa (coherente con el resto de la tienda, vía X-Currency).
         String displayCode = pricingService.displayCurrencyCode();
-        return new MarginEstimate(
-                currencyService.usdToDisplay(costUsd).setScale(2, halfUp),
+        return new MarginEstimate(currencyService.usdToDisplay(costUsd).setScale(2, halfUp),
                 currencyService.usdToDisplay(retailUsd).setScale(2, halfUp),
                 currencyService.usdToDisplay(shippingUsd).setScale(2, halfUp),
                 currencyService.usdToDisplay(commissionUsd).setScale(2, halfUp),
-                currencyService.usdToDisplay(netUsd).setScale(2, halfUp),
-                marginPct.setScale(1, halfUp), displayCode, withMargin.appliedPercentage(),
-                basis.appliedTierMinQty());
+                currencyService.usdToDisplay(netUsd).setScale(2, halfUp), marginPct.setScale(1, halfUp), displayCode,
+                withMargin.appliedPercentage(), basis.appliedTierMinQty());
     }
 
     /** Precio unitario de origen del que parte la estimación, su divisa y el tramo que lo justifica. */

@@ -84,9 +84,10 @@ public class SearchIndexBootstrap {
         if (enElCatalogo == 0 || enElIndice >= enElCatalogo * PARTE_MINIMA_INDEXADA) {
             return;
         }
-        log.warn("::> [SEARCH] el índice '{}' está INCOMPLETO: {} documentos para {} productos del catálogo. "
-                + "La búsqueda no encontrará los que faltan aunque el listado sí los enseñe. "
-                + "Reconstrúyelo desde el panel (Catálogo → Sincronizar).",
+        log.warn(
+                "::> [SEARCH] el índice '{}' está INCOMPLETO: {} documentos para {} productos del catálogo. "
+                        + "La búsqueda no encontrará los que faltan aunque el listado sí los enseñe. "
+                        + "Reconstrúyelo desde el panel (Catálogo → Sincronizar).",
                 productIndexer.indexName(), enElIndice, enElCatalogo);
     }
 }

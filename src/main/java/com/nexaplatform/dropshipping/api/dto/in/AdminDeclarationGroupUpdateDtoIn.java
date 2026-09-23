@@ -11,6 +11,5 @@ import jakarta.validation.constraints.Size;
  * @param cname el {@code CName}; opcional aquí porque un grupo puede quedarse a medio redactar, pero
  *              solo se transmite si lleva ideogramas
  */
-public record AdminDeclarationGroupUpdateDtoIn(@NotBlank @Size(max = 512) String ename,
-        @Size(max = 512) String cname) {
+public record AdminDeclarationGroupUpdateDtoIn(@NotBlank @Size(max = 512) String ename, @Size(max = 512) String cname) {
 }

@@ -220,7 +220,8 @@ class WalletFlowIT extends BaseIntegration {
 
         assertThatThrownBy(() -> walletUseCase.charge(clienteId, 0L, UUID.randomUUID(), "cargo-cero", "cero"))
                 .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> walletUseCase.charge(clienteId, -500L, UUID.randomUUID(), "cargo-negativo", "negativo"))
+        assertThatThrownBy(
+                () -> walletUseCase.charge(clienteId, -500L, UUID.randomUUID(), "cargo-negativo", "negativo"))
                 .isInstanceOf(BusinessException.class);
 
         assertThat(saldoEnBd(clienteId)).as("ni el cero ni el negativo mueven el saldo").isEqualTo(1_000L);
@@ -366,16 +367,18 @@ class WalletFlowIT extends BaseIntegration {
         currencyRateService.applyBulkSync(Map.of("EUR", new BigDecimal("0.90"), "MXN", new BigDecimal("17.00")));
 
         // 10,00 € / 0,90 = 11,1111 USD → 1.111 céntimos (HALF_UP). Se cobran 10,00 € EXACTOS en EUR.
-        Map<String, Object> enEuros = json(HttpMethod.POST, ME_RECHARGE, clienteToken, Map.of("method", METODO_TARJETA,
-                DIVISA_MOSTRADA, "EUR", IMPORTE_MOSTRADO, new BigDecimal("10.00")), 200);
+        Map<String, Object> enEuros = json(HttpMethod.POST, ME_RECHARGE, clienteToken,
+                Map.of("method", METODO_TARJETA, DIVISA_MOSTRADA, "EUR", IMPORTE_MOSTRADO, new BigDecimal("10.00")),
+                200);
         assertThat(numero(enEuros, CAMPO_IMPORTE_USD)).isEqualTo(1_111L);
         assertThat(String.valueOf(enEuros.get("chargeCurrency"))).as("Stripe en EUR liquida en EUR").isEqualTo("EUR");
         assertThat(importeLiquidado(idDePago(enEuros))).as("se cobran los 10,00 € tecleados, ni un céntimo más")
                 .isEqualByComparingTo("10.00");
 
         // 100,00 MXN / 17,00 = 5,8824 USD → 588 céntimos. Se muestra en MXN pero se liquida en USD.
-        Map<String, Object> enPesos = json(HttpMethod.POST, ME_RECHARGE, clienteToken, Map.of("method", METODO_TARJETA,
-                DIVISA_MOSTRADA, "MXN", IMPORTE_MOSTRADO, new BigDecimal("100.00")), 200);
+        Map<String, Object> enPesos = json(HttpMethod.POST, ME_RECHARGE, clienteToken,
+                Map.of("method", METODO_TARJETA, DIVISA_MOSTRADA, "MXN", IMPORTE_MOSTRADO, new BigDecimal("100.00")),
+                200);
         assertThat(numero(enPesos, CAMPO_IMPORTE_USD)).isEqualTo(588L);
         assertThat(String.valueOf(enPesos.get("chargeCurrency"))).as("cualquier otra divisa liquida en USD")
                 .isEqualTo("USD");
@@ -390,8 +393,9 @@ class WalletFlowIT extends BaseIntegration {
     @Test
     @DisplayName("una recarga por debajo del mínimo de un dólar se rechaza")
     void recargaPorDebajoDelMinimoSeRechaza() {
-        peticion(HttpMethod.POST, ME_RECHARGE, clienteToken, Map.of("method", METODO_TARJETA, DIVISA_MOSTRADA, "USD",
-                IMPORTE_MOSTRADO, new BigDecimal("0.99")), null).expectStatus().isEqualTo(NO_PROCESABLE);
+        peticion(HttpMethod.POST, ME_RECHARGE, clienteToken,
+                Map.of("method", METODO_TARJETA, DIVISA_MOSTRADA, "USD", IMPORTE_MOSTRADO, new BigDecimal("0.99")),
+                null).expectStatus().isEqualTo(NO_PROCESABLE);
 
         assertThat(saldoEnBd(clienteId)).isZero();
     }
@@ -400,8 +404,9 @@ class WalletFlowIT extends BaseIntegration {
     @Test
     @DisplayName("una recarga por encima del tope se rechaza")
     void recargaPorEncimaDelTopeSeRechaza() {
-        peticion(HttpMethod.POST, ME_RECHARGE, clienteToken, Map.of("method", METODO_TARJETA, DIVISA_MOSTRADA, "USD",
-                IMPORTE_MOSTRADO, new BigDecimal("2000000")), null).expectStatus().isBadRequest();
+        peticion(HttpMethod.POST, ME_RECHARGE, clienteToken,
+                Map.of("method", METODO_TARJETA, DIVISA_MOSTRADA, "USD", IMPORTE_MOSTRADO, new BigDecimal("2000000")),
+                null).expectStatus().isBadRequest();
 
         assertThat(saldoEnBd(clienteId)).isZero();
     }
@@ -442,8 +447,8 @@ class WalletFlowIT extends BaseIntegration {
         sembrarSaldo(clienteId, 1_000L);
 
         peticion(HttpMethod.POST, String.format(ADMIN_ADJUST, clienteId), adminToken,
-                Map.of(CAMPO_IMPORTE, 0L, CAMPO_DESCRIPCION, "nada", CLAVE_IDEM, "aj-cero"), null)
-                .expectStatus().isEqualTo(NO_PROCESABLE);
+                Map.of(CAMPO_IMPORTE, 0L, CAMPO_DESCRIPCION, "nada", CLAVE_IDEM, "aj-cero"), null).expectStatus()
+                .isEqualTo(NO_PROCESABLE);
 
         assertThat(saldoEnBd(clienteId)).isEqualTo(1_000L);
         assertThat(numeroApuntes(clienteId)).isZero();
@@ -458,8 +463,8 @@ class WalletFlowIT extends BaseIntegration {
         Map<String, Object> cuerpo = new HashMap<>();
         cuerpo.put(CAMPO_IMPORTE, 500L);
         cuerpo.put(CAMPO_DESCRIPCION, "   ");
-        peticion(HttpMethod.POST, String.format(ADMIN_ADJUST, clienteId), adminToken, cuerpo, null)
-                .expectStatus().isBadRequest();
+        peticion(HttpMethod.POST, String.format(ADMIN_ADJUST, clienteId), adminToken, cuerpo, null).expectStatus()
+                .isBadRequest();
 
         assertThat(saldoEnBd(clienteId)).isEqualTo(1_000L);
         assertThat(numeroApuntes(clienteId)).isZero();
@@ -563,12 +568,12 @@ class WalletFlowIT extends BaseIntegration {
 
         // Las palancas de dinero del panel son exclusivas del administrador.
         peticion(HttpMethod.POST, String.format(ADMIN_TOPUP, clienteId), intrusoToken,
-                Map.of(CAMPO_IMPORTE, 100_000L, CAMPO_DESCRIPCION, "me regalo saldo"), null)
-                .expectStatus().isForbidden();
+                Map.of(CAMPO_IMPORTE, 100_000L, CAMPO_DESCRIPCION, "me regalo saldo"), null).expectStatus()
+                .isForbidden();
         peticion(HttpMethod.POST, String.format(ADMIN_ADJUST, clienteId), intrusoToken,
                 Map.of(CAMPO_IMPORTE, -5_000L, CAMPO_DESCRIPCION, "te vacío"), null).expectStatus().isForbidden();
-        peticion(HttpMethod.GET, String.format(ADMIN_DETAIL, clienteId), intrusoToken, null, null)
-                .expectStatus().isForbidden();
+        peticion(HttpMethod.GET, String.format(ADMIN_DETAIL, clienteId), intrusoToken, null, null).expectStatus()
+                .isForbidden();
 
         // Cada uno ve SU saldo, nunca el del otro.
         assertThat(saldoPorHttp(clienteToken)).isEqualTo(5_000L);
@@ -624,18 +629,19 @@ class WalletFlowIT extends BaseIntegration {
      * la fila ni reventar por la clave única.
      */
     private void sembrarSaldo(UUID userId, long centimos) {
-        int actualizadas = jdbcTemplate.update("UPDATE wallet SET balance_usd_cents = ?, updated_at = now()"
-                + " WHERE user_id = ?", centimos, userId);
+        int actualizadas = jdbcTemplate.update(
+                "UPDATE wallet SET balance_usd_cents = ?, updated_at = now()" + " WHERE user_id = ?", centimos, userId);
         if (actualizadas == 0) {
-            jdbcTemplate.update("INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
-                    + " status, created_at, updated_at) VALUES (?, ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
+            jdbcTemplate.update(
+                    "INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
+                            + " status, created_at, updated_at) VALUES (?, ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
                     UUID.randomUUID(), userId, centimos);
         }
     }
 
     private long saldoEnBd(UUID userId) {
-        Long saldo = jdbcTemplate.queryForObject("SELECT coalesce(max(balance_usd_cents), 0) FROM wallet"
-                + " WHERE user_id = ?", Long.class, userId);
+        Long saldo = jdbcTemplate.queryForObject(
+                "SELECT coalesce(max(balance_usd_cents), 0) FROM wallet" + " WHERE user_id = ?", Long.class, userId);
         return saldo == null ? 0L : saldo;
     }
 

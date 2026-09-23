@@ -262,9 +262,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
             @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv,
-            @Param("verified") Boolean verified,
-            @Param("lang") String lang, @Param("wide") boolean wide, @Param("ranked") boolean ranked,
-            Pageable pageable);
+            @Param("verified") Boolean verified, @Param("lang") String lang, @Param("wide") boolean wide,
+            @Param("ranked") boolean ranked, Pageable pageable);
 
     /**
      * Productos del escaparate restringidos a un conjunto de identificadores — el camino que se usa cuando
@@ -347,8 +346,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                           OR nx_norm(t2.description)   LIKE CONCAT('%', nx_norm(:needle), '%')))))
             """)
     @SuppressWarnings("java:S107")
-    Page<ProductEntity> searchAdminEnRango(@Param("status") ProductStatus status,
-            @Param("categoryId") UUID categoryId,
+    Page<ProductEntity> searchAdminEnRango(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
             @Param("needle") String needle, @Param("verified") Boolean verified, @Param("lang") String lang,
             @Param("wide") boolean wide,
             // Filtros de la tabla del panel. El COSTE va en CNY, que es como está guardado: la columna del
@@ -357,8 +355,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             @Param("minCost") BigDecimal minCost, @Param("maxCost") BigDecimal maxCost,
             @Param("minSales") Integer minSales, @Param("minTrend") BigDecimal minTrend,
             @Param("conDesde") boolean conDesde, @Param("createdFrom") Instant createdFrom,
-            @Param("conHasta") boolean conHasta, @Param("createdTo") Instant createdTo,
-            Pageable pageable);
+            @Param("conHasta") boolean conHasta, @Param("createdTo") Instant createdTo, Pageable pageable);
 
     /**
      * La búsqueda del panel, con el rango por fecha de CARGA opcional.
@@ -375,11 +372,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
      */
     @SuppressWarnings("java:S107")
     default Page<ProductEntity> searchAdmin(ProductStatus status, UUID categoryId, String needle, Boolean verified,
-            String lang, boolean wide, BigDecimal minCost, BigDecimal maxCost, Integer minSales,
-            BigDecimal minTrend, Instant createdFrom, Instant createdTo, Pageable pageable) {
+            String lang, boolean wide, BigDecimal minCost, BigDecimal maxCost, Integer minSales, BigDecimal minTrend,
+            Instant createdFrom, Instant createdTo, Pageable pageable) {
         return searchAdminEnRango(status, categoryId, needle, verified, lang, wide, minCost, maxCost, minSales,
-                minTrend, createdFrom != null, createdFrom == null ? Instant.EPOCH : createdFrom,
-                createdTo != null, createdTo == null ? Instant.EPOCH : createdTo, pageable);
+                minTrend, createdFrom != null, createdFrom == null ? Instant.EPOCH : createdFrom, createdTo != null,
+                createdTo == null ? Instant.EPOCH : createdTo, pageable);
     }
 
     /** IDs (distintos) de categorías con productos del estado dado ingeridos desde {@code since} — campaña de novedades. */
@@ -437,8 +434,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             ORDER BY p.trendScore DESC, p.monthlySales DESC, p.id ASC
             """)
     List<UUID> idsForCustomsTerna(@Param("status") ProductStatus status, @Param("hs6") String hs6,
-            @Param("material") String material, @Param("usageCode") String usageCode,
-            @Param("origin") String origin);
+            @Param("material") String material, @Param("usageCode") String usageCode, @Param("origin") String origin);
 
     // ── v164: espejado del vídeo. Mismos métodos que ProductImageRepository usa para las imágenes, para
     // que el servicio de vídeo sea el mismo mecanismo y no uno nuevo que haya que aprender aparte. ──
@@ -455,8 +451,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Modifying
     @Transactional
     @Query("UPDATE ProductEntity p SET p.videoCdnUrl = :cdnUrl, p.videoBytes = :bytes, p.videoHash = :hash, "
-            + "p.videoMirrorStatus = :status, p.videoMirroredAt = :at, p.videoMirrorAttempts = 0 "
-            + "WHERE p.id = :id")
+            + "p.videoMirrorStatus = :status, p.videoMirroredAt = :at, p.videoMirrorAttempts = 0 " + "WHERE p.id = :id")
     void markVideoMirrored(@Param("id") UUID id, @Param("cdnUrl") String cdnUrl, @Param("bytes") Long bytes,
             @Param("hash") String hash, @Param("status") MirrorStatus status, @Param("at") Instant at);
 
@@ -476,8 +471,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Query("SELECT p FROM ProductEntity p "
             + "WHERE p.videoMirrorStatus = com.nexaplatform.dropshipping.domain.enums.MirrorStatus.FAILED "
             + "AND coalesce(p.videoMirrorAttempts, 0) < :maxAttempts ORDER BY p.updatedAt ASC LIMIT :limit")
-    List<ProductEntity> findVideosFailedForRetry(@Param("maxAttempts") int maxAttempts,
-            @Param("limit") int limit);
+    List<ProductEntity> findVideosFailedForRetry(@Param("maxAttempts") int maxAttempts, @Param("limit") int limit);
 
     // ── v165: anuncio al bus, diferido. La petición marca; el barrido construye y publica. ──
 

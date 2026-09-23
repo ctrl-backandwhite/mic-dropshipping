@@ -40,13 +40,13 @@ public class PartnerPaymentController implements PartnerPaymentApi {
 
     @Override
     public ResponseEntity<List<OrderPaymentDtoOut>> list(Jwt jwt, UUID orderId) {
-        return ResponseEntity.ok(
-                orderPaymentDtoMapper.toDtoOutList(paymentUseCase.listOrderPaymentsForPartner(jwt, orderId)));
+        return ResponseEntity
+                .ok(orderPaymentDtoMapper.toDtoOutList(paymentUseCase.listOrderPaymentsForPartner(jwt, orderId)));
     }
 
     @Override
     public ResponseEntity<OrderPaymentDtoOut> get(Jwt jwt, UUID orderId, UUID paymentId) {
-        return ResponseEntity.ok(
-                orderPaymentDtoMapper.toDtoOut(paymentUseCase.getOrderPaymentForPartner(jwt, orderId, paymentId)));
+        return ResponseEntity
+                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.getOrderPaymentForPartner(jwt, orderId, paymentId)));
     }
 }

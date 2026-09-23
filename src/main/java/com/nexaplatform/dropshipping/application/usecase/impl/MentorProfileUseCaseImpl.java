@@ -46,8 +46,8 @@ public class MentorProfileUseCaseImpl implements MentorProfileUseCase {
             return false;
         }
         return !email.startsWith("admin@") && !email.startsWith("operator@") && !email.startsWith("customer@")
-                && !email.startsWith("partner@") && !email.endsWith("@partners.nx036.local")
-                && !email.contains("qa-") && !email.endsWith("@example.com");
+                && !email.startsWith("partner@") && !email.endsWith("@partners.nx036.local") && !email.contains("qa-")
+                && !email.endsWith("@example.com");
     }
 
     @Override

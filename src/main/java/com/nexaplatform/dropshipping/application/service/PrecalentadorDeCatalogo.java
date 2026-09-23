@@ -57,9 +57,8 @@ import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CAC
 @RequiredArgsConstructor
 public class PrecalentadorDeCatalogo {
 
-    private static final ProductListFilters SIN_FILTROS =
-            new ProductListFilters(null, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null);
+    private static final ProductListFilters SIN_FILTROS = new ProductListFilters(null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null);
 
     private final StorefrontCatalogApi catalogo;
     private final CatalogStorefrontReadService lectura;

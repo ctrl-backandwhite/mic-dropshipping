@@ -100,13 +100,16 @@ class OrderChargeMatchesShownTotalTest {
         PaymentGateway tarjeta = mock(PaymentGateway.class);
         when(tarjeta.supports(PaymentMethod.CARD)).thenReturn(true);
         when(tarjeta.providerName()).thenReturn("stripe");
-        when(tarjeta.initiate(any())).thenReturn(
-                new PaymentGateway.InitiateResult("ref-1", null, null, null, null, null, Map.of()));
+        when(tarjeta.initiate(any()))
+                .thenReturn(new PaymentGateway.InitiateResult("ref-1", null, null, null, null, null, Map.of()));
 
-        subject = new PaymentUseCaseImpl(List.of(tarjeta), paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, mock(PartnerPlanSyncService.class),
-                mock(CustomerSubscriptionUseCase.class), mock(SubscriptionNotificationService.class),
-                new ObjectMapper(), mock(OrderEmailService.class), currencyRateService, new OrderAmounts(currencyRateService), mock(StockService.class),
+        subject = new PaymentUseCaseImpl(List.of(tarjeta), paymentRepository, paymentJpaRepositoryAdapter,
+                userRepository, orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, mock(PartnerPlanSyncService.class), mock(CustomerSubscriptionUseCase.class),
+                mock(SubscriptionNotificationService.class), new ObjectMapper(), mock(OrderEmailService.class),
+                currencyRateService, new OrderAmounts(currencyRateService), mock(StockService.class),
                 mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))

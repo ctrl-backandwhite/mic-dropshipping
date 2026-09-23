@@ -22,17 +22,13 @@ class WalletUpdateMapperTest {
     void updateFromModel_copiesEditableFieldsAndPreservesIdentityAndAudit() {
         UUID id = UUID.randomUUID();
         Instant createdAt = Instant.parse("2020-01-01T00:00:00Z");
-        Wallet target = Wallet.builder()
-                .id(id).userId(UUID.randomUUID())
-                .balanceUsdCents(1000L).holdUsdCents(200L).currencyDefault("USD").status("ACTIVE")
-                .createdAt(createdAt).createdBy("creator").updatedBy("editor1")
+        Wallet target = Wallet.builder().id(id).userId(UUID.randomUUID()).balanceUsdCents(1000L).holdUsdCents(200L)
+                .currencyDefault("USD").status("ACTIVE").createdAt(createdAt).createdBy("creator").updatedBy("editor1")
                 .build();
 
-        Wallet source = Wallet.builder()
-                .id(UUID.randomUUID()).userId(UUID.randomUUID())
-                .balanceUsdCents(5000L).holdUsdCents(0L).currencyDefault("EUR").status("FROZEN")
-                .createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2")
-                .build();
+        Wallet source = Wallet.builder().id(UUID.randomUUID()).userId(UUID.randomUUID()).balanceUsdCents(5000L)
+                .holdUsdCents(0L).currencyDefault("EUR").status("FROZEN")
+                .createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2").build();
 
         mapper.updateFromModel(source, target);
 

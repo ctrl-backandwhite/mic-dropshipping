@@ -78,8 +78,8 @@ class CartServiceTest {
     }
 
     private CartItemEntity lineaGuardada(int cantidad) {
-        return CartItemEntity.builder()
-                .userId(userId).productId(productId).variantId(variantId).quantity(cantidad).title("viejo").build();
+        return CartItemEntity.builder().userId(userId).productId(productId).variantId(variantId).quantity(cantidad)
+                .title("viejo").build();
     }
 
     private CartItemEntity capturarGuardado() {
@@ -317,9 +317,8 @@ class CartServiceTest {
     @Test
     @DisplayName("listar mapea las entidades a su dto")
     void listarMapeaLasEntidadesAsuDto() {
-        CartItemEntity entity = CartItemEntity.builder()
-                .userId(userId).productId(productId).variantId(variantId).quantity(4)
-                .slug("camisa-roja").title("Camisa roja").unitPriceSource(new BigDecimal("10.00"))
+        CartItemEntity entity = CartItemEntity.builder().userId(userId).productId(productId).variantId(variantId)
+                .quantity(4).slug("camisa-roja").title("Camisa roja").unitPriceSource(new BigDecimal("10.00"))
                 .sourceCurrency("EUR").build();
         when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(entity));
 
@@ -358,8 +357,7 @@ class CartServiceTest {
     void entreVariasFotosGanaLaPrincipalNoLaPrimera() {
         when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(lineaSinFoto()));
         when(productImageRepository.findByProductIdInOrderByPositionAsc(List.of(productId)))
-                .thenReturn(List.of(
-                        imagen("GALLERY", 0, "https://img.nx036.com/primera.jpg"),
+                .thenReturn(List.of(imagen("GALLERY", 0, "https://img.nx036.com/primera.jpg"),
                         imagen("MAIN", 1, "https://img.nx036.com/principal.jpg")));
 
         assertThat(service.list(userId).get(0).image()).isEqualTo("https://img.nx036.com/principal.jpg");
@@ -428,10 +426,9 @@ class CartServiceTest {
     }
 
     private CartItemEntity lineaSinFoto() {
-        return CartItemEntity.builder()
-                .userId(userId).productId(productId).variantId(variantId).quantity(2)
-                .slug("camisa-roja").title("Camisa roja").unitPriceSource(new BigDecimal("10.00"))
-                .sourceCurrency("EUR").build();
+        return CartItemEntity.builder().userId(userId).productId(productId).variantId(variantId).quantity(2)
+                .slug("camisa-roja").title("Camisa roja").unitPriceSource(new BigDecimal("10.00")).sourceCurrency("EUR")
+                .build();
     }
 
     private ProductImageEntity imagen(String papel, int posicion, String cdnUrl) {

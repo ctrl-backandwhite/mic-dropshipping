@@ -86,7 +86,8 @@ class CatalogDutyBadgeTest {
     void unProductoDelMismoGrupoNoSumaArancel() {
         // Los dos viajan con la MISMA descripción —la del grupo aprobado—, así que la aduana los cuenta
         // como una sola línea: añadirlo al carrito no cuesta un derecho más.
-        catalogoCon(producto(EN_CARRITO, "620443", "Women's dresses"), producto(MISMO_GRUPO, "620443", "Women's dresses"));
+        catalogoCon(producto(EN_CARRITO, "620443", "Women's dresses"),
+                producto(MISMO_GRUPO, "620443", "Women's dresses"));
 
         Map<UUID, DutyBadge> badges = service.badgesFor(List.of(EN_CARRITO), List.of(MISMO_GRUPO), "ES");
 
@@ -132,7 +133,8 @@ class CatalogDutyBadgeTest {
         // pagan 3 EUR cada uno. Comparar grupos sin repartir en bultos daría una promesa falsa y esos
         // 3 EUR los pondría el comercio al despachar.
         ReflectionTestUtils.setField(dutyLines, "maxParcelWeightGrams", 600);
-        catalogoCon(producto(EN_CARRITO, "620443", "Women's dresses"), producto(MISMO_GRUPO, "620443", "Women's dresses"));
+        catalogoCon(producto(EN_CARRITO, "620443", "Women's dresses"),
+                producto(MISMO_GRUPO, "620443", "Women's dresses"));
 
         Map<UUID, DutyBadge> badges = service.badgesFor(List.of(EN_CARRITO), List.of(MISMO_GRUPO), "ES");
 
@@ -144,9 +146,9 @@ class CatalogDutyBadgeTest {
         // Un grupo sin aprobar no agrupa nada: ofrecer «ver los que no suman arancel» sería una promesa
         // que la aduana no va a cumplir.
         catalogoCon(producto(MISMO_GRUPO, "620443", "Women's dresses"));
-        when(groupRepository.findAllByOrderByProductCountDesc()).thenReturn(List.of(
-                CustomsDeclarationGroupEntity.builder().id(GRUPO).hs6("620443").material("POLYESTER")
-                        .usageCode("DRESS").ename("Women's dresses").approvedAt(null).build()));
+        when(groupRepository.findAllByOrderByProductCountDesc())
+                .thenReturn(List.of(CustomsDeclarationGroupEntity.builder().id(GRUPO).hs6("620443")
+                        .material("POLYESTER").usageCode("DRESS").ename("Women's dresses").approvedAt(null).build()));
 
         Map<UUID, DutyBadge> badges = service.badgesFor(List.of(), List.of(MISMO_GRUPO), "ES");
 
@@ -213,8 +215,8 @@ class CatalogDutyBadgeTest {
     }
 
     private void grupoAprobado() {
-        when(groupRepository.findAllByOrderByProductCountDesc()).thenReturn(List.of(
-                CustomsDeclarationGroupEntity.builder().id(GRUPO).hs6("620443").material("POLYESTER")
+        when(groupRepository.findAllByOrderByProductCountDesc()).thenReturn(
+                List.of(CustomsDeclarationGroupEntity.builder().id(GRUPO).hs6("620443").material("POLYESTER")
                         .usageCode("DRESS").ename("Women's dresses").approvedAt(Instant.now()).build()));
     }
 
@@ -234,7 +236,6 @@ class CatalogDutyBadgeTest {
     }
 
     private static String descripcionDe(Object producto) {
-        return Optional.ofNullable(CustomsDutyLinesService.declaredDescriptionOf((ProductEntity) producto))
-                .orElse("");
+        return Optional.ofNullable(CustomsDutyLinesService.declaredDescriptionOf((ProductEntity) producto)).orElse("");
     }
 }

@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,104 @@ public class PricingService {
     private final MarginService marginService;
     /** Solo para saber si el destino del comprador cobra derecho por artículo. */
     private final CustomsValuationService customsValuation;
+
+    /**
+     * El precio de una CANTIDAD concreta: aplica el tramo por cantidad que le toca (23-sep-2026).
+     *
+     * <p>Hasta esta fecha la tabla de cantidades de la ficha era pura decoracion. Anunciaba «1000+ ->
+     * 5,14 EUR», el cliente metia mil unidades en la cesta y se le cobraban 5,78 EUR cada una, porque
+     * ni la cesta, ni la vista previa, ni el pedido consultaban los tramos. La promesa que hace vender
+     * mas unidades no se cumplia en la unica pantalla donde importa: la del pago.
+     *
+     * <p><b>El tramo se aplica como PROPORCION sobre el precio de la variante, no como importe
+     * absoluto.</b> Los tramos son del PRODUCTO —las 19.568 filas del catalogo tienen la variante a
+     * nulo— mientras que cada variante tiene su propio coste, y en 713 productos hay una variante mas
+     * cara que el primer tramo, hasta 300 CNY por encima. Cobrar a esa variante el importe literal del
+     * tramo seria venderla por debajo de coste justo en los pedidos grandes, que es donde mas duele.
+     * Con la proporcion, el descuento por volumen que declara el proveedor se respeta y el sobreprecio
+     * de la variante tambien.
+     *
+     * <p>La proporcion se mide contra el PRIMER tramo, que es el precio de una unidad. Asi el tramo
+     * inicial vale exactamente lo mismo que el precio de portada —factor 1— y la tabla de cantidades
+     * deja de contradecir a la cifra grande de la ficha, cosa que hoy hace en esos mismos 713.
+     *
+     * @param quantity unidades de ESTE producto en todo el pedido, no solo en esta linea: el pedido
+     *                 minimo ya se cuenta asi, y a quien se lleva cien unidades repartidas en dos
+     *                 tallas hay que hacerle el mismo precio que a quien se lleva cien de una.
+     */
+    public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant, int quantity,
+            List<ProductPriceTierEntity> tiers) {
+        BigDecimal factor = factorDelTramo(tiers, quantity);
+        ProductPriceTierEntity aplicable = tramoAplicable(tiers, quantity);
+        // El recargo del tramo manda sobre el del producto; nulo = el tramo no tiene uno propio.
+        BigDecimal recargoDelTramo = aplicable != null ? aplicable.getSurchargeCny() : null;
+
+        // Sin descuento que aplicar Y sin recargo propio no hay nada que cambiar.
+        //
+        // Las dos condiciones, y la segunda faltaba: `factorDelTramo` devuelve nulo cuando el tramo
+        // ES el primero —no hay proporcion que medir contra si mismo— y por ahi se salia al precio
+        // normal, que usa el recargo del PRODUCTO. Resultado: un recargo escrito para 1-9 unidades
+        // se guardaba en `product_price_tier.surcharge_cny` y no se cobraba nunca, sin un solo
+        // error. Y el primer tramo lo tienen TODOS los productos, asi que era justo el caso mas
+        // comun del cambio del 23-sep-2026.
+        if (factor == null && recargoDelTramo == null) {
+            return priceFor(product, variant);
+        }
+        ProductVariantEntity effective = variant != null ? variant : representativeVariant(product);
+        BigDecimal base = effective != null && effective.getPrice() != null
+                ? effective.getPrice()
+                : product.getBasePrice();
+        if (base == null) {
+            return priceFor(product, variant);
+        }
+        // Sin proporcion se cobra la base tal cual: el primer escalon no descuenta nada, pero su
+        // recargo si cuenta.
+        BigDecimal proporcion = factor != null ? factor : BigDecimal.ONE;
+        return priceForSupplierAmount(product, effective, base.multiply(proporcion), recargoDelTramo);
+    }
+
+    /**
+     * Cuanto multiplica al precio el tramo que corresponde a esta cantidad, o nulo si no hay descuento
+     * que aplicar (sin tramos, cantidad en el primer escalon, o datos que no permiten dividir).
+     */
+    private BigDecimal factorDelTramo(List<ProductPriceTierEntity> tiers, int quantity) {
+        ProductPriceTierEntity tramo = tramoAplicable(tiers, quantity);
+        if (tramo == null || tramo.getUnitPrice() == null) {
+            return null;
+        }
+        ProductPriceTierEntity primero = tiers.stream().min(Comparator.comparingInt(ProductPriceTierEntity::getMinQty))
+                .orElse(null);
+        // Sin un primer tramo utilizable no hay contra que medir la proporcion. Se deja el precio como
+        // esta en vez de inventar una referencia: un factor mal calculado se cobra.
+        if (primero == null || primero.getUnitPrice() == null || primero.getUnitPrice().signum() <= 0) {
+            return null;
+        }
+        if (tramo == primero) {
+            return null;
+        }
+        return tramo.getUnitPrice().divide(primero.getUnitPrice(), 10, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * El tramo cuyo rango [minQty, maxQty] contiene la cantidad.
+     *
+     * <p>Gana el de mayor minQty de los que la cantidad alcanza: son escalones «a partir de N», no
+     * franjas sueltas, y el proveedor no siempre cierra el maximo del ultimo.
+     */
+    private ProductPriceTierEntity tramoAplicable(List<ProductPriceTierEntity> tiers, int quantity) {
+        if (tiers == null || tiers.isEmpty()) {
+            return null;
+        }
+        ProductPriceTierEntity mejor = null;
+        for (ProductPriceTierEntity t : tiers) {
+            Integer max = t.getMaxQty();
+            boolean cabe = quantity >= t.getMinQty() && (max == null || quantity <= max);
+            if (cabe && (mejor == null || t.getMinQty() > mejor.getMinQty())) {
+                mejor = t;
+            }
+        }
+        return mejor;
+    }
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
         // DROP-629: the product's headline price must be traceable to a real, purchasable
@@ -79,6 +178,23 @@ public class PricingService {
      */
     public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
             BigDecimal supplierAmount) {
+        return priceForSupplierAmount(product, effective, supplierAmount, null);
+    }
+
+    /**
+     * Lo mismo, pero con el recargo de un TRAMO concreto en vez del del producto (23-sep-2026).
+     *
+     * <p>El recargo cubre un coste que no escala con la cantidad -la gestion de la compra, el
+     * manipulado, la parte fija del despacho-, asi que cobrarlo igual por una unidad que por diez mil
+     * encarece el pedido grande justo donde la tabla de cantidades promete lo contrario. El envio y el
+     * arancel NO se tocan: esos si escalan con el bulto y siguen siendo uno por producto.
+     *
+     * <p>{@code surchargeOverrideCny} nulo significa «este tramo no tiene recargo propio», y entonces
+     * se usa el del producto. Nulo y cero son cosas distintas a proposito: cero es un recargo de cero
+     * que alguien ha escrito, y tiene que poder escribirse.
+     */
+    public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
+            BigDecimal supplierAmount, BigDecimal surchargeOverrideCny) {
         if (product == null) {
             return unpriced();
         }
@@ -92,13 +208,26 @@ public class PricingService {
         BigDecimal supplierIvaUsd = product.getIvaCny() != null
                 ? currencyService.toUsd(product.getIvaCny(), sourceCurrency)
                 : BigDecimal.ZERO;
-        BigDecimal supplierShippingUsd = product.getShippingCny() != null
-                ? currencyService.toUsd(product.getShippingCny(), sourceCurrency)
+        // El envío de la VARIANTE manda sobre el del producto (23-sep-2026).
+        //
+        // El envío nacional chino se calcula por tramos de PESO, y en una misma ficha una talla
+        // pesa 800 g y otra 1,2 kg: 10 CNY y 16. Con un único importe por producto había que
+        // elegir entre cobrar de menos en la pesada o de más en la ligera.
+        //
+        // Mismo criterio que el recargo del tramo, y por el mismo motivo: nulo = esta variante no
+        // declara envío propio y hereda el del producto. Las 225.959 variantes ya cargadas tienen
+        // la columna vacía, así que tratar el nulo como cero las pondría a portes gratis.
+        BigDecimal envioCny = effective != null && effective.getShippingCny() != null
+                ? effective.getShippingCny()
+                : product.getShippingCny();
+        BigDecimal supplierShippingUsd = envioCny != null
+                ? currencyService.toUsd(envioCny, sourceCurrency)
                 : BigDecimal.ZERO;
         // Recargo fijo por producto (surcharge_cny, default 0): lo fija el admin y se suma al precio de
         // venta tal cual, SIN margen — es un cargo directo que él decide, no un coste de proveedor.
-        BigDecimal surchargeUsd = product.getSurchargeCny() != null && product.getSurchargeCny().signum() != 0
-                ? currencyService.toUsd(product.getSurchargeCny(), sourceCurrency)
+        BigDecimal surchargeCny = surchargeOverrideCny != null ? surchargeOverrideCny : product.getSurchargeCny();
+        BigDecimal surchargeUsd = surchargeCny != null && surchargeCny.signum() != 0
+                ? currencyService.toUsd(surchargeCny, sourceCurrency)
                 : BigDecimal.ZERO;
         // Bolsas de subvención (1-sep-2026): igual que el recargo, se suman al precio de venta SIN margen.
         // El cliente las paga aquí y se le descuentan después del envío y del arancel del pedido, que es

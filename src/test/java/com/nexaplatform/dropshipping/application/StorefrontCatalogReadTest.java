@@ -68,11 +68,12 @@ class StorefrontCatalogReadTest {
 
     @org.junit.jupiter.api.BeforeEach
     void precioDeVentaPorDefecto() {
-        com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount venta =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount.class);
+        com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount venta = org.mockito.Mockito
+                .mock(com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount.class);
         org.mockito.Mockito.lenient().when(venta.displayAmount()).thenReturn(java.math.BigDecimal.ONE);
-        org.mockito.Mockito.lenient().when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity.class)))
+        org.mockito.Mockito.lenient()
+                .when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(
+                        com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity.class)))
                 .thenReturn(venta);
     }
 
@@ -158,8 +159,7 @@ class StorefrontCatalogReadTest {
         hija.getTranslations().add(translation("es", "Relojes"));
         when(categoryRepository.findBySlug("moda-relojes")).thenReturn(Optional.of(hija));
 
-        List<CategoryBreadcrumb> migas =
-                service.categoryBreadcrumb("moda-relojes", "es");
+        List<CategoryBreadcrumb> migas = service.categoryBreadcrumb("moda-relojes", "es");
 
         assertThat(migas).extracting("name").containsExactly("Moda", "Relojes");
     }
@@ -176,15 +176,9 @@ class StorefrontCatalogReadTest {
     // ---------------------------------------------------------------- ordenación
 
     @ParameterizedTest
-    @CsvSource({
-            "price_asc,  basePrice,      ASC",
-            "price_desc, basePrice,      DESC",
-            "newest,     createdAt,      DESC",
-            "sales,      monthlySales,   DESC",
-            "lists,      monthlySales,   DESC",
-            "rating,     rating,         DESC",
-            "inventory,  inventoryCount, DESC"
-    })
+    @CsvSource({"price_asc,  basePrice,      ASC", "price_desc, basePrice,      DESC",
+            "newest,     createdAt,      DESC", "sales,      monthlySales,   DESC", "lists,      monthlySales,   DESC",
+            "rating,     rating,         DESC", "inventory,  inventoryCount, DESC"})
     void cadaOrdenPedidoSeTraduceASuCampo(String sort, String field, String direction) {
         Sort spec = service.sortFor(sort);
 
@@ -301,8 +295,7 @@ class StorefrontCatalogReadTest {
     }
 
     private static ProductSummaryView summaryOf(ProductEntity p) {
-        ProductSummaryView v =
-                mock(ProductSummaryView.class);
+        ProductSummaryView v = mock(ProductSummaryView.class);
         when(v.id()).thenReturn(p.getId());
         return v;
     }

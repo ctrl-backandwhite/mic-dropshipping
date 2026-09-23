@@ -85,16 +85,13 @@ public class AffiliateProgramService {
             return;
         }
         try {
-            UserEntity u = userRepository
-                    .findById(userId).orElse(null);
+            UserEntity u = userRepository.findById(userId).orElse(null);
             if (u == null) {
                 return;
             }
             Map<String, Object> inAppPayload = payload != null ? new HashMap<>(payload) : new HashMap<>();
-            notificationRepo.save(
-                    NotificationEntity.builder().user(u)
-                            .eventType(eventType).title(title).body(body).channel("IN_APP")
-                            .payload(inAppPayload).build());
+            notificationRepo.save(NotificationEntity.builder().user(u).eventType(eventType).title(title).body(body)
+                    .channel("IN_APP").payload(inAppPayload).build());
             // Email via Kafka (notifications.dispatch → EmailDispatchConsumer). Marketing → opt-out aware.
             Map<String, Object> extra = new HashMap<>();
             extra.put("title", title);
@@ -162,9 +159,11 @@ public class AffiliateProgramService {
         String fullName = composeFullName(joiner);
         String email = joiner.getEmail();
         String country = joiner.getCountry() != null && !joiner.getCountry().isBlank()
-                ? joiner.getCountry().trim() : null;
+                ? joiner.getCountry().trim()
+                : null;
         String company = joiner.getCompanyName() != null && !joiner.getCompanyName().isBlank()
-                ? joiner.getCompanyName().trim() : null;
+                ? joiner.getCompanyName().trim()
+                : null;
         String userId = joiner.getId() != null ? joiner.getId().toString() : null;
 
         StringBuilder body = new StringBuilder("Nuevo afiliado: ").append(fullName);
@@ -208,9 +207,10 @@ public class AffiliateProgramService {
      * anotación que no se aplica nunca; la transacción la abre el método público de entrada.
      */
     private AffiliateProgramConfigEntity currentConfig() {
-        return configRepo.findFirstByOrderByCreatedAtAsc().orElseGet(() -> AffiliateProgramConfigEntity.builder()
-                .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
-                .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build());
+        return configRepo.findFirstByOrderByCreatedAtAsc()
+                .orElseGet(() -> AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
+                        .attributionWindowDays(30).returnPeriodDays(14).minPayoutCents(5000).currency("EUR")
+                        .attributionModel("LAST_CLICK").build());
     }
 
     @Transactional
@@ -218,12 +218,18 @@ public class AffiliateProgramService {
             Long minPayoutCents, String currency, Long maxCommissionPeriodCents) {
         AffiliateProgramConfigEntity c = configRepo.findFirstByOrderByCreatedAtAsc()
                 .orElseGet(() -> configRepo.save(currentConfig()));
-        if (defaultPercent != null) c.setDefaultPercent(defaultPercent);
-        if (windowDays != null) c.setAttributionWindowDays(windowDays);
-        if (returnDays != null) c.setReturnPeriodDays(returnDays);
-        if (minPayoutCents != null) c.setMinPayoutCents(minPayoutCents);
-        if (currency != null && !currency.isBlank()) c.setCurrency(currency);
-        if (maxCommissionPeriodCents != null) c.setMaxCommissionPeriodCents(maxCommissionPeriodCents);
+        if (defaultPercent != null)
+            c.setDefaultPercent(defaultPercent);
+        if (windowDays != null)
+            c.setAttributionWindowDays(windowDays);
+        if (returnDays != null)
+            c.setReturnPeriodDays(returnDays);
+        if (minPayoutCents != null)
+            c.setMinPayoutCents(minPayoutCents);
+        if (currency != null && !currency.isBlank())
+            c.setCurrency(currency);
+        if (maxCommissionPeriodCents != null)
+            c.setMaxCommissionPeriodCents(maxCommissionPeriodCents);
         return configRepo.save(c);
     }
 
@@ -237,13 +243,11 @@ public class AffiliateProgramService {
 
     /** Cuerpo sin anotar de {@link #getOrCreateForUser(UUID)}: es al que llaman los métodos de esta clase. */
     private AffiliateEntity getOrCreateAffiliate(UUID userId) {
-        UserEntity user = userRepository.findById(userId).orElseThrow(
-                () -> new NotFoundException("User not found"));
+        UserEntity user = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         // Data rule: admin/operator accounts cannot be affiliates.
         String role = user.getRole() != null ? user.getRole().name() : "";
         if ("ADMIN".equals(role) || "OPERATOR".equals(role)) {
-            throw new BusinessException(
-                    "Las cuentas de administración no pueden ser afiliados");
+            throw new BusinessException("Las cuentas de administración no pueden ser afiliados");
         }
         AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseGet(() -> {
             // Nace PENDING/inactivo: hasta que un admin lo apruebe no gana comisiones ni cuenta clics (la
@@ -255,8 +259,8 @@ public class AffiliateProgramService {
         // Ensure at least one referral code row exists.
         if (codeRepo.findByAffiliateIdOrderByCreatedAtAsc(affiliate.getId()).isEmpty()) {
             codeRepo.save(AffiliateReferralCodeEntity.builder().affiliate(affiliate)
-                    .code(affiliate.getCode() != null ? affiliate.getCode() : generateUniqueCode(user))
-                    .label("Primary").active(true).build());
+                    .code(affiliate.getCode() != null ? affiliate.getCode() : generateUniqueCode(user)).label("Primary")
+                    .active(true).build());
         }
         affiliateIndexer.indexAffiliate(affiliate); // auto-sync del índice al crear/obtener el afiliado
         return affiliate;
@@ -290,11 +294,11 @@ public class AffiliateProgramService {
 
     @Transactional
     public AffiliateReferralCodeEntity addCode(UUID affiliateId, String label) {
-        AffiliateEntity affiliate = affiliateRepo.findById(affiliateId).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
-        return codeRepo.save(AffiliateReferralCodeEntity.builder().affiliate(affiliate)
-                .code(generateUniqueCode(affiliate.getUser())).label(label != null ? label : "Link").active(true)
-                .build());
+        AffiliateEntity affiliate = affiliateRepo.findById(affiliateId)
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        return codeRepo.save(
+                AffiliateReferralCodeEntity.builder().affiliate(affiliate).code(generateUniqueCode(affiliate.getUser()))
+                        .label(label != null ? label : "Link").active(true).build());
     }
 
     /**
@@ -307,8 +311,8 @@ public class AffiliateProgramService {
      */
     @Transactional
     public AffiliateReferralCodeEntity setCodeActive(UUID userId, UUID codeId, boolean active) {
-        AffiliateReferralCodeEntity c = codeRepo.findById(codeId).orElseThrow(
-                () -> new NotFoundException("Code not found"));
+        AffiliateReferralCodeEntity c = codeRepo.findById(codeId)
+                .orElseThrow(() -> new NotFoundException("Code not found"));
         UUID owner = c.getAffiliate() != null ? c.getAffiliate().getId() : null;
         UUID mine = affiliateRepo.findByUser_Id(userId).map(AffiliateEntity::getId).orElse(null);
         if (owner == null || !owner.equals(mine)) {
@@ -332,8 +336,10 @@ public class AffiliateProgramService {
 
     private String generateUniqueCode(UserEntity u) {
         String base = codeSeed(u).toLowerCase().replaceAll("[^a-z0-9]", "");
-        if (base.isBlank()) base = "ref";
-        if (base.length() > 8) base = base.substring(0, 8);
+        if (base.isBlank())
+            base = "ref";
+        if (base.length() > 8)
+            base = base.substring(0, 8);
         for (int i = 0; i < 12; i++) {
             String candidate = base + "-" + UUID.randomUUID().toString().substring(0, 6);
             if (!codeRepo.existsByCodeIgnoreCase(candidate)) {
@@ -397,8 +403,8 @@ public class AffiliateProgramService {
     }
 
     private boolean isSelf(UUID affiliateId, UUID userId) {
-        return affiliateRepo.findById(affiliateId)
-                .map(a -> a.getUser() != null && userId.equals(a.getUser().getId())).orElse(false);
+        return affiliateRepo.findById(affiliateId).map(a -> a.getUser() != null && userId.equals(a.getUser().getId()))
+                .orElse(false);
     }
 
     /* ============================ Buyer referral discount ============================ */
@@ -482,14 +488,15 @@ public class AffiliateProgramService {
         BigDecimal pct = affiliate.getCommissionPercentOverride() != null
                 ? affiliate.getCommissionPercentOverride()
                 : cfg.getDefaultPercent();
-        long amount = BigDecimal.valueOf(subtotalCents).multiply(pct).divide(BigDecimal.valueOf(100), 0,
-                RoundingMode.HALF_UP).longValue();
+        long amount = BigDecimal.valueOf(subtotalCents).multiply(pct)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP).longValue();
 
         boolean review = exceedsPeriodCap(cfg, affiliate.getId(), amount);
         String status = review ? "REVIEW" : PENDING;
         commissionRepo.save(AffiliateCommissionEntity.builder().affiliateId(affiliate.getId())
                 .conversionId(conv.getId()).amountCents(amount).currency(ccy).percentage(pct).status(status)
-                .note((review ? "REVISIÓN (límite de periodo): " : "Auto: ") + pct + "% de " + subtotalCents + " " + ccy)
+                .note((review ? "REVISIÓN (límite de periodo): " : "Auto: ") + pct + "% de " + subtotalCents + " "
+                        + ccy)
                 .build());
 
         boolean firstConversion = affiliate.getReferralsCount() == 0;
@@ -517,8 +524,8 @@ public class AffiliateProgramService {
         Instant since = Instant.now().minus(Duration.ofDays(Math.max(1, cfg.getMaxPeriodDays())));
         long periodSum = commissionRepo.findByAffiliateIdOrderByCreatedAtDesc(affiliateId).stream()
                 .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().isAfter(since))
-                .filter(c -> !REJECTED.equals(c.getStatus()))
-                .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
+                .filter(c -> !REJECTED.equals(c.getStatus())).mapToLong(AffiliateCommissionEntity::getAmountCents)
+                .sum();
         return periodSum + amount > cfg.getMaxCommissionPeriodCents();
     }
 
@@ -570,9 +577,10 @@ public class AffiliateProgramService {
                 comm.setApprovedAt(Instant.now());
                 commissionRepo.save(comm);
                 approved++;
-                affiliateRepo.findById(comm.getAffiliateId()).ifPresent(a -> notify(
-                        a.getUser() != null ? a.getUser().getId() : null, "AFFILIATE_COMMISSION_APPROVED",
-                        "Comisión aprobada", "Una de tus comisiones ha sido aprobada y está lista para liquidar."));
+                affiliateRepo.findById(comm.getAffiliateId())
+                        .ifPresent(a -> notify(a.getUser() != null ? a.getUser().getId() : null,
+                                "AFFILIATE_COMMISSION_APPROVED", "Comisión aprobada",
+                                "Una de tus comisiones ha sido aprobada y está lista para liquidar."));
             }
         }
         return approved;
@@ -581,8 +589,8 @@ public class AffiliateProgramService {
     /** A commission flagged for manual REVIEW can be approved or rejected by the operator (DROP-652). */
     @Transactional
     public void resolveReview(UUID commissionId, boolean approve) {
-        AffiliateCommissionEntity comm = commissionRepo.findById(commissionId).orElseThrow(
-                () -> new NotFoundException("Commission not found"));
+        AffiliateCommissionEntity comm = commissionRepo.findById(commissionId)
+                .orElseThrow(() -> new NotFoundException("Commission not found"));
         if (!"REVIEW".equals(comm.getStatus())) {
             throw new BusinessException("La comisión no está en revisión");
         }
@@ -624,8 +632,8 @@ public class AffiliateProgramService {
         if (!m.matches("WALLET|BANK|PAYPAL")) {
             throw new BusinessException("INVALID_PAYOUT_METHOD", "Método de cobro no válido");
         }
-        AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId)
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
         if ("BANK".equals(m) && (affiliate.getBankIban() == null || affiliate.getBankHolder() == null)) {
             throw new BusinessException("PAYOUT_DETAILS_MISSING", "Configura tus datos bancarios primero");
         }
@@ -633,15 +641,14 @@ public class AffiliateProgramService {
             throw new BusinessException("PAYOUT_DETAILS_MISSING", "Configura tu PayPal primero");
         }
         if (payoutRepo.existsByAffiliateIdAndStatus(affiliate.getId(), REQUESTED)) {
-            throw new BusinessException(
-                    "Ya tienes una solicitud de pago pendiente");
+            throw new BusinessException("Ya tienes una solicitud de pago pendiente");
         }
-        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), APPROVED);
+        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(),
+                APPROVED);
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         AffiliateProgramConfigEntity cfg = currentConfig();
         if (total < cfg.getMinPayoutCents()) {
-            throw new BusinessException(
-                    "Saldo aprobado por debajo del pago mínimo");
+            throw new BusinessException("Saldo aprobado por debajo del pago mínimo");
         }
         AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliate.getId())
                 .amountCents(total).currency(cfg.getCurrency()).status(REQUESTED).method(m)
@@ -649,8 +656,7 @@ public class AffiliateProgramService {
                 .destHolder("BANK".equals(m) ? affiliate.getBankHolder() : null)
                 .destIban("BANK".equals(m) ? affiliate.getBankIban() : null)
                 .destBic("BANK".equals(m) ? affiliate.getBankBic() : null)
-                .destPaypalEmail("PAYPAL".equals(m) ? affiliate.getPaypalEmail() : null)
-                .build());
+                .destPaypalEmail("PAYPAL".equals(m) ? affiliate.getPaypalEmail() : null).build());
         notifyStaff("AFFILIATE_PAYOUT_REQUEST", "Solicitud de pago de afiliado",
                 "Un afiliado ha solicitado el pago de sus comisiones aprobadas (" + m + ").");
         return payout;
@@ -685,17 +691,18 @@ public class AffiliateProgramService {
      * la abre siempre el método público de entrada.
      */
     private AffiliatePayoutEntity executePayout(UUID payoutId, UUID adminUserId, String reference) {
-        AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
-                () -> new NotFoundException("Payout not found"));
+        AffiliatePayoutEntity payout = payoutRepo.findById(payoutId)
+                .orElseThrow(() -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
             return payout; // idempotent — never pay twice
         }
         if (REJECTED.equals(payout.getStatus())) {
             throw new BusinessException("El pago fue rechazado");
         }
-        AffiliateEntity affiliate = affiliateRepo.findById(payout.getAffiliateId()).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
-        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), APPROVED);
+        AffiliateEntity affiliate = affiliateRepo.findById(payout.getAffiliateId())
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(),
+                APPROVED);
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         if (total <= 0) {
             payout.setStatus(REJECTED);
@@ -730,7 +737,8 @@ public class AffiliateProgramService {
         payout.setCommissionCount(approved.size());
         payoutRepo.save(payout);
         notify(userId, "AFFILIATE_PAYOUT_PAID", "Pago de comisiones realizado",
-                WALLET.equals(payout.getMethod()) ? "Tus comisiones se han abonado a tu wallet."
+                WALLET.equals(payout.getMethod())
+                        ? "Tus comisiones se han abonado a tu wallet."
                         : "Tus comisiones han sido pagadas.");
         log.info("::> [AFFILIATE] Payout {} paid {} cents to affiliate {} (method {}, wallet tx {})", payout.getId(),
                 total, affiliate.getId(), payout.getMethod(), txId);
@@ -739,8 +747,8 @@ public class AffiliateProgramService {
 
     @Transactional
     public AffiliatePayoutEntity rejectPayout(UUID payoutId, String reason) {
-        AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
-                () -> new NotFoundException("Payout not found"));
+        AffiliatePayoutEntity payout = payoutRepo.findById(payoutId)
+                .orElseThrow(() -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
             throw new BusinessException("El pago ya se ejecutó");
         }
@@ -788,24 +796,22 @@ public class AffiliateProgramService {
     /** Returns the affiliate's payout profile with the IBAN masked (last 4 digits only). */
     @Transactional(readOnly = true)
     public PayoutProfileView getPayoutProfile(UUID userId) {
-        AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
-        return new PayoutProfileView(a.getPayoutMethod(), a.getBankHolder(), maskIban(a.getBankIban()),
-                a.getBankBic(), a.getPaypalEmail(),
-                a.getBankHolder() != null && a.getBankIban() != null,
+        AffiliateEntity a = affiliateRepo.findByUser_Id(userId)
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        return new PayoutProfileView(a.getPayoutMethod(), a.getBankHolder(), maskIban(a.getBankIban()), a.getBankBic(),
+                a.getPaypalEmail(), a.getBankHolder() != null && a.getBankIban() != null,
                 a.getPaypalEmail() != null && !a.getPaypalEmail().isBlank());
     }
 
     /** Updates the affiliate's payout profile; requires the caller's current password to confirm. */
     @Transactional
     public void updatePayoutProfile(UUID userId, PayoutProfileUpdateRequest req) {
-        UserEntity user = userRepository.findById(userId).orElseThrow(
-                () -> new NotFoundException("User not found"));
+        UserEntity user = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         if (req.password() == null || !passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new BusinessException("INVALID_PASSWORD", "Contraseña incorrecta");
         }
-        AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        AffiliateEntity a = affiliateRepo.findByUser_Id(userId)
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
         String iban = normalizedIban(req.iban());
         String email = normalizedPaypalEmail(req.paypalEmail());
         mergePayoutProfile(a, req, iban, email);
@@ -889,8 +895,8 @@ public class AffiliateProgramService {
         if (!s.equals(PENDING) && !s.equals(ACTIVE) && !s.equals("SUSPENDED")) {
             throw new BusinessException("Estado de afiliado no válido");
         }
-        AffiliateEntity a = affiliateRepo.findById(affiliateId).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        AffiliateEntity a = affiliateRepo.findById(affiliateId)
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
         boolean wasPending = PENDING.equals(a.getStatus());
         a.setStatus(s);
         a.setActive(ACTIVE.equals(s));

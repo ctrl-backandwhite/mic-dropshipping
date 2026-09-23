@@ -11,15 +11,9 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum OrderStatus {
 
-    PENDING(0),
-    AWAITING_PAYMENT(1),
-    PAID(2),
-    FORWARDED(3),
-    SHIPPED(4),
-    DELIVERED(5),
+    PENDING(0), AWAITING_PAYMENT(1), PAID(2), FORWARDED(3), SHIPPED(4), DELIVERED(5),
     /** Fuera del recorrido normal: no puede ganar a un bulto que sí avanza, de ahí el avance negativo. */
-    CANCELLED(-1),
-    REFUNDED(-1);
+    CANCELLED(-1), REFUNDED(-1);
 
     private final int progress;
 

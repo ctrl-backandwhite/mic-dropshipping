@@ -66,9 +66,8 @@ class AffiliateFlowIT extends BaseIntegration {
     private static final String ADMIN_REEMBOLSAR = "/api/admin/orders/%s/refund";
     private static final String ADMIN_CANCELAR = "/api/admin/orders/%s/cancel";
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> LISTA_JSON =
-            new ParameterizedTypeReference<>() {
-            };
+    private static final ParameterizedTypeReference<List<Map<String, Object>>> LISTA_JSON = new ParameterizedTypeReference<>() {
+    };
     private static final TypeReference<Map<String, Object>> MAPA_JSON = new TypeReference<>() {
     };
 
@@ -271,8 +270,9 @@ class AffiliateFlowIT extends BaseIntegration {
         affiliateProgramService.onOrderPlaced(pedidoDeMedioCentimo, compradorId, 5L, "USD");
         affiliateProgramService.onOrderPlaced(pedidoDeCuatroDecimas, compradorId, 4L, "USD");
 
-        List<Long> importes = jdbcTemplate.queryForList("SELECT amount_cents FROM affiliate_commission"
-                + " WHERE affiliate_id = ? ORDER BY amount_cents DESC", Long.class, afiliadoEntidadId);
+        List<Long> importes = jdbcTemplate.queryForList(
+                "SELECT amount_cents FROM affiliate_commission" + " WHERE affiliate_id = ? ORDER BY amount_cents DESC",
+                Long.class, afiliadoEntidadId);
         assertThat(importes).as("10 % de 5 = 0,5 → 1; 10 % de 4 = 0,4 → 0").containsExactly(1L, 0L);
     }
 
@@ -429,8 +429,8 @@ class AffiliateFlowIT extends BaseIntegration {
 
         assertThat(saldoDeLaWallet(afiliadoId)).as("el pago externo NO abona la wallet").isEqualTo(saldoAntes);
         assertThat(estadoDeLaComision(afiliadoId)).as("pero la comisión sí queda liquidada").isEqualTo("PAID");
-        assertThat(jdbcTemplate.queryForObject("SELECT paid_reference FROM affiliate_payout WHERE id = ?",
-                String.class, pagoId)).as("con la referencia de la transferencia anotada").isEqualTo("TRF-2026-0001");
+        assertThat(jdbcTemplate.queryForObject("SELECT paid_reference FROM affiliate_payout WHERE id = ?", String.class,
+                pagoId)).as("con la referencia de la transferencia anotada").isEqualTo("TRF-2026-0001");
         assertThat(jdbcTemplate.queryForObject("SELECT wallet_tx_id FROM affiliate_payout WHERE id = ?", UUID.class,
                 pagoId)).as("y sin apunte de monedero asociado").isNull();
     }
@@ -471,8 +471,7 @@ class AffiliateFlowIT extends BaseIntegration {
         generarComisionAprobada();
         solicitarPago("WALLET");
 
-        json(HttpMethod.POST, ME_AFILIADO_SOLICITAR_PAGO, afiliadoToken, Map.of(CAMPO_METODO, "WALLET"),
-                NO_PROCESABLE);
+        json(HttpMethod.POST, ME_AFILIADO_SOLICITAR_PAGO, afiliadoToken, Map.of(CAMPO_METODO, "WALLET"), NO_PROCESABLE);
 
         assertThat(pagosDelAfiliado(afiliadoId)).as("sigue habiendo un solo pago").isEqualTo(1L);
     }
@@ -638,8 +637,8 @@ class AffiliateFlowIT extends BaseIntegration {
         producto.put("imageUrls", List.of("https://example.com/certificacion.jpg"));
         producto.put("weightGrams", 500);
         producto.put("moq", 1);
-        producto.put("variants", List.of(Map.of("sku", "CERT-1", "price", new BigDecimal("70.00"), "stock", 500,
-                "optionValues", Map.of())));
+        producto.put("variants", List
+                .of(Map.of("sku", "CERT-1", "price", new BigDecimal("70.00"), "stock", 500, "optionValues", Map.of())));
 
         return peticion(HttpMethod.POST, ADMIN_CREAR_PRODUCTO, adminToken, producto, null).expectStatus()
                 .is2xxSuccessful().expectBody(UUID.class).returnResult().getResponseBody();
@@ -647,8 +646,9 @@ class AffiliateFlowIT extends BaseIntegration {
 
     /** Monedero abierto con saldo de partida: el alta del monedero no es lo que se certifica aquí. */
     private void sembrarMonedero(UUID userId, long centimos) {
-        jdbcTemplate.update("INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
-                + " status, created_at, updated_at) VALUES (?, ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
+                        + " status, created_at, updated_at) VALUES (?, ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
                 UUID.randomUUID(), userId, centimos);
     }
 
@@ -718,8 +718,9 @@ class AffiliateFlowIT extends BaseIntegration {
         Map<String, Object> resultado = json(HttpMethod.POST, ADMIN_APROBAR_VENCIDAS, adminToken, null, 200);
         assertThat(numero(resultado, "approved")).as("una comisión vencida pasa a aprobada").isEqualTo(1L);
 
-        Long aprobado = jdbcTemplate.queryForObject("SELECT sum(amount_cents) FROM affiliate_commission c"
-                + " JOIN affiliate a ON a.id = c.affiliate_id WHERE a.user_id = ? AND c.status = 'APPROVED'",
+        Long aprobado = jdbcTemplate.queryForObject(
+                "SELECT sum(amount_cents) FROM affiliate_commission c"
+                        + " JOIN affiliate a ON a.id = c.affiliate_id WHERE a.user_id = ? AND c.status = 'APPROVED'",
                 Long.class, afiliadoId);
         return aprobado == null ? 0L : aprobado;
     }
@@ -787,8 +788,8 @@ class AffiliateFlowIT extends BaseIntegration {
     }
 
     private long saldoDeLaWallet(UUID userId) {
-        Long saldo = jdbcTemplate.queryForObject("SELECT coalesce(max(balance_usd_cents), 0) FROM wallet"
-                + " WHERE user_id = ?", Long.class, userId);
+        Long saldo = jdbcTemplate.queryForObject(
+                "SELECT coalesce(max(balance_usd_cents), 0) FROM wallet" + " WHERE user_id = ?", Long.class, userId);
         return saldo == null ? 0L : saldo;
     }
 
@@ -804,8 +805,8 @@ class AffiliateFlowIT extends BaseIntegration {
 
     /** Mismo redondeo que usa el programa: porcentaje sobre céntimos, HALF_UP al céntimo. */
     private long porcentaje(long centimos, BigDecimal porcentaje) {
-        return BigDecimal.valueOf(centimos).multiply(porcentaje).divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-                .longValue();
+        return BigDecimal.valueOf(centimos).multiply(porcentaje)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP).longValue();
     }
 
     private long numero(Map<String, Object> cuerpo, String campo) {
@@ -835,8 +836,8 @@ class AffiliateFlowIT extends BaseIntegration {
      */
     private Map<String, Object> json(HttpMethod metodo, String uri, String token, Object cuerpo, int estadoEsperado,
             String claveIdempotencia) {
-        byte[] bytes = peticion(metodo, uri, token, cuerpo, claveIdempotencia).expectStatus()
-                .isEqualTo(estadoEsperado).expectBody().returnResult().getResponseBody();
+        byte[] bytes = peticion(metodo, uri, token, cuerpo, claveIdempotencia).expectStatus().isEqualTo(estadoEsperado)
+                .expectBody().returnResult().getResponseBody();
         if (bytes == null || bytes.length == 0) {
             return Map.of(); // 204 y demás respuestas sin cuerpo
         }

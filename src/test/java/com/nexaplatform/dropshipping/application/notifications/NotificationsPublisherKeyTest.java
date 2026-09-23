@@ -23,8 +23,7 @@ import static org.mockito.Mockito.verify;
 class NotificationsPublisherKeyTest {
 
     private final EventPublisher events = mock(EventPublisher.class);
-    private final NotificationsPublisher publisher =
-            new NotificationsPublisher(events);
+    private final NotificationsPublisher publisher = new NotificationsPublisher(events);
 
     @Test
     void sinIdentificadorDeUsuarioLaClaveEsElCorreoYNoRevienta() {

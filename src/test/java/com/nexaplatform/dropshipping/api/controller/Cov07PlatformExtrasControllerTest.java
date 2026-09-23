@@ -231,7 +231,7 @@ class Cov07PlatformExtrasControllerTest {
     /* ==================== Notificaciones ==================== */
 
     @ParameterizedTest
-    @ValueSource(strings = { "archived", " TRASH ", "inbox" })
+    @ValueSource(strings = {"archived", " TRASH ", "inbox"})
     void laCarpetaDeNotificacionesAceptaMayusculasMinusculasYEspacios(String folder) {
         controller.notifications(auth, folder);
 
@@ -245,8 +245,7 @@ class Cov07PlatformExtrasControllerTest {
         controller.notifications(auth, null);
 
         // Un enlace viejo o un parámetro basura no puede tumbar la bandeja del usuario.
-        verify(notificationUseCase, times(2))
-                .myNotifications(userId, NotificationUseCase.Folder.INBOX);
+        verify(notificationUseCase, times(2)).myNotifications(userId, NotificationUseCase.Folder.INBOX);
     }
 
     @Test

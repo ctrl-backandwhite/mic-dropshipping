@@ -47,14 +47,10 @@ class ShippingCoverageMigrationTest {
      * cita por su nombre, los tres de Oriente Medio con operación declarada, y Australia y Nueva Zelanda.
      * Puerto Rico entra porque su última milla es USPS, que el transportista documenta expresamente.
      */
-    private static final Set<String> ESPERADOS = new TreeSet<>(Set.of(
-            "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT",
-            "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
-            "IS", "NO", "LI", "GB", "CH",
-            "US", "CA", "MX", "PR",
-            "BR", "AR", "CL", "CO",
-            "AE", "SA", "IL",
-            "AU", "NZ"));
+    private static final Set<String> ESPERADOS = new TreeSet<>(
+            Set.of("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT",
+                    "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "NO", "LI", "GB", "CH", "US",
+                    "CA", "MX", "PR", "BR", "AR", "CL", "CO", "AE", "SA", "IL", "AU", "NZ"));
 
     @Test
     @DisplayName("tras el recorte quedan exactamente los destinos con entrega documentada")

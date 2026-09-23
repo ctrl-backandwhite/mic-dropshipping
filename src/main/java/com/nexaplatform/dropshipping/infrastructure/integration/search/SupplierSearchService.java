@@ -39,7 +39,6 @@ public class SupplierSearchService {
      */
     private static final int MAX_FROM = 10_000;
 
-
     /** Max suppliers pulled from the index in one shot (the catalog has at most a few thousand). */
     private static final int MAX = 10_000;
 
@@ -54,7 +53,6 @@ public class SupplierSearchService {
         // Sólo el primer nodo de la lista: este cliente no hace balanceo, apunta a uno.
         this.searchUrl = Texts.stripTrailingSlashes(uris.split(",")[0].trim()) + "/" + index + "/_search";
     }
-
 
     /** A flattened supplier row read from the OpenSearch index (everything the listing needs). */
     public record IndexedSupplier(UUID id, String externalId, String name, String nameZh, String country, String city,
@@ -84,18 +82,18 @@ public class SupplierSearchService {
             if (verified != null) {
                 must.add("{\"term\":{\"verified\":" + verified + "}}");
             }
-            String query = must.isEmpty() ? "{\"match_all\":{}}"
+            String query = must.isEmpty()
+                    ? "{\"match_all\":{}}"
                     : "{\"bool\":{\"must\":[" + String.join(",", must) + "]}}";
             // page y size llegan del cliente: se acotan los DOS. Con size=0 salía una página vacía con
             // total>0 (el listado parecía roto) y un page enorme desbordaba el int hasta un from negativo,
             // que OpenSearch rechaza con 400 y aquí acababa en caída a base de datos.
             int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
             int from = (int) Math.min((long) Math.max(0, page) * pageSize, MAX_FROM);
-            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize + ",\"query\":" + query
-                    + ",\"sort\":[{\"createdAt\":{\"order\":\"desc\"}}]}";
+            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize + ",\"query\":"
+                    + query + ",\"sort\":[{\"createdAt\":{\"order\":\"desc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+                    .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() / 100 != 2) {
                 log.warn("Supplier index page read returned {} — falling back to DB", res.statusCode());
@@ -140,8 +138,7 @@ public class SupplierSearchService {
                             + ",\"fields\":[\"name\",\"nameZh\",\"country\",\"city\"]}}";
             String body = "{\"size\":" + MAX + ",\"query\":" + query + "}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+                    .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() / 100 != 2) {
                 log.warn("Supplier index read returned {} — falling back to DB", res.statusCode());
@@ -178,7 +175,8 @@ public class SupplierSearchService {
             return null;
         }
         JsonNode ratingNode = s.path("rating");
-        BigDecimal rating = ratingNode.isNull() || ratingNode.isMissingNode() ? null
+        BigDecimal rating = ratingNode.isNull() || ratingNode.isMissingNode()
+                ? null
                 : BigDecimal.valueOf(ratingNode.asDouble());
         JsonNode yearsNode = s.path("yearsActive");
         Integer yearsActive = yearsNode.isNull() || yearsNode.isMissingNode() ? null : yearsNode.asInt();

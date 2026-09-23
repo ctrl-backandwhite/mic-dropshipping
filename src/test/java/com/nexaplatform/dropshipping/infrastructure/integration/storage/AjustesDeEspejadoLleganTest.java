@@ -43,8 +43,7 @@ class AjustesDeEspejadoLleganTest {
         String yaml = leer("/application.yml");
 
         List<String> huerfanas = new ArrayList<>();
-        for (Class<?> servicio : List.of(ImageMirrorService.class, VideoMirrorService.class,
-                CompresorDeImagen.class)) {
+        for (Class<?> servicio : List.of(ImageMirrorService.class, VideoMirrorService.class, CompresorDeImagen.class)) {
             for (Field campo : servicio.getDeclaredFields()) {
                 Value anotacion = campo.getAnnotation(Value.class);
                 if (anotacion == null) {
@@ -67,11 +66,9 @@ class AjustesDeEspejadoLleganTest {
             }
         }
 
-        assertThat(huerfanas)
-                .as("estas propiedades se leen con @Value pero NO están en application.yml, así que su "
-                        + "variable de entorno no llega y el valor por defecto manda siempre — que es "
-                        + "exactamente lo que pasó con mirror-concurrency")
-                .isEmpty();
+        assertThat(huerfanas).as("estas propiedades se leen con @Value pero NO están en application.yml, así que su "
+                + "variable de entorno no llega y el valor por defecto manda siempre — que es "
+                + "exactamente lo que pasó con mirror-concurrency").isEmpty();
     }
 
     private static String leer(String recurso) throws IOException {

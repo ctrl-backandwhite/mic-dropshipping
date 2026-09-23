@@ -76,10 +76,9 @@ public class SavedPaymentMethodsService {
                     }
                     continue;
                 }
-                out.add(PaymentMethodDtoOut.builder().id(pm.getId()).type("CARD")
-                        .brand(c != null ? c.getBrand() : null).last4(c != null ? c.getLast4() : null)
-                        .expMonth(c != null ? c.getExpMonth() : null).expYear(c != null ? c.getExpYear() : null)
-                        .build());
+                out.add(PaymentMethodDtoOut.builder().id(pm.getId()).type("CARD").brand(c != null ? c.getBrand() : null)
+                        .last4(c != null ? c.getLast4() : null).expMonth(c != null ? c.getExpMonth() : null)
+                        .expYear(c != null ? c.getExpYear() : null).build());
             }
         }
         // Cuentas PayPal (correo descifrado solo para enmascarar).
@@ -168,8 +167,7 @@ public class SavedPaymentMethodsService {
                 && user.getPmDeleteCodeAt().isAfter(Instant.now().minusSeconds(900));
         // Comparación en tiempo CONSTANTE del código (evita timing side-channels).
         boolean codeOk = code != null && !code.isBlank() && user.getPmDeleteCode() != null
-                && java.security.MessageDigest.isEqual(
-                        code.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                && java.security.MessageDigest.isEqual(code.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         user.getPmDeleteCode().getBytes(java.nio.charset.StandardCharsets.UTF_8));
         if (!(refOk && fresh && codeOk)) {
             // Un intento con el código ERRÓNEO (con ref y ventana válidas) QUEMA el código: sin esto, el
@@ -222,9 +220,8 @@ public class SavedPaymentMethodsService {
      * cuenta PayPal). Solo cambia si el usuario elige otro método manualmente. Si no hay tarjeta, el primero.
      */
     private static String implicitDefault(List<PaymentMethodDtoOut> methods) {
-        return methods.stream().filter(m -> "CARD".equalsIgnoreCase(m.getType()))
-                .map(PaymentMethodDtoOut::getId).findFirst()
-                .orElseGet(() -> methods.isEmpty() ? null : methods.get(0).getId());
+        return methods.stream().filter(m -> "CARD".equalsIgnoreCase(m.getType())).map(PaymentMethodDtoOut::getId)
+                .findFirst().orElseGet(() -> methods.isEmpty() ? null : methods.get(0).getId());
     }
 
     private String soleMethodRef(UUID userId) {
@@ -245,16 +242,16 @@ public class SavedPaymentMethodsService {
             return;
         }
         String customerId = loadUser(userId).getStripeCustomerId();
-        boolean owned = customerId != null && stripeService.listCards(customerId).stream()
-                .anyMatch(pm -> pm.getId().equals(ref));
+        boolean owned = customerId != null
+                && stripeService.listCards(customerId).stream().anyMatch(pm -> pm.getId().equals(ref));
         if (!owned) {
             throw new NotFoundException("Método de pago no encontrado");
         }
     }
 
     private void saveDefault(UUID userId, String ref) {
-        defaultRepository.save(UserDefaultPaymentEntity.builder().userId(userId).ref(ref)
-                .updatedAt(Instant.now()).build());
+        defaultRepository
+                .save(UserDefaultPaymentEntity.builder().userId(userId).ref(ref).updatedAt(Instant.now()).build());
     }
 
     private long totalMethods(UUID userId) {

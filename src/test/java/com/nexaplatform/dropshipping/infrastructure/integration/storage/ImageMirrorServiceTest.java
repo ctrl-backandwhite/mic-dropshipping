@@ -68,9 +68,7 @@ class ImageMirrorServiceTest {
     }
 
     private static ProductImageEntity image(UUID id, String sourceUrl) {
-        ProductImageEntity img = ProductImageEntity.builder()
-                .sourceUrl(sourceUrl)
-                .mirrorStatus(MirrorStatus.PENDING)
+        ProductImageEntity img = ProductImageEntity.builder().sourceUrl(sourceUrl).mirrorStatus(MirrorStatus.PENDING)
                 .build();
         img.setId(id); // id heredado de BaseEntity, no lo cubre el @Builder
         return img;
@@ -100,8 +98,7 @@ class ImageMirrorServiceTest {
 
     @Test
     void pendingBatch_returnsZero_whenNothingPending() {
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
-                .thenReturn(List.of());
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING)).thenReturn(List.of());
 
         int mirrored = service.mirrorPendingBatch(50);
 
@@ -181,13 +178,11 @@ class ImageMirrorServiceTest {
         ProductImageEntity gone = image(missing, "https://o/gone.jpg");
         gone.setCdnUrl("https://cdn.example.com/media/cd/gone.jpg");
         gone.setMirrorStatus(MirrorStatus.MIRRORED);
-        when(imageRepository.findByMirrorStatusAndCdnUrlStartingWith(
-                MirrorStatus.MIRRORED, "https://cdn.example.com/"))
+        when(imageRepository.findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, "https://cdn.example.com/"))
                 .thenReturn(List.of(kept, gone));
 
         // No hay PENDING tras el heal: el resto del lote es no-op controlable.
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
-                .thenReturn(List.of());
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING)).thenReturn(List.of());
         // El barrido de variantes/valores no aporta nada (listas vacías).
         when(variantRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
         when(variantValueRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
@@ -209,8 +204,7 @@ class ImageMirrorServiceTest {
         when(storage.publicUrl()).thenReturn("https://cdn.example.com");
         when(imageRepository.requeueNotMirrored(any())).thenReturn(0);
         when(storage.listKeys()).thenReturn(Set.of()); // vacío → se salta la verificación de objetos
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
-                .thenReturn(List.of());
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING)).thenReturn(List.of());
         when(variantRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
         when(variantValueRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
 

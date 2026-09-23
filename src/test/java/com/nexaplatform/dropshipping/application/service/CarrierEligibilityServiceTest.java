@@ -40,20 +40,13 @@ class CarrierEligibilityServiceTest {
     @ParameterizedTest(name = "partida {0} → {1}")
     @CsvSource({
             // Capítulo 61: prendas de punto. 6109 son camisetas.
-            "610910, true",
-            "611020, true",
+            "610910, true", "611020, true",
             // Capítulo 62: prendas excepto las de punto.
-            "620342, true",
-            "620423, true",
+            "620342, true", "620423, true",
             // Capítulo 65: sombrerería.
             "650500, true",
             // Y lo que no es ropa, por mucho que se le parezca.
-            "640399, false",
-            "691200, false",
-            "711719, false",
-            "900410, false",
-            "910211, false",
-    })
+            "640399, false", "691200, false", "711719, false", "900410, false", "910211, false",})
     @DisplayName("la línea de ropa solo admite las partidas de prendas y sombrerería")
     void laLineaDeRopaSoloAdmiteRopa(String hs, boolean admitida) {
         assertThat(servicio.admiteLaLineaDeRopa(List.of(con(hs)))).isEqualTo(admitida);
@@ -65,33 +58,30 @@ class CarrierEligibilityServiceTest {
         List<ProductEntity> mixto = List.of(con("610910"), con("691200"));
 
         assertThat(servicio.admiteLaLineaDeRopa(mixto))
-                .as("basta una taza en la bolsa para que el transportista rechace la guía entera")
-                .isFalse();
+                .as("basta una taza en la bolsa para que el transportista rechace la guía entera").isFalse();
     }
 
     @Test
     @DisplayName("varias prendas distintas siguen siendo ropa")
     void variasPrendasSiguenSiendoRopa() {
-        assertThat(servicio.admiteLaLineaDeRopa(List.of(con("610910"), con("620342"), con("650500"))))
-                .isTrue();
+        assertThat(servicio.admiteLaLineaDeRopa(List.of(con("610910"), con("620342"), con("650500")))).isTrue();
     }
 
     // ------------------------------------------------------------------ datos que faltan o vienen sucios
 
     @ParameterizedTest(name = "partida {0} sigue siendo ropa")
-    @ValueSource(strings = { " 610910", "610910 ", "6109.10", "61 09 10" })
+    @ValueSource(strings = {" 610910", "610910 ", "6109.10", "61 09 10"})
     @DisplayName("la partida se normaliza: espacios y puntos no cambian de qué capítulo es")
     void normalizaLaPartida(String hs) {
         assertThat(servicio.admiteLaLineaDeRopa(List.of(con(hs)))).isTrue();
     }
 
     @ParameterizedTest(name = "partida ausente: [{0}]")
-    @ValueSource(strings = { "", "   ", "6" })
+    @ValueSource(strings = {"", "   ", "6"})
     @DisplayName("sin partida utilizable no se arriesga la guía: la línea de ropa se descarta")
     void sinPartidaSeDescarta(String hs) {
         assertThat(servicio.admiteLaLineaDeRopa(List.of(con(hs))))
-                .as("un producto sin partida ya no se puede activar; la regla cubre los pedidos antiguos")
-                .isFalse();
+                .as("un producto sin partida ya no se puede activar; la regla cubre los pedidos antiguos").isFalse();
     }
 
     @Test
@@ -117,8 +107,7 @@ class CarrierEligibilityServiceTest {
         assertThat(servicio.admiteCanal("THPHR", taza)).isTrue();
         assertThat(servicio.admiteCanal("CANAL_LIBRE", taza)).isTrue();
         assertThat(servicio.admiteCanal("FZZXR", taza))
-                .as("la de ropa es la única con restricción, y por eso es la única que se pregunta")
-                .isFalse();
+                .as("la de ropa es la única con restricción, y por eso es la única que se pregunta").isFalse();
     }
 
     @Test
@@ -127,8 +116,7 @@ class CarrierEligibilityServiceTest {
         List<ProductEntity> taza = List.of(con("691200"));
 
         assertThat(servicio.admiteCanal("FZZXR-AMZ", taza))
-                .as("es la misma línea de ropa con otro nombre: admite lo mismo, textil y nada más")
-                .isFalse();
+                .as("es la misma línea de ropa con otro nombre: admite lo mismo, textil y nada más").isFalse();
         assertThat(servicio.admiteCanal("FZZXR-AMZ", List.of(con("610910")))).isTrue();
     }
 

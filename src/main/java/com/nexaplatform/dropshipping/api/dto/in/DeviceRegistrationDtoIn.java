@@ -13,8 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeviceRegistrationDtoIn {
 
-    @Schema(description = "Token de avisos que devuelve Expo en el dispositivo",
-            example = "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]")
+    @Schema(description = "Token de avisos que devuelve Expo en el dispositivo", example = "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]")
     @NotBlank
     @Size(max = 255)
     private String token;

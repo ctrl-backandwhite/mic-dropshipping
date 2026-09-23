@@ -48,14 +48,13 @@ class RetryFulfillmentNoFallaPorElCarrierTest {
         orderId = UUID.randomUUID();
 
         when(fulfillmentService.adminTrackingView(orderId)).thenReturn(
-                new TrackingView("FORWARDED", "YUNEXPRESS", "YT-NUEVA", null, null, List.of(), List.of(),
-                        List.of()));
+                new TrackingView("FORWARDED", "YUNEXPRESS", "YT-NUEVA", null, null, List.of(), List.of(), List.of()));
     }
 
     @Test
     void siElCarrierNoContestaElReintentoSigueDandoRespuestaBuena() {
-        doThrow(new IllegalStateException("YunExpress HTTP 503 en /v1/track-service/info/get"))
-                .when(syncScheduler).syncOrderById(any());
+        doThrow(new IllegalStateException("YunExpress HTTP 503 en /v1/track-service/info/get")).when(syncScheduler)
+                .syncOrderById(any());
 
         ResponseEntity<TrackingView> res = controller.retryFulfillment(orderId);
 

@@ -108,8 +108,11 @@ class PaymentInitiationTest {
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
-                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
                 stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
     }
 
@@ -136,9 +139,8 @@ class PaymentInitiationTest {
         Wallet w = new Wallet();
         w.setId(UUID.randomUUID());
         when(walletUseCase.getOrCreate(userId)).thenReturn(w);
-        when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
-                .thenAnswer(i -> i.getArgument(0));
-        when(currencyRateService.decimalsOf(anyString())).thenReturn(2);            // 1:1 para que las cuentas se lean solas
+        when(currencyRateService.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        when(currencyRateService.decimalsOf(anyString())).thenReturn(2); // 1:1 para que las cuentas se lean solas
         when(paymentRepository.save(any())).thenAnswer(i -> {
             Payment p = i.getArgument(0);
             if (p.getId() == null) {
@@ -149,10 +151,9 @@ class PaymentInitiationTest {
         when(paymentJpaRepositoryAdapter.findById(any())).thenReturn(Optional.of(mock(PaymentEntity.class)));
         when(gateway.supports(any())).thenReturn(true);
         when(gateway.providerName()).thenReturn("stripe");
-        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult(
-                "cs_test_1", null, "https://pay/1", null, null, null, Map.of()));
+        when(gateway.initiate(any())).thenReturn(
+                new PaymentGateway.InitiateResult("cs_test_1", null, "https://pay/1", null, null, null, Map.of()));
     }
-
 
     /**
      * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
@@ -176,8 +177,7 @@ class PaymentInitiationTest {
         order(OrderStatus.valueOf(status), 9540);
 
         assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("cannot be paid");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("cannot be paid");
 
         verify(gateway, never()).initiate(any());
     }
@@ -188,15 +188,13 @@ class PaymentInitiationTest {
         order(OrderStatus.AWAITING_PAYMENT, 99);
 
         assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("below $1.00");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("below $1.00");
     }
 
     @Test
     void sinMetodoDePagoNoSeLlegaAConsultarElPedido() {
         assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, null, "k1"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("paymentMethod required");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("paymentMethod required");
     }
 
     @Test
@@ -283,8 +281,8 @@ class PaymentInitiationTest {
         order(OrderStatus.AWAITING_PAYMENT, 9540);
         happyGateway();
 
-        assertThat(useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1")
-                .getSettlementCurrency()).isEqualTo("USD");
+        assertThat(useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1").getSettlementCurrency())
+                .isEqualTo("USD");
     }
 
     // ------------------------------------------------------------ fallo de la pasarela

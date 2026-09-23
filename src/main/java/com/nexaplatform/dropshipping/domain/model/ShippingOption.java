@@ -14,8 +14,8 @@ package com.nexaplatform.dropshipping.domain.model;
  * @param amountUsdCents porte en céntimos de dólar, con los recargos ya dentro
  * @param carrier        quién la lleva ({@code YUNEXPRESS}); nulo si no se sabe
  */
-public record ShippingOption(String code, String name, int amountUsdCents, int etaMinDays,
-        int etaMaxDays, String carrier) {
+public record ShippingOption(String code, String name, int amountUsdCents, int etaMinDays, int etaMaxDays,
+        String carrier) {
 
     /**
      * Opción sin transportista asignado.

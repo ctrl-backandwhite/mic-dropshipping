@@ -34,19 +34,32 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AffiliateProgramServiceTest {
 
-    @Mock AffiliateJpaRepositoryAdapter affiliateRepo;
-    @Mock AffiliateReferralCodeRepository codeRepo;
-    @Mock AffiliateAttributionRepository attrRepo;
-    @Mock AffiliateConversionRepository conversionRepo;
-    @Mock AffiliateCommissionRepository commissionRepo;
-    @Mock AffiliateProgramConfigRepository configRepo;
-    @Mock AffiliatePayoutRepository payoutRepo;
-    @Mock UserRepository userRepository;
-    @Mock PasswordEncoder passwordEncoder;
-    @Mock NotificationJpaRepositoryAdapter notificationRepo;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock WalletUseCase walletUseCase;
-    @Mock AffiliateIndexer affiliateIndexer;
+    @Mock
+    AffiliateJpaRepositoryAdapter affiliateRepo;
+    @Mock
+    AffiliateReferralCodeRepository codeRepo;
+    @Mock
+    AffiliateAttributionRepository attrRepo;
+    @Mock
+    AffiliateConversionRepository conversionRepo;
+    @Mock
+    AffiliateCommissionRepository commissionRepo;
+    @Mock
+    AffiliateProgramConfigRepository configRepo;
+    @Mock
+    AffiliatePayoutRepository payoutRepo;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    PasswordEncoder passwordEncoder;
+    @Mock
+    NotificationJpaRepositoryAdapter notificationRepo;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    AffiliateIndexer affiliateIndexer;
 
     @InjectMocks
     AffiliateProgramService service;
@@ -64,7 +77,8 @@ class AffiliateProgramServiceTest {
         when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(config));
         when(conversionRepo.save(any())).thenAnswer(i -> {
             AffiliateConversionEntity c = i.getArgument(0);
-            if (c.getId() == null) c.setId(UUID.randomUUID());
+            if (c.getId() == null)
+                c.setId(UUID.randomUUID());
             return c;
         });
         when(commissionRepo.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -81,7 +95,8 @@ class AffiliateProgramServiceTest {
 
     private AffiliateAttributionEntity liveAttribution() {
         return AffiliateAttributionEntity.builder().affiliateId(affiliateId).referralCodeId(UUID.randomUUID())
-                .referredUserId(customerId).clickedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(86400)).build();
+                .referredUserId(customerId).clickedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(86400))
+                .build();
     }
 
     @Test
@@ -165,8 +180,10 @@ class AffiliateProgramServiceTest {
         AffiliatePayoutEntity[] saved = new AffiliatePayoutEntity[1];
         when(payoutRepo.save(any())).thenAnswer(i -> {
             var p = (AffiliatePayoutEntity) i.getArgument(0);
-            if (p.getId() == null) p.setId(UUID.randomUUID());
-            saved[0] = p; return p;
+            if (p.getId() == null)
+                p.setId(UUID.randomUUID());
+            saved[0] = p;
+            return p;
         });
         when(payoutRepo.findById(any())).thenAnswer(i -> Optional.ofNullable(saved[0]));
 
@@ -208,8 +225,7 @@ class AffiliateProgramServiceTest {
                 .status("APPROVED").build();
         when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED")).thenReturn(List.of(c));
 
-        assertThatThrownBy(() -> service.requestPayout(affiliateUserId))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.requestPayout(affiliateUserId)).isInstanceOf(BusinessException.class);
         verify(payoutRepo, never()).save(any());
     }
 

@@ -65,21 +65,17 @@ class EspejadoAhorraDescargasTest {
     void unaUrlYaDescargadaSeReaprovechaSinVolverATocarLaRed() {
         UUID id = UUID.randomUUID();
         when(origenesEspejados.findById(ImageMirrorService.hashDeUrl(URL)))
-                .thenReturn(Optional.of(ImagenOrigenEspejadaEntity.builder()
-                        .urlHash(ImageMirrorService.hashDeUrl(URL))
-                        .urlOrigen(URL)
-                        .cdnUrl("https://img.nx036.com/product-images/media/ab/abcd.webp")
-                        .bytes(1234L).hash("abcd").ancho(800).alto(600)
-                        .comprimida(true).creadaEn(Instant.now()).usadaEn(Instant.now()).veces(1)
-                        .build()));
+                .thenReturn(Optional.of(ImagenOrigenEspejadaEntity.builder().urlHash(ImageMirrorService.hashDeUrl(URL))
+                        .urlOrigen(URL).cdnUrl("https://img.nx036.com/product-images/media/ab/abcd.webp").bytes(1234L)
+                        .hash("abcd").ancho(800).alto(600).comprimida(true).creadaEn(Instant.now())
+                        .usadaEn(Instant.now()).veces(1).build()));
 
         boolean espejada = service.mirrorOne(id, URL);
 
         assertThat(espejada).isTrue();
         // La ficha queda apuntando a lo que ya teníamos, sin pasar por el proveedor.
-        verify(imageRepository).markMirrored(eq(id),
-                eq("https://img.nx036.com/product-images/media/ab/abcd.webp"), eq(1234L), eq("abcd"),
-                eq(800), eq(600), eq(MirrorStatus.MIRRORED), any(Instant.class));
+        verify(imageRepository).markMirrored(eq(id), eq("https://img.nx036.com/product-images/media/ab/abcd.webp"),
+                eq(1234L), eq("abcd"), eq(800), eq(600), eq(MirrorStatus.MIRRORED), any(Instant.class));
         // Y se anota el reaprovechamiento: es la única forma de saber si esta memoria sirve de algo.
         verify(origenesEspejados).anotaUso(eq(ImageMirrorService.hashDeUrl(URL)), any(Instant.class));
         // Venía comprimida, así que la segunda pasada no tiene nada que hacer con ella.
@@ -99,8 +95,7 @@ class EspejadoAhorraDescargasTest {
 
         assertThat(espejada).isFalse();
         verify(imageRepository).markFailed(id);
-        verify(imageRepository, never()).markMirrored(any(), any(), anyLong(), any(), any(), any(),
-                any(), any());
+        verify(imageRepository, never()).markMirrored(any(), any(), anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -220,13 +215,10 @@ class EspejadoAhorraDescargasTest {
         fila.setId(variante);
         fila.setImageSourceUrl(URL);
         when(origenesEspejados.findById(ImageMirrorService.hashDeUrl(URL)))
-                .thenReturn(Optional.of(ImagenOrigenEspejadaEntity.builder()
-                        .urlHash(ImageMirrorService.hashDeUrl(URL))
-                        .urlOrigen(URL)
-                        .cdnUrl("https://img.nx036.com/product-images/media/ab/abcd.webp")
-                        .bytes(1234L).hash("abcd").ancho(800).alto(600)
-                        .comprimida(true).creadaEn(Instant.now()).usadaEn(Instant.now()).veces(1)
-                        .build()));
+                .thenReturn(Optional.of(ImagenOrigenEspejadaEntity.builder().urlHash(ImageMirrorService.hashDeUrl(URL))
+                        .urlOrigen(URL).cdnUrl("https://img.nx036.com/product-images/media/ab/abcd.webp").bytes(1234L)
+                        .hash("abcd").ancho(800).alto(600).comprimida(true).creadaEn(Instant.now())
+                        .usadaEn(Instant.now()).veces(1).build()));
         when(variantRepository.findNeedingImageMirrorByProducts(any(), any())).thenReturn(List.of(fila));
         when(variantValueRepository.findNeedingImageMirrorByProducts(any(), any())).thenReturn(List.of());
         when(storage.isReady()).thenReturn(true);
@@ -235,8 +227,7 @@ class EspejadoAhorraDescargasTest {
         service.mirrorVariantImagesOf(List.of(UUID.randomUUID()));
 
         // La variante queda apuntando a lo que ya teníamos, sin descargar ni subir nada.
-        verify(variantRepository).markImageCdn(variante,
-                "https://img.nx036.com/product-images/media/ab/abcd.webp");
+        verify(variantRepository).markImageCdn(variante, "https://img.nx036.com/product-images/media/ab/abcd.webp");
         verify(origenesEspejados).anotaUso(eq(ImageMirrorService.hashDeUrl(URL)), any(Instant.class));
         verify(storage, never()).upload(any(), any(), any());
     }

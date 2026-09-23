@@ -14,8 +14,7 @@ package com.nexaplatform.dropshipping.infrastructure.security.oauth;
  */
 public enum OAuthClientTarget {
 
-    WEB("web"),
-    MOBILE("mobile");
+    WEB("web"), MOBILE("mobile");
 
     private final String code;
 

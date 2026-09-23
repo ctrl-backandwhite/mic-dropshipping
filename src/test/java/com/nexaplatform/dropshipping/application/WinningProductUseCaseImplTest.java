@@ -36,8 +36,7 @@ class WinningProductUseCaseImplTest {
 
     private static ProductEntity product(String slug, ProductStatus status, int monthlySales, String trendScore) {
         ProductEntity p = ProductEntity.builder().slug(slug).titleZh(slug + "-zh").status(status)
-                .monthlySales(monthlySales)
-                .trendScore(trendScore == null ? null : new BigDecimal(trendScore))
+                .monthlySales(monthlySales).trendScore(trendScore == null ? null : new BigDecimal(trendScore))
                 .basePrice(new BigDecimal("9.99")).build();
         p.setId(UUID.randomUUID());
         return p;
@@ -190,9 +189,7 @@ class WinningProductUseCaseImplTest {
         List<WinningProduct> result = useCase.salesTrends(null, 10, "en");
 
         assertThat(result).extracting(WinningProduct::getSlug, WinningProduct::getMainImage).containsExactly(
-                tuple("cdn", "https://cdn/img.jpg"),
-                tuple("src", "https://src/only.jpg"),
-                tuple("noimg", null));
+                tuple("cdn", "https://cdn/img.jpg"), tuple("src", "https://src/only.jpg"), tuple("noimg", null));
     }
 
     /**
@@ -206,14 +203,12 @@ class WinningProductUseCaseImplTest {
      */
     @Test
     void elCosteDeProveedorNoSaleParaQuienNoEsAdministrador() {
-        when(productRepository.findAll())
-                .thenReturn(List.of(product("p1", ProductStatus.ACTIVE, 100, "9.0")));
+        when(productRepository.findAll()).thenReturn(List.of(product("p1", ProductStatus.ACTIVE, 100, "9.0")));
 
         List<WinningProduct> resultado = useCase.winning(10, "en");
 
         assertThat(resultado).isNotEmpty();
         assertThat(resultado.getFirst().getPrice())
-                .as("basePrice es el desembolso al proveedor: no viaja a quien no es admin")
-                .isNull();
+                .as("basePrice es el desembolso al proveedor: no viaja a quien no es admin").isNull();
     }
 }

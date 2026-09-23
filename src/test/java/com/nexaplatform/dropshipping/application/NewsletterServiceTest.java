@@ -161,13 +161,10 @@ class NewsletterServiceTest {
         assertThat(campaign.getStatus()).isEqualTo("SENT");
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<java.util.Map<String, Object>> payload =
-                ArgumentCaptor.forClass(java.util.Map.class);
-        verify(eventPublisher).publish(eq(NexaTopics.NEWSLETTER_SEND), eq("Newsletter"),
-                eq(campaignId.toString()), eq(campaignId.toString()), payload.capture());
-        assertThat(payload.getValue())
-                .containsEntry("subject", "Hello")
-                .containsEntry("bodyHtml", "<p>body</p>")
+        ArgumentCaptor<java.util.Map<String, Object>> payload = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(eventPublisher).publish(eq(NexaTopics.NEWSLETTER_SEND), eq("Newsletter"), eq(campaignId.toString()),
+                eq(campaignId.toString()), payload.capture());
+        assertThat(payload.getValue()).containsEntry("subject", "Hello").containsEntry("bodyHtml", "<p>body</p>")
                 .containsEntry("campaignId", campaignId.toString());
     }
 
@@ -187,8 +184,8 @@ class NewsletterServiceTest {
     void subscribe_yaConfirmadoNoReenviaNiDegradaElEstado() {
         // Quien ya confirmó no puede volver a PENDING porque otro escriba su correo en el formulario:
         // sería una forma trivial de darle de baja a traición.
-        NewsletterSubscriberEntity ya = NewsletterSubscriberEntity.builder().email("a@b.com")
-                .status("SUBSCRIBED").token("tok").build();
+        NewsletterSubscriberEntity ya = NewsletterSubscriberEntity.builder().email("a@b.com").status("SUBSCRIBED")
+                .token("tok").build();
         when(subscriberRepo.findByEmailIgnoreCase("a@b.com")).thenReturn(Optional.of(ya));
 
         NewsletterService.SubscribeResult r = service.subscribe("a@b.com", null, null);
@@ -200,8 +197,8 @@ class NewsletterServiceTest {
 
     @Test
     void confirm_activaLaSuscripcionYDejaConstanciaDeCuando() {
-        NewsletterSubscriberEntity pendiente = NewsletterSubscriberEntity.builder().email("a@b.com")
-                .status("PENDING").token("tok").build();
+        NewsletterSubscriberEntity pendiente = NewsletterSubscriberEntity.builder().email("a@b.com").status("PENDING")
+                .token("tok").build();
         when(subscriberRepo.findByToken("tok")).thenReturn(Optional.of(pendiente));
 
         assertThat(service.confirm("tok")).isTrue();

@@ -142,8 +142,8 @@ abstract class EmailITSupport extends BaseIntegration {
     protected MimeMessage unicoCorreoPara(String destinatario) {
         List<MimeMessage> suyos = correosPara(destinatario);
         if (suyos.size() != 1) {
-            throw new AssertionError("Se esperaba exactamente 1 correo para " + destinatario + " y hay "
-                    + suyos.size() + " (asuntos: " + suyos.stream().map(EmailITSupport::asuntoDe).toList() + ")");
+            throw new AssertionError("Se esperaba exactamente 1 correo para " + destinatario + " y hay " + suyos.size()
+                    + " (asuntos: " + suyos.stream().map(EmailITSupport::asuntoDe).toList() + ")");
         }
         return suyos.get(0);
     }

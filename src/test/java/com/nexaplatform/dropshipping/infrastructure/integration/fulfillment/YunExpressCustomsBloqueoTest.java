@@ -43,8 +43,8 @@ class YunExpressCustomsBloqueoTest {
     private final UUID productId = UUID.randomUUID();
 
     private YunExpressFulfillmentService service() {
-        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null),
-                productRepository, null, null, null);
+        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), productRepository,
+                null, null, null);
     }
 
     /** Producto con todo lo obligatorio; cada test le quita justo el dato que quiere provocar. */
@@ -81,10 +81,8 @@ class YunExpressCustomsBloqueoTest {
         p.setHsCode(null);
         Order pedido = pedidoDe(p);
 
-        assertThatThrownBy(() -> service().createShipments(pedido))
-                .isInstanceOf(FulfillmentFailure.class)
-                .hasMessageContaining("partida arancelaria (HSCode)")
-                .hasMessageContaining("NX-1")
+        assertThatThrownBy(() -> service().createShipments(pedido)).isInstanceOf(FulfillmentFailure.class)
+                .hasMessageContaining("partida arancelaria (HSCode)").hasMessageContaining("NX-1")
                 .hasMessageContaining("SKU-1");
     }
 
@@ -109,12 +107,10 @@ class YunExpressCustomsBloqueoTest {
         p.setHsCode(null);
         p.setWeightGrams(null);
         Order pedido = pedidoDe(p);
-        pedido.getItems().get(0).setProductTitleZh("Reloj de pulsera");   // sin ideogramas: cuenta como ausente
+        pedido.getItems().get(0).setProductTitleZh("Reloj de pulsera"); // sin ideogramas: cuenta como ausente
 
-        assertThatThrownBy(() -> service().createShipments(pedido))
-                .hasMessageContaining("partida arancelaria (HSCode)")
-                .hasMessageContaining("peso unitario (UnitWeight)")
-                .hasMessageContaining("nombre en chino (CName)");
+        assertThatThrownBy(() -> service().createShipments(pedido)).hasMessageContaining("partida arancelaria (HSCode)")
+                .hasMessageContaining("peso unitario (UnitWeight)").hasMessageContaining("nombre en chino (CName)");
     }
 
     @Test

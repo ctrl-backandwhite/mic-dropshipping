@@ -17,7 +17,7 @@ import java.util.UUID;
  * un usuario no puede tener el mismo producto dos veces (UNIQUE user_id, product_id).
  */
 @Entity
-@Table(name = "product_favorite", uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "product_id" }))
+@Table(name = "product_favorite", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "product_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

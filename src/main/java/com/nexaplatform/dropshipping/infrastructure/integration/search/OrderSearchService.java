@@ -38,7 +38,6 @@ public class OrderSearchService {
      */
     private static final int MAX_FROM = 10_000;
 
-
     private final ObjectMapper objectMapper;
     private final String searchUrl;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -51,7 +50,6 @@ public class OrderSearchService {
         this.searchUrl = base + "/" + index + "/_search";
     }
 
-
     /** A page of order IDs (in newest-first order) plus the grand total for the filter. */
     public record IdPage(List<UUID> ids, long total) {
     }
@@ -63,11 +61,11 @@ public class OrderSearchService {
             // que OpenSearch rechaza con 400 y aquí acababa en caída a base de datos.
             int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
             int from = (int) Math.min((long) Math.max(0, page) * pageSize, MAX_FROM);
-            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize + ",\"_source\":[\"id\"],"
-                    + "\"query\":" + buildQuery(status, q) + ",\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]}";
+            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize
+                    + ",\"_source\":[\"id\"]," + "\"query\":" + buildQuery(status, q)
+                    + ",\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+                    .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() / 100 != 2) {
                 log.warn("Order index page read returned {} — falling back to DB", res.statusCode());
@@ -111,7 +109,8 @@ public class OrderSearchService {
     private static List<UUID> extractIds(JsonNode root) {
         List<UUID> ids = new ArrayList<>();
         for (JsonNode hit : root.path("hits").path("hits")) {
-            String id = hit.path("_source").path("id").isMissingNode() ? hit.path("_id").asText()
+            String id = hit.path("_source").path("id").isMissingNode()
+                    ? hit.path("_id").asText()
                     : hit.path("_source").path("id").asText();
             UUID uuid = parse(id);
             if (uuid != null) {

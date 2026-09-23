@@ -180,8 +180,8 @@ class PayPalGatewayTest {
         verify(bodySpec, Mockito.atLeastOnce()).bodyValue(bodyCaptor.capture());
         @SuppressWarnings("unchecked")
         Map<String, Object> orderBody = bodyCaptor.getAllValues().stream()
-                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("intent")).map(b -> (Map<String, Object>) b)
-                .findFirst().orElseThrow();
+                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("intent"))
+                .map(b -> (Map<String, Object>) b).findFirst().orElseThrow();
         assertThat(orderBody).containsEntry("intent", "CAPTURE");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> units = (List<Map<String, Object>>) orderBody.get("purchase_units");
@@ -213,8 +213,8 @@ class PayPalGatewayTest {
         verify(bodySpec, Mockito.atLeastOnce()).bodyValue(bodyCaptor.capture());
         @SuppressWarnings("unchecked")
         Map<String, Object> orderBody = bodyCaptor.getAllValues().stream()
-                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("intent")).map(b -> (Map<String, Object>) b)
-                .findFirst().orElseThrow();
+                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("intent"))
+                .map(b -> (Map<String, Object>) b).findFirst().orElseThrow();
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> units = (List<Map<String, Object>>) orderBody.get("purchase_units");
         @SuppressWarnings("unchecked")
@@ -304,8 +304,8 @@ class PayPalGatewayTest {
         verify(bodySpec, Mockito.atLeastOnce()).bodyValue(bodyCaptor.capture());
         @SuppressWarnings("unchecked")
         Map<String, Object> refundBody = bodyCaptor.getAllValues().stream()
-                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("amount")).map(b -> (Map<String, Object>) b)
-                .findFirst().orElseThrow();
+                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("amount"))
+                .map(b -> (Map<String, Object>) b).findFirst().orElseThrow();
         @SuppressWarnings("unchecked")
         Map<String, Object> amount = (Map<String, Object>) refundBody.get("amount");
         assertThat(amount).containsEntry("currency_code", "USD").containsEntry("value", "25.99");
@@ -358,9 +358,8 @@ class PayPalGatewayTest {
         ReflectionTestUtils.setField(gateway, "mobileReturnUrl", "nx036://pago/retorno");
         ReflectionTestUtils.setField(gateway, "mobileCancelUrl", "nx036://pago/cancelado");
 
-        enqueueResponses(Map.of("access_token", "tok_abc"),
-                Map.of("id", "ORDER-1", "links",
-                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-1"))));
+        enqueueResponses(Map.of("access_token", "tok_abc"), Map.of("id", "ORDER-1", "links",
+                List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-1"))));
 
         gateway.initiate(mobilePayment(ORDER_ID));
 
@@ -375,9 +374,8 @@ class PayPalGatewayTest {
         ReflectionTestUtils.setField(gateway, "mobileReturnUrl", "nx036://pago/retorno");
         ReflectionTestUtils.setField(gateway, "mobileCancelUrl", "nx036://pago/cancelado");
 
-        enqueueResponses(Map.of("access_token", "tok_abc"),
-                Map.of("id", "ORDER-2", "links",
-                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-2"))));
+        enqueueResponses(Map.of("access_token", "tok_abc"), Map.of("id", "ORDER-2", "links",
+                List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-2"))));
 
         gateway.initiate(mobilePayment(null));
 
@@ -389,15 +387,13 @@ class PayPalGatewayTest {
     @Test
     void initiateOrderFromWebKeepsTheStorefrontReturn() {
         enable();
-        enqueueResponses(Map.of("access_token", "tok_abc"),
-                Map.of("id", "ORDER-3", "links",
-                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-3"))));
+        enqueueResponses(Map.of("access_token", "tok_abc"), Map.of("id", "ORDER-3", "links",
+                List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-3"))));
 
         gateway.initiate(payment(ORDER_ID, 12_345L, "idem-web"));
 
         Map<String, Object> context = applicationContextOf();
-        assertThat(String.valueOf(context.get("return_url")))
-                .startsWith("https://shop.test/checkout/return")
+        assertThat(String.valueOf(context.get("return_url"))).startsWith("https://shop.test/checkout/return")
                 .contains("orderId=" + ORDER_ID);
         assertThat(context).containsEntry("cancel_url", "https://shop.test/checkout?cancelled=1");
     }
@@ -406,14 +402,12 @@ class PayPalGatewayTest {
     @Test
     void initiateWalletFromWebKeepsTheWalletReturn() {
         enable();
-        enqueueResponses(Map.of("access_token", "tok_abc"),
-                Map.of("id", "ORDER-4", "links",
-                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-4"))));
+        enqueueResponses(Map.of("access_token", "tok_abc"), Map.of("id", "ORDER-4", "links",
+                List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-4"))));
 
         gateway.initiate(payment(null, 100L, null));
 
-        assertThat(applicationContextOf())
-                .containsEntry("return_url", "https://shop.test/wallet/paypal-return")
+        assertThat(applicationContextOf()).containsEntry("return_url", "https://shop.test/wallet/paypal-return")
                 .containsEntry("cancel_url", "https://shop.test/wallet/recharge?cancelled=1");
     }
 }

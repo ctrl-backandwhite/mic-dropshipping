@@ -44,19 +44,32 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AffiliateApprovePayoutTest {
 
-    @Mock AffiliateJpaRepositoryAdapter affiliateRepo;
-    @Mock AffiliateReferralCodeRepository codeRepo;
-    @Mock AffiliateAttributionRepository attrRepo;
-    @Mock AffiliateConversionRepository conversionRepo;
-    @Mock AffiliateCommissionRepository commissionRepo;
-    @Mock AffiliateProgramConfigRepository configRepo;
-    @Mock AffiliatePayoutRepository payoutRepo;
-    @Mock UserRepository userRepository;
-    @Mock PasswordEncoder passwordEncoder;
-    @Mock NotificationJpaRepositoryAdapter notificationRepo;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock WalletUseCase walletUseCase;
-    @Mock AffiliateIndexer affiliateIndexer;
+    @Mock
+    AffiliateJpaRepositoryAdapter affiliateRepo;
+    @Mock
+    AffiliateReferralCodeRepository codeRepo;
+    @Mock
+    AffiliateAttributionRepository attrRepo;
+    @Mock
+    AffiliateConversionRepository conversionRepo;
+    @Mock
+    AffiliateCommissionRepository commissionRepo;
+    @Mock
+    AffiliateProgramConfigRepository configRepo;
+    @Mock
+    AffiliatePayoutRepository payoutRepo;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    PasswordEncoder passwordEncoder;
+    @Mock
+    NotificationJpaRepositoryAdapter notificationRepo;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    AffiliateIndexer affiliateIndexer;
 
     // Con @InjectMocks los colaboradores se pasan por el constructor por tipo: añadir uno nuevo al
     // servicio ya no obliga a retocar esta lista de argumentos.
@@ -75,8 +88,7 @@ class AffiliateApprovePayoutTest {
     }
 
     private AffiliateEntity affiliate() {
-        AffiliateEntity a = AffiliateEntity.builder().user(user()).code("ref-1").active(true).status("ACTIVE")
-                .build();
+        AffiliateEntity a = AffiliateEntity.builder().user(user()).code("ref-1").active(true).status("ACTIVE").build();
         a.setId(affiliateId);
         return a;
     }
@@ -90,8 +102,8 @@ class AffiliateApprovePayoutTest {
 
     private List<AffiliateCommissionEntity> approvedCommissions(long amountCents) {
         AffiliateCommissionEntity c = AffiliateCommissionEntity.builder().affiliateId(affiliateId)
-                .conversionId(UUID.randomUUID()).amountCents(amountCents).currency("EUR")
-                .percentage(BigDecimal.TEN).status("APPROVED").build();
+                .conversionId(UUID.randomUUID()).amountCents(amountCents).currency("EUR").percentage(BigDecimal.TEN)
+                .status("APPROVED").build();
         return List.of(c);
     }
 

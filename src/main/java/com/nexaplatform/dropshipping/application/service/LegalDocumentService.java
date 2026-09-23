@@ -77,8 +77,7 @@ public class LegalDocumentService {
         String tipo = docType.trim().toLowerCase();
         String idioma = lang.trim().toLowerCase();
         LegalDocumentEntity doc = repository.findByDocTypeAndLang(tipo, idioma)
-                .orElseGet(() -> LegalDocumentEntity.builder().docType(tipo).lang(idioma)
-                        .version("borrador").build());
+                .orElseGet(() -> LegalDocumentEntity.builder().docType(tipo).lang(idioma).version("borrador").build());
         // Se escribe en el BORRADOR, no en lo publicado: el escaparate sigue sirviendo la versión
         // anterior, completa, hasta que alguien pulse Publicar.
         doc.setDraftTitle(title);

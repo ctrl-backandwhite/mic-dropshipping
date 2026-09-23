@@ -60,7 +60,9 @@ class DeviceSessionServiceTest {
 
     private static HttpServletRequest requestWith(String deviceToken, String userAgent, String ip) {
         HttpServletRequest req = mock(HttpServletRequest.class);
-        Cookie[] cookies = deviceToken == null ? null : new Cookie[] {new Cookie(DeviceSessionService.COOKIE, deviceToken)};
+        Cookie[] cookies = deviceToken == null
+                ? null
+                : new Cookie[]{new Cookie(DeviceSessionService.COOKIE, deviceToken)};
         // Helper compartido: no todos los tests consumen los 3 stubs → lenient para no romper en STRICT.
         lenient().when(req.getCookies()).thenReturn(cookies);
         lenient().when(req.getHeader("User-Agent")).thenReturn(userAgent);
@@ -71,9 +73,8 @@ class DeviceSessionServiceTest {
     }
 
     private static UserSessionEntity session(UUID id, UUID userId, String token, Instant lastSeen, Instant revokedAt) {
-        UserSessionEntity e = UserSessionEntity.builder().userId(userId).deviceToken(token)
-                .device("Chrome").ip("1.1.1.1").createdAt(Instant.now()).lastSeenAt(lastSeen).revokedAt(revokedAt)
-                .build();
+        UserSessionEntity e = UserSessionEntity.builder().userId(userId).deviceToken(token).device("Chrome")
+                .ip("1.1.1.1").createdAt(Instant.now()).lastSeenAt(lastSeen).revokedAt(revokedAt).build();
         e.setId(id);
         return e;
     }
@@ -129,8 +130,7 @@ class DeviceSessionServiceTest {
     void recordLogin_rotatesTokenWhenCookieBelongsToAnotherUser() {
         UUID userId = UUID.randomUUID();
         UUID otherUser = UUID.randomUUID();
-        UserSessionEntity foreign = session(UUID.randomUUID(), otherUser, TOKEN_AJENO,
-                Instant.now(), null);
+        UserSessionEntity foreign = session(UUID.randomUUID(), otherUser, TOKEN_AJENO, Instant.now(), null);
         HttpServletRequest req = requestWith(TOKEN_AJENO, "Mozilla/5.0 (Android) Chrome", "3.3.3.3");
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
         HttpServletResponse res = mock(HttpServletResponse.class);
@@ -243,7 +243,8 @@ class DeviceSessionServiceTest {
 
     @Test
     void isRevoked_trueWhenSessionForCookieIsRevoked() {
-        UserSessionEntity revoked = session(UUID.randomUUID(), UUID.randomUUID(), TOKEN_UNO, Instant.now(), Instant.now());
+        UserSessionEntity revoked = session(UUID.randomUUID(), UUID.randomUUID(), TOKEN_UNO, Instant.now(),
+                Instant.now());
         when(repository.findByDeviceToken(TOKEN_UNO)).thenReturn(Optional.of(revoked));
         HttpServletRequest req = requestWith(TOKEN_UNO, "Chrome", "1.1.1.1");
 
@@ -267,8 +268,7 @@ class DeviceSessionServiceTest {
      * como ordenadores—. Antes eran dos cadenas de cinco ternarios anidados.
      */
     @ParameterizedTest
-    @CsvSource({
-            "'Mozilla/5.0 (Windows NT 10.0) AppleWebKit Chrome/120 Safari/537 Edg/120', 'Edge · Windows'",
+    @CsvSource({"'Mozilla/5.0 (Windows NT 10.0) AppleWebKit Chrome/120 Safari/537 Edg/120', 'Edge · Windows'",
             "'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537 OPR/106',             'Opera · Windows'",
             "'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537',                     'Chrome · Windows'",
             "'Mozilla/5.0 (X11; Linux x86_64) Firefox/121',                             'Firefox · Linux'",
@@ -278,8 +278,7 @@ class DeviceSessionServiceTest {
             "'Mozilla/5.0 (Linux; Android 14) Chrome/120 Safari/537',                   'Chrome · Android'",
             "'NX036/0.1.0 (Android 14; sdk_gphone64_x86_64)',                          'App NX036 · Android'",
             "'NX036/0.1.0 (iOS 17.4; iPhone15,2)',                                      'App NX036 · iOS'",
-            "'algo-que-no-reconocemos/1.0',                                             'Navegador'"
-    })
+            "'algo-que-no-reconocemos/1.0',                                             'Navegador'"})
     void recordLogin_nombraElDispositivoSegunElOrdenDeComprobacion(String userAgent, String expected) {
         HttpServletRequest req = requestWith(null, userAgent, "9.9.9.9");
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
@@ -303,8 +302,8 @@ class DeviceSessionServiceTest {
         when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_EXISTENTE);
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
         UUID userId = UUID.randomUUID();
-        UserSessionEntity existente = UserSessionEntity.builder().userId(userId)
-                .deviceToken(TOKEN_EXISTENTE).createdAt(Instant.now()).build();
+        UserSessionEntity existente = UserSessionEntity.builder().userId(userId).deviceToken(TOKEN_EXISTENTE)
+                .createdAt(Instant.now()).build();
         when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(existente));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -342,9 +341,8 @@ class DeviceSessionServiceTest {
         HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
         when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_AJENO);
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
-        when(repository.findByDeviceToken(TOKEN_AJENO)).thenReturn(Optional.of(
-                UserSessionEntity.builder().userId(UUID.randomUUID()).deviceToken(TOKEN_AJENO)
-                        .createdAt(Instant.now()).build()));
+        when(repository.findByDeviceToken(TOKEN_AJENO)).thenReturn(Optional.of(UserSessionEntity.builder()
+                .userId(UUID.randomUUID()).deviceToken(TOKEN_AJENO).createdAt(Instant.now()).build()));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.recordLogin(UUID.randomUUID(), req, mock(HttpServletResponse.class));
@@ -376,9 +374,8 @@ class DeviceSessionServiceTest {
         when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_EXISTENTE);
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
         UUID userId = UUID.randomUUID();
-        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(
-                UserSessionEntity.builder().userId(userId).deviceToken(TOKEN_EXISTENTE)
-                        .createdAt(Instant.now()).build()));
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(UserSessionEntity.builder()
+                .userId(userId).deviceToken(TOKEN_EXISTENTE).createdAt(Instant.now()).build()));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.recordLogin(userId, req, mock(HttpServletResponse.class));
@@ -398,9 +395,8 @@ class DeviceSessionServiceTest {
         when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn("no-es-un-identificador\r\nSet-Cookie: x=1");
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
         UUID userId = UUID.randomUUID();
-        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(
-                UserSessionEntity.builder().userId(userId).deviceToken(TOKEN_EXISTENTE)
-                        .createdAt(Instant.now()).build()));
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(UserSessionEntity.builder()
+                .userId(userId).deviceToken(TOKEN_EXISTENTE).createdAt(Instant.now()).build()));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.recordLogin(userId, req, mock(HttpServletResponse.class));
@@ -415,8 +411,8 @@ class DeviceSessionServiceTest {
     void isRevoked_miraTambienLaCabecera() {
         HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
         when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_EXISTENTE);
-        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(
-                UserSessionEntity.builder().deviceToken(TOKEN_EXISTENTE).revokedAt(Instant.now()).build()));
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(
+                Optional.of(UserSessionEntity.builder().deviceToken(TOKEN_EXISTENTE).revokedAt(Instant.now()).build()));
 
         assertThat(service.isRevoked(req)).isTrue();
     }

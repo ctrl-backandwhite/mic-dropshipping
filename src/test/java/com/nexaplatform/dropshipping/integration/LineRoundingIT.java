@@ -75,8 +75,7 @@ class LineRoundingIT extends BaseIntegration {
     private static final long SALDO_HOLGADO = 50_000_000L;
 
     private static final ObjectMapper JSON = JsonMapper.builder()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-            .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     @Autowired
     private MarginService marginService;
@@ -118,8 +117,7 @@ class LineRoundingIT extends BaseIntegration {
         JsonNode carrito = cuerpo(cotizarCarrito(100));
 
         // 0,15 × 0,92 = 0,138 → el unitario que ve el cliente es 0,14 €...
-        assertThat(importe(carrito.get("items").get(0).get("unitFormatted").asText()))
-                .isEqualByComparingTo("0.14");
+        assertThat(importe(carrito.get("items").get(0).get("unitFormatted").asText())).isEqualByComparingTo("0.14");
         // ...pero la línea son 100 × 0,15 = 15,00 $, y ESO convertido da 13,80 €.
         assertThat(importe(carrito.get("items").get(0).get("lineTotalFormatted").asText()))
                 .as("0,14 € × 100 = 14,00 € era el cobro inflado: 20 céntimos de más, un +1,45 %")
@@ -132,8 +130,7 @@ class LineRoundingIT extends BaseIntegration {
     void laVistaPreviaEnsenaElMismoImporteDeLinea() {
         JsonNode previa = cuerpo(cotizar(100));
 
-        assertThat(importe(previa.get("items").get(0).get("unitFormatted").asText()))
-                .isEqualByComparingTo("0.14");
+        assertThat(importe(previa.get("items").get(0).get("unitFormatted").asText())).isEqualByComparingTo("0.14");
         assertThat(importe(previa.get("items").get(0).get("lineTotalFormatted").asText()))
                 .isEqualByComparingTo("13.80");
         assertThat(importe(previa.get("subtotalFormatted").asText())).isEqualByComparingTo("13.80");
@@ -149,8 +146,8 @@ class LineRoundingIT extends BaseIntegration {
         JsonNode creado = cuerpo(checkout(100));
 
         JsonNode detalle = cuerpo(client.get().uri(MIS_PEDIDOS + "/" + creado.get("id").asText())
-                .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR")
-                .exchange().expectStatus().isOk());
+                .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR").exchange()
+                .expectStatus().isOk());
 
         assertThat(importe(detalle.get("items").get(0).get("lineTotalFormatted").asText()))
                 .isEqualByComparingTo("13.80");
@@ -183,8 +180,7 @@ class LineRoundingIT extends BaseIntegration {
         JsonNode carrito = cuerpo(cotizarCarrito(1));
 
         // Sin cantidad que multiplicar no hay redondeo que multiplicar: unitario e importe coinciden.
-        assertThat(importe(carrito.get("items").get(0).get("unitFormatted").asText()))
-                .isEqualByComparingTo("0.14");
+        assertThat(importe(carrito.get("items").get(0).get("unitFormatted").asText())).isEqualByComparingTo("0.14");
         assertThat(importe(carrito.get("items").get(0).get("lineTotalFormatted").asText()))
                 .isEqualByComparingTo("0.14");
     }
@@ -201,8 +197,7 @@ class LineRoundingIT extends BaseIntegration {
         JsonNode carrito = cuerpo(cotizarCarrito(3));
 
         assertThat(importe(carrito.get("items").get(0).get("lineTotalFormatted").asText()))
-                .as("0,525 € sube a 0,53, nunca baja a 0,52")
-                .isEqualByComparingTo("0.53");
+                .as("0,525 € sube a 0,53, nunca baja a 0,52").isEqualByComparingTo("0.53");
     }
 
     @Test
@@ -241,22 +236,19 @@ class LineRoundingIT extends BaseIntegration {
                 {"productId":"%s","quantity":100},{"productId":"%s","quantity":3}
                 """.formatted(productId, casiDosDolares);
 
-        JsonNode previa = cuerpo(client.post().uri(COTIZAR)
+        JsonNode previa = cuerpo(client.post().uri(COTIZAR).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .header(CABECERA_DIVISA, "EUR").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"country\":\"" + PAIS + "\",\"region\":null,\"items\":[" + lineas + "]}").exchange()
+                .expectStatus().isOk());
+        JsonNode creado = cuerpo(client.post().uri(CHECKOUT).header("Idempotency-Key", UUID.randomUUID().toString())
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"country\":\"" + PAIS + "\",\"region\":null,\"items\":[" + lineas + "]}")
-                .exchange().expectStatus().isOk());
-        JsonNode creado = cuerpo(client.post().uri(CHECKOUT)
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
-                        + "\"items\":[" + lineas + "]}")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"shippingAddressId\":\"" + direccionId
+                        + "\",\"paymentMethod\":\"WALLET\"," + "\"items\":[" + lineas + "]}")
                 .exchange().expectStatus().isCreated());
 
         JsonNode detalle = cuerpo(client.get().uri(MIS_PEDIDOS + "/" + creado.get("id").asText())
-                .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR")
-                .exchange().expectStatus().isOk());
+                .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR").exchange()
+                .expectStatus().isOk());
 
         // 13,80 + 5,49 = 19,29 € de producto, más 4,60 € de envío = 23,89 €.
         assertThat(importe(previa.get("subtotalFormatted").asText())).isEqualByComparingTo("19.29");
@@ -272,8 +264,8 @@ class LineRoundingIT extends BaseIntegration {
 
     private WebTestClient.ResponseSpec cotizarCarrito(int cantidad) {
         String cuerpo = "[{\"productId\":\"" + productId + "\",\"quantity\":" + cantidad + "}]";
-        return client.post().uri(CARRITO).header(CABECERA_DIVISA, "EUR")
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isOk();
+        return client.post().uri(CARRITO).header(CABECERA_DIVISA, "EUR").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(cuerpo).exchange().expectStatus().isOk();
     }
 
     private WebTestClient.ResponseSpec cotizar(int cantidad) {
@@ -281,8 +273,8 @@ class LineRoundingIT extends BaseIntegration {
                 {"country":"%s","region":null,"items":[{"productId":"%s","quantity":%d}]}
                 """.formatted(PAIS, productId, cantidad);
         return client.post().uri(COTIZAR).header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .header(CABECERA_DIVISA, "EUR").contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo)
-                .exchange().expectStatus().isOk();
+                .header(CABECERA_DIVISA, "EUR").contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
+                .expectStatus().isOk();
     }
 
     private WebTestClient.ResponseSpec checkout(int cantidad) {
@@ -335,9 +327,10 @@ class LineRoundingIT extends BaseIntegration {
     /* ---------- Siembra ---------- */
 
     private void sembrarDivisa(String codigo, String nombre, String simbolo, String locale, String tasa) {
-        jdbcTemplate.update("INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active)"
-                + " VALUES (gen_random_uuid(), ?, ?, ?, ?, ?::numeric, TRUE) ON CONFLICT (code) DO UPDATE"
-                + " SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = TRUE",
+        jdbcTemplate.update(
+                "INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active)"
+                        + " VALUES (gen_random_uuid(), ?, ?, ?, ?, ?::numeric, TRUE) ON CONFLICT (code) DO UPDATE"
+                        + " SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = TRUE",
                 codigo, nombre, simbolo, locale, tasa);
     }
 
@@ -365,8 +358,7 @@ class LineRoundingIT extends BaseIntegration {
         jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
                 + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
                 + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
-                + " 'USD', 0, 0, 500, now(), now())",
-                id, "producto-" + sufijo, "ext-" + sufijo, basePrice);
+                + " 'USD', 0, 0, 500, now(), now())", id, "producto-" + sufijo, "ext-" + sufijo, basePrice);
         return id;
     }
 
@@ -375,16 +367,14 @@ class LineRoundingIT extends BaseIntegration {
                 {"fullName":"Comprador de prueba","phone":"+34600000000","line1":"Gran Via 1",
                  "city":"Madrid","postalCode":"28013","country":"%s","isDefault":true}
                 """.formatted(pais);
-        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES)
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(creada.get("id").asText());
     }
 
     private long saldoEnBd() {
-        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?",
-                Long.class, userId);
+        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?", Long.class,
+                userId);
         return saldo == null ? 0L : saldo;
     }
 }

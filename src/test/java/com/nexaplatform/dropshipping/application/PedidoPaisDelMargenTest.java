@@ -27,6 +27,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderInde
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -80,36 +81,62 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class PedidoPaisDelMargenTest {
 
-    @Mock com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
-    @Mock com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
-    @Mock ProductRepository productRepository;
-    @Mock ProductVariantRepository variantRepository;
-    @Mock UserRepository userRepository;
-    @Mock ShopConnectionRepository shopConnectionRepository;
-    @Mock UserAddressRepository userAddressRepository;
-    @Mock WebhookDispatcherService webhooks;
-    @Mock WalletUseCase walletUseCase;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock PricingService pricingService;
-    @Mock AffiliateProgramService affiliateProgramService;
-    @Mock StockService stockService;
-    @Mock PaymentUseCase paymentUseCase;
-    @Mock OrderEmailService orderEmailService;
+    @Mock
+    com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
+    @Mock
+    ProductRepository productRepository;
+    @Mock
+    ProductVariantRepository variantRepository;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    ShopConnectionRepository shopConnectionRepository;
+    @Mock
+    UserAddressRepository userAddressRepository;
+    @Mock
+    WebhookDispatcherService webhooks;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    PricingService pricingService;
+    @Mock
+    AffiliateProgramService affiliateProgramService;
+    @Mock
+    StockService stockService;
+    @Mock
+    PaymentUseCase paymentUseCase;
+    @Mock
+    OrderEmailService orderEmailService;
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
     FulfillmentRouter router;
-    @Mock CheckoutTotalsService checkoutTotalsService;
-    @Mock ProductSubsidyService productSubsidyService;
-    @Mock OperatorCommissionService operatorCommissionService;
-    @Mock OrderIndexer orderIndexer;
-    @Mock OrderSearchService orderSearchService;
-    @Mock SupplierPurchaseService supplierPurchaseService;
+    @Mock
+    CheckoutTotalsService checkoutTotalsService;
+    @Mock
+    ProductSubsidyService productSubsidyService;
+    @Mock
+    OperatorCommissionService operatorCommissionService;
+    @Mock
+    OrderIndexer orderIndexer;
+    @Mock
+    OrderSearchService orderSearchService;
+    @Mock
+    SupplierPurchaseService supplierPurchaseService;
 
     @org.mockito.Mock
     com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
-    @Mock UnserviceableZoneService unserviceableZoneService;
-    @Spy CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
+    @Mock
+    UnserviceableZoneService unserviceableZoneService;
+    @Spy
+    CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
 
     @InjectMocks
     private OrderUseCaseImpl subject;
@@ -172,18 +199,18 @@ class PedidoPaisDelMargenTest {
 
     /** El tarificador anota el país que ve y devuelve el precio pedido. */
     private void precioUnitario(BigDecimal retailUsd) {
-        when(pricingService.priceFor(any(), any())).thenAnswer(inv -> {
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenAnswer(inv -> {
             paisesAlTarificar.add(PricingCountryHolder.get());
-            return new PricingService.PricedAmount(new BigDecimal("1.34"), retailUsd, retailUsd,
-                    "USD", "$", null, null, null, null, null, null, null, null, null);
+            return new PricingService.PricedAmount(new BigDecimal("1.34"), retailUsd, retailUsd, "USD", "$", null, null,
+                    null, null, null, null, null, null, null);
         });
     }
 
     private void comprar(int unidades) {
         MeCheckoutDtoIn req = new MeCheckoutDtoIn();
         req.setPaymentMethod("WALLET");
-        req.setShippingAddressInline(new AddressInput("Nombre Apellido", "+34600000000",
-                "comprador@example.com", "Calle 1", null, "Madrid", "Madrid", "28001", DESTINO));
+        req.setShippingAddressInline(new AddressInput("Nombre Apellido", "+34600000000", "comprador@example.com",
+                "Calle 1", null, "Madrid", "Madrid", "28001", DESTINO));
         MeCheckoutDtoIn.Item item = new MeCheckoutDtoIn.Item();
         item.setProductId(PRODUCTO);
         item.setQuantity(unidades);
@@ -227,8 +254,7 @@ class PedidoPaisDelMargenTest {
         comprar(1);
 
         assertThat(PricingCountryHolder.get())
-                .as("los hilos vienen de un pool: dejarlo cambiado tarifica mal la SIGUIENTE petición")
-                .isEqualTo("MX");
+                .as("los hilos vienen de un pool: dejarlo cambiado tarifica mal la SIGUIENTE petición").isEqualTo("MX");
     }
 
     // ------------------------------------------------------------------ el céntimo exacto
@@ -237,18 +263,12 @@ class PedidoPaisDelMargenTest {
     @CsvSource({
             // Redondeo del céntimo: HALF_UP, el mismo que el catálogo y la vista previa. La mitad
             // exacta sube, que es lo que el cliente ha visto en la ficha.
-            "5.475, 1, 548",
-            "5.474, 1, 547",
-            "5.005, 1, 501",
-            "0.005, 1, 1",
-            "9.995, 1, 1000",
+            "5.475, 1, 548", "5.474, 1, 547", "5.005, 1, 501", "0.005, 1, 1", "9.995, 1, 1000",
             // Y el importe de línea multiplica el céntimo ya redondeado, no el decimal crudo: si se
             // multiplicara antes, 5,475 × 4 daría 2.190 y el cliente vería cuatro veces 5,48 = 21,92.
-            "5.475, 4, 2192",
-            "0.005, 100, 100",
+            "5.475, 4, 2192", "0.005, 100, 100",
             // Céntimo exacto sin decimales que redondear: no puede desviarse ni por arriba ni por abajo.
-            "12.00, 3, 3600",
-    })
+            "12.00, 3, 3600",})
     @DisplayName("el céntimo cobrado sale de redondear el precio al alza en la mitad exacta")
     void elCentimoCobradoEsElDeLaFicha(String retailUsd, int unidades, int lineaEsperadaCents) {
         PricingCountryHolder.set("MX");

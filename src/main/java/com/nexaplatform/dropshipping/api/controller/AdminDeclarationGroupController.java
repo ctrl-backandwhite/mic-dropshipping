@@ -91,8 +91,7 @@ public class AdminDeclarationGroupController implements AdminDeclarationGroupApi
         grupo.setApprovedAt(null);
         grupo.setApprovedBy(null);
         grupo.setUpdatedAt(Instant.now());
-        log.info("Grupo de declaración {} ({}) sin aprobación: vuelve a una línea por producto",
-                grupo.getHs6(), id);
+        log.info("Grupo de declaración {} ({}) sin aprobación: vuelve a una línea por producto", grupo.getHs6(), id);
         return ResponseEntity.ok(vista(groupRepository.save(grupo)));
     }
 
@@ -106,8 +105,8 @@ public class AdminDeclarationGroupController implements AdminDeclarationGroupApi
     }
 
     private static AdminDeclarationGroupDtoOut vista(CustomsDeclarationGroupEntity g) {
-        return new AdminDeclarationGroupDtoOut(g.getId(), g.getHs6(), g.getMaterial(), g.getUsageCode(),
-                g.getEname(), g.getCname(), g.getProductCount(), g.getApprovedAt() != null, g.getApprovedAt(),
-                g.getApprovedBy(), CustomsDeclarationGroupSync.esRellenoSinRedactar(g));
+        return new AdminDeclarationGroupDtoOut(g.getId(), g.getHs6(), g.getMaterial(), g.getUsageCode(), g.getEname(),
+                g.getCname(), g.getProductCount(), g.getApprovedAt() != null, g.getApprovedAt(), g.getApprovedBy(),
+                CustomsDeclarationGroupSync.esRellenoSinRedactar(g));
     }
 }

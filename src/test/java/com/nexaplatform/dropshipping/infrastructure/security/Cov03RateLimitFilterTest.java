@@ -33,8 +33,7 @@ class Cov03RateLimitFilterTest {
         chain = mock(FilterChain.class);
     }
 
-    private MockHttpServletResponse lanza(String path, String ip, String forwardedFor, String bearer)
-            throws Exception {
+    private MockHttpServletResponse lanza(String path, String ip, String forwardedFor, String bearer) throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", path);
         req.setRequestURI(path);
         req.setRemoteAddr(ip);
@@ -72,8 +71,7 @@ class Cov03RateLimitFilterTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "/api/auth/login,                    auth.login.api,  10",
+    @CsvSource({"/api/auth/login,                    auth.login.api,  10",
             "/api/auth/refresh,                  auth.refresh,    30",
             "/api/auth/register,                 auth.register,   5",
             "/api/auth/password-reset/request,   auth.reset.req,  20",
@@ -86,8 +84,7 @@ class Cov03RateLimitFilterTest {
             "/api/search,                        storefront.web,  100",
             "/api/v1/rate-limits,                storefront,      60",
             "/api/v1/invoices/1,                 storefront,      60",
-            "/api/v1/integrations/shops/7/hook,  inbound.shop,    240"
-    })
+            "/api/v1/integrations/shops/7/hook,  inbound.shop,    240"})
     void cadaRutaCaeEnSuPoliticaYConSuCuota(String path, String politica, int capacidad) throws Exception {
         // El orden de evaluación importa: si las reglas de autenticación no fueran primero, /api/auth/login
         // caería en el cubo público de 100/min y el credential-stuffing quedaría prácticamente sin freno.

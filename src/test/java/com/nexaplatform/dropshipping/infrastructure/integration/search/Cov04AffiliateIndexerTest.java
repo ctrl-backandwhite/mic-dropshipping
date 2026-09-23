@@ -143,8 +143,8 @@ class Cov04AffiliateIndexerTest {
     @Test
     void elArranqueRellenaElIndiceCuandoEstaVacio() throws IOException {
         when(affiliateSearchService.pageIds(null, null, 0, 1)).thenReturn(Optional.empty());
-        when(affiliateRepo.findAll()).thenReturn(List.of(afiliado(usuario("a@test", "Ana", "López", null),
-                "AF1", "ACTIVE")));
+        when(affiliateRepo.findAll())
+                .thenReturn(List.of(afiliado(usuario("a@test", "Ana", "López", null), "AF1", "ACTIVE")));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 
         indexer.warmUpOnStartup();
@@ -182,12 +182,9 @@ class Cov04AffiliateIndexerTest {
         verify(client).index(captor.capture());
         assertThat(captor.getValue().index()).isEqualTo(INDEX);
         assertThat(captor.getValue().id()).isEqualTo(a.getId().toString());
-        assertThat(captor.getValue().document())
-                .containsEntry("id", a.getId().toString())
-                .containsEntry("email", "ana@test")
-                .containsEntry("name", "Ana López Ruiz")
-                .containsEntry("code", "AF-1")
-                .containsEntry("status", "PENDING")
+        assertThat(captor.getValue().document()).containsEntry("id", a.getId().toString())
+                .containsEntry("email", "ana@test").containsEntry("name", "Ana López Ruiz")
+                .containsEntry("code", "AF-1").containsEntry("status", "PENDING")
                 .containsEntry("createdAt", "2026-07-29T10:15:30Z");
     }
 
@@ -253,9 +250,9 @@ class Cov04AffiliateIndexerTest {
 
     @Test
     void reindexarDevuelveCuantosAfiliadosSeIndexaron() throws IOException {
-        when(affiliateRepo.findAll()).thenReturn(List.of(
-                afiliado(usuario("a@test", "Ana", null, null), "AF-1", "ACTIVE"),
-                afiliado(usuario("b@test", "Bea", null, null), "AF-2", "ACTIVE")));
+        when(affiliateRepo.findAll())
+                .thenReturn(List.of(afiliado(usuario("a@test", "Ana", null, null), "AF-1", "ACTIVE"),
+                        afiliado(usuario("b@test", "Bea", null, null), "AF-2", "ACTIVE")));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 
         assertThat(indexer.reindexAll()).isEqualTo(2);
@@ -268,9 +265,9 @@ class Cov04AffiliateIndexerTest {
 
         indexer.deleteFromIndex(id);
 
-        @SuppressWarnings({ "unchecked", "rawtypes" })
-        ArgumentCaptor<Function<DeleteRequest.Builder, ObjectBuilder<DeleteRequest>>> captor =
-                ArgumentCaptor.forClass((Class) Function.class);
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        ArgumentCaptor<Function<DeleteRequest.Builder, ObjectBuilder<DeleteRequest>>> captor = ArgumentCaptor
+                .forClass((Class) Function.class);
         verify(client).delete(captor.capture());
         DeleteRequest req = captor.getValue().apply(new DeleteRequest.Builder()).build();
         assertThat(req.index()).isEqualTo(INDEX);

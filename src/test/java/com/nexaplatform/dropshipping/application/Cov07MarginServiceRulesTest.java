@@ -66,7 +66,7 @@ class Cov07MarginServiceRulesTest {
 
     @Test
     void unaReglaDeUnPaisGanaSobreLaGlobalCuandoElPaisCoincide() {
-        PriceRuleEntity global = rule(PriceRuleScope.GLOBAL, null, "100");   // cualquier país: 100%
+        PriceRuleEntity global = rule(PriceRuleScope.GLOBAL, null, "100"); // cualquier país: 100%
         PriceRuleEntity alemania = rule(PriceRuleScope.GLOBAL, null, "120"); // DE: 120%
         alemania.setCountryCode("DE");
         rules(global, alemania);
@@ -115,8 +115,7 @@ class Cov07MarginServiceRulesTest {
         rules(rule(PriceRuleScope.SUPPLIER, supplierId, "10"), rule(PriceRuleScope.PRODUCT_GROUP, groupId, "20"));
         when(groupMemberRepository.findGroupIdsByProductId(productId)).thenReturn(List.of(groupId));
 
-        assertThat(resolvedScope(product(productId, supplierId, null), null))
-                .isEqualTo(PriceRuleScope.PRODUCT_GROUP);
+        assertThat(resolvedScope(product(productId, supplierId, null), null)).isEqualTo(PriceRuleScope.PRODUCT_GROUP);
     }
 
     @Test
@@ -377,8 +376,7 @@ class Cov07MarginServiceRulesTest {
     private static PriceRuleEntity rule(PriceRuleScope scope, UUID scopeId, String margin, String min, String max) {
         PriceRuleEntity rule = PriceRuleEntity.builder().scope(scope).scopeId(scopeId)
                 .channel(PriceRuleChannel.STOREFRONT).marginType(MarginType.PERCENTAGE)
-                .marginValue(new BigDecimal(margin)).active(true)
-                .minCostUsd(min == null ? null : new BigDecimal(min))
+                .marginValue(new BigDecimal(margin)).active(true).minCostUsd(min == null ? null : new BigDecimal(min))
                 .maxCostUsd(max == null ? null : new BigDecimal(max)).build();
         rule.setId(UUID.randomUUID());
         return rule;

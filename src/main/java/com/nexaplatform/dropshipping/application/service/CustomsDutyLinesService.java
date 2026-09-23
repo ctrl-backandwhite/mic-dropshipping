@@ -85,8 +85,7 @@ public class CustomsDutyLinesService {
      * lo que se le va a transmitir al transportista.
      */
     public record Line(UUID productId, String hsCode, String description, String originCountry, int quantity,
-                       int unitPriceCents, int unitWeightGrams, int lengthMm, int widthMm, int heightMm,
-                       boolean withBattery) {
+            int unitPriceCents, int unitWeightGrams, int lengthMm, int widthMm, int heightMm, boolean withBattery) {
     }
 
     /** Un bulto ya formado: lo que declara y cuántas partidas arancelarias distintas contiene. */
@@ -142,9 +141,8 @@ public class CustomsDutyLinesService {
                         l.heightMm(), l.withBattery()));
             }
         }
-        List<ParcelSplitter.Bin> bins = ParcelSplitter.split(units,
-                new ParcelSplitter.Limits(maxWeightGramsFor(channelCode, countryCode), maxParcelValueCents,
-                        maxParcelUnits));
+        List<ParcelSplitter.Bin> bins = ParcelSplitter.split(units, new ParcelSplitter.Limits(
+                maxWeightGramsFor(channelCode, countryCode), maxParcelValueCents, maxParcelUnits));
 
         List<DutyParcel> parcels = new ArrayList<>(bins.size());
         for (ParcelSplitter.Bin bin : bins) {
@@ -208,8 +206,7 @@ public class CustomsDutyLinesService {
      * rama solo cubre catálogo incompleto.
      */
     private static String classificationKey(Line line) {
-        return claveDeLineaDeDeclaracion(line.hsCode(), line.description(), line.originCountry(),
-                line.productId());
+        return claveDeLineaDeDeclaracion(line.hsCode(), line.description(), line.originCountry(), line.productId());
     }
 
     /**
@@ -222,8 +219,7 @@ public class CustomsDutyLinesService {
      * producto y la guía agrupaba por descripción y origen, así que dos artículos sin partida con la misma
      * descripción se cobraban como dos derechos y se declaraban como uno.
      */
-    public static String claveDeLineaDeDeclaracion(String hsCode, String descripcion, String origen,
-            UUID productId) {
+    public static String claveDeLineaDeDeclaracion(String hsCode, String descripcion, String origen, UUID productId) {
         String hs = hsCode == null ? "" : hsCode.replaceAll("[^0-9]", "");
         if (hs.length() < 6) {
             return "SIN-HS:" + productId;
@@ -255,10 +251,8 @@ public class CustomsDutyLinesService {
         if (product == null || product.getTranslations() == null) {
             return null;
         }
-        return product.getTranslations().stream()
-                .filter(t -> "en".equalsIgnoreCase(t.getLanguage()))
-                .map(ProductTranslationEntity::getTitle)
-                .filter(t -> t != null && !t.isBlank())
-                .findFirst().orElse(null);
+        return product.getTranslations().stream().filter(t -> "en".equalsIgnoreCase(t.getLanguage()))
+                .map(ProductTranslationEntity::getTitle).filter(t -> t != null && !t.isBlank()).findFirst()
+                .orElse(null);
     }
 }

@@ -40,41 +40,19 @@ class PaymentJpaRepositoryAdapterIT extends PersistenceITBase {
 
     @BeforeEach
     void setUp() {
-        userA = users.save(UserEntity.builder()
-                .email("pay-a-" + UUID.randomUUID() + "@nx.local")
-                .role(UserRole.USER)
-                .active(true)
-                .googleLinked(false)
-                .build());
-        userB = users.save(UserEntity.builder()
-                .email("pay-b-" + UUID.randomUUID() + "@nx.local")
-                .role(UserRole.USER)
-                .active(true)
-                .googleLinked(false)
-                .build());
-        walletA = wallets.save(WalletEntity.builder()
-                .user(userA)
-                .balanceUsdCents(0)
-                .holdUsdCents(0)
-                .currencyDefault("USD")
-                .status("ACTIVE")
-                .build());
+        userA = users.save(UserEntity.builder().email("pay-a-" + UUID.randomUUID() + "@nx.local").role(UserRole.USER)
+                .active(true).googleLinked(false).build());
+        userB = users.save(UserEntity.builder().email("pay-b-" + UUID.randomUUID() + "@nx.local").role(UserRole.USER)
+                .active(true).googleLinked(false).build());
+        walletA = wallets.save(WalletEntity.builder().user(userA).balanceUsdCents(0).holdUsdCents(0)
+                .currencyDefault("USD").status("ACTIVE").build());
     }
 
     private PaymentEntity payment(UserEntity user, UUID orderId, PaymentStatus status, String provider,
             String providerRef, String idempotencyKey) {
-        return PaymentEntity.builder()
-                .user(user)
-                .wallet(user == userA ? walletA : null)
-                .orderId(orderId)
-                .purpose("ORDER_PAYMENT")
-                .method(PaymentMethod.CARD)
-                .status(status)
-                .amountUsdCents(1000)
-                .settlementCurrency("USD")
-                .provider(provider)
-                .providerRef(providerRef)
-                .idempotencyKey(idempotencyKey)
+        return PaymentEntity.builder().user(user).wallet(user == userA ? walletA : null).orderId(orderId)
+                .purpose("ORDER_PAYMENT").method(PaymentMethod.CARD).status(status).amountUsdCents(1000)
+                .settlementCurrency("USD").provider(provider).providerRef(providerRef).idempotencyKey(idempotencyKey)
                 .build();
     }
 
@@ -107,8 +85,7 @@ class PaymentJpaRepositoryAdapterIT extends PersistenceITBase {
 
         List<PaymentEntity> ofA = payments.findByUser_IdOrderByCreatedAtDesc(userA.getId());
 
-        assertThat(ofA).hasSize(2)
-                .allMatch(p -> p.getUser().getId().equals(userA.getId()));
+        assertThat(ofA).hasSize(2).allMatch(p -> p.getUser().getId().equals(userA.getId()));
     }
 
     @Test
@@ -121,8 +98,7 @@ class PaymentJpaRepositoryAdapterIT extends PersistenceITBase {
 
         List<PaymentEntity> ofOrder = payments.findByOrderIdOrderByCreatedAtDesc(orderId);
 
-        assertThat(ofOrder).hasSize(2)
-                .allMatch(p -> p.getOrderId().equals(orderId));
+        assertThat(ofOrder).hasSize(2).allMatch(p -> p.getOrderId().equals(orderId));
     }
 
     @Test

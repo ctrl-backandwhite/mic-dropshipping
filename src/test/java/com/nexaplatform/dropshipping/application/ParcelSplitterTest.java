@@ -48,8 +48,7 @@ class ParcelSplitterTest {
         // 6 unidades de 900 g con tope de 2 kg -> caben 2 por bulto (1800 g), es decir 3 bultos.
         List<Bin> bins = ParcelSplitter.split(units(6, 900, 100), new Limits(2000, 0, 0));
 
-        assertThat(bins).hasSize(3)
-                .allSatisfy(b -> assertThat(b.spec().weightGrams()).isLessThanOrEqualTo(2000));
+        assertThat(bins).hasSize(3).allSatisfy(b -> assertThat(b.spec().weightGrams()).isLessThanOrEqualTo(2000));
     }
 
     @Test
@@ -57,14 +56,12 @@ class ParcelSplitterTest {
         // 4 unidades de 10 $ con tope de 24 $ -> 2 por bulto.
         List<Bin> bins = ParcelSplitter.split(units(4, 100, 1000), new Limits(0, 2400, 0));
 
-        assertThat(bins).hasSize(2)
-                .allSatisfy(b -> assertThat(b.valueCents()).isLessThanOrEqualTo(2400));
+        assertThat(bins).hasSize(2).allSatisfy(b -> assertThat(b.valueCents()).isLessThanOrEqualTo(2400));
     }
 
     @Test
     void respetaAmbosLimitesALaVez() {
-        List<Unit> mixed = List.of(
-                unit(0, 1500, 500), unit(1, 600, 2000), unit(2, 300, 300), unit(3, 1900, 100));
+        List<Unit> mixed = List.of(unit(0, 1500, 500), unit(1, 600, 2000), unit(2, 300, 300), unit(3, 1900, 100));
 
         List<Bin> bins = ParcelSplitter.split(mixed, new Limits(2000, 2400, 0));
 
@@ -121,15 +118,13 @@ class ParcelSplitterTest {
     void tambienSePuedeLimitarPorNumeroDeArticulos() {
         List<Bin> bins = ParcelSplitter.split(units(5, 100, 100), new Limits(0, 0, 2));
 
-        assertThat(bins).hasSize(3)
-                .allSatisfy(b -> assertThat(b.units()).hasSizeLessThanOrEqualTo(2));
+        assertThat(bins).hasSize(3).allSatisfy(b -> assertThat(b.units()).hasSizeLessThanOrEqualTo(2));
     }
 
     @Test
     void elCasoRealDelPedidoRechazadoSeResuelveEnVariosBultos() {
         // Pedido de 11,853 kg y 70,21 $ que BPA rechazó entero (máx 2 kg / 24 $).
-        List<Unit> pedido = List.of(
-                unit(0, 4000, 2500), unit(1, 300, 1200), unit(2, 300, 1200), unit(3, 7253, 3121));
+        List<Unit> pedido = List.of(unit(0, 4000, 2500), unit(1, 300, 1200), unit(2, 300, 1200), unit(3, 7253, 3121));
 
         List<Bin> bins = ParcelSplitter.split(pedido, new Limits(2000, 2400, 0));
 

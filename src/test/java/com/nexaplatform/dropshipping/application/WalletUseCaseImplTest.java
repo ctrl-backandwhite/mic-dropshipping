@@ -54,7 +54,8 @@ class WalletUseCaseImplTest {
         // El saldo se mueve con un UPDATE atómico en la base (applyBalanceDelta), no leyendo y guardando la
         // entidad: es lo que impide el doble gasto entre checkouts simultáneos. Se reproduce esa semántica
         // sobre la wallet simulada para que la prueba siga comprobando la regla, no el mecanismo.
-        org.mockito.Mockito.lenient().when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
+        org.mockito.Mockito.lenient()
+                .when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenAnswer(inv -> {
                     var actual = walletRepository.findByUserId(inv.getArgument(0));
                     if (actual.isEmpty()) {
@@ -67,9 +68,8 @@ class WalletUseCaseImplTest {
                     actual.get().setBalanceUsdCents(nuevo);
                     return true;
                 });
-        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any()))
-                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0))
-                        .map(w -> w.getBalanceUsdCents()).orElse(0L));
+        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any())).thenAnswer(
+                inv -> walletRepository.findByUserId(inv.getArgument(0)).map(w -> w.getBalanceUsdCents()).orElse(0L));
         when(txRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.empty());
         // Ya no se stubbea save(): el saldo se mueve con applyBalanceDelta, no guardando la entidad.
         when(txRepository.save(any())).thenAnswer(inv -> {

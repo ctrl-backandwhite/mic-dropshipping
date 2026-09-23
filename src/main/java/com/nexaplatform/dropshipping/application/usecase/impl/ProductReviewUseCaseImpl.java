@@ -76,16 +76,15 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
         var author = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User"));
         String authorName = author.getDisplayName() != null && !author.getDisplayName().isBlank()
                 ? author.getDisplayName()
-                : (author.getFirstName() != null && !author.getFirstName().isBlank() ? author.getFirstName()
+                : (author.getFirstName() != null && !author.getFirstName().isBlank()
+                        ? author.getFirstName()
                         : "Anónimo");
         short rating = (short) Math.clamp(review.getRating(), 1, 5);
-        ProductReviewEntity entity = ProductReviewEntity.builder()
-                .product(product)
-                .user(author)
-                .authorName(authorName)
+        ProductReviewEntity entity = ProductReviewEntity.builder().product(product).user(author).authorName(authorName)
                 .authorCountry(author.getCountry()).rating(rating).title(review.getTitle()).body(review.getBody())
                 .language(review.getLanguage() != null && !review.getLanguage().isBlank()
-                        ? review.getLanguage().toLowerCase() : "es")
+                        ? review.getLanguage().toLowerCase()
+                        : "es")
                 // Escrita en la plataforma, no importada del proveedor. Sin compra verificada asociada aún.
                 .helpfulCount(0).verifiedPurchase(false).source(ReviewSource.CUSTOMER).approved(true).build();
         ProductReviewEntity saved = reviewJpa.save(entity);
@@ -93,7 +92,8 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
         // Recalcular media y contador del producto (solo reseñas aprobadas).
         Map<Integer, Long> dist = productReviewRepository.ratingDistribution(productId);
         long total = dist.values().stream().mapToLong(Long::longValue).sum();
-        double avg = total == 0 ? 0.0
+        double avg = total == 0
+                ? 0.0
                 : dist.entrySet().stream().mapToDouble(e -> e.getKey() * e.getValue()).sum() / total;
         product.setReviewCount((int) total);
         product.setRating(BigDecimal.valueOf(Math.round(avg * 100) / 100.0));

@@ -40,8 +40,8 @@ class PostalCodeValidationIT extends BaseIntegration {
                 + " VALUES (?, ?, 'USER', true, 'es', now(), now())", userId, "cp@nx036.local");
         // La base de los IT se vacía entre pruebas: se repone la lista de zonas excluidas con el mismo
         // fichero que se despliega (ver UnserviceableZoneIT).
-        jdbcTemplate.execute(new String(new ClassPathResource(MIGRACION).getInputStream().readAllBytes(),
-                StandardCharsets.UTF_8));
+        jdbcTemplate.execute(
+                new String(new ClassPathResource(MIGRACION).getInputStream().readAllBytes(), StandardCharsets.UTF_8));
     }
 
     @Test
@@ -85,16 +85,13 @@ class PostalCodeValidationIT extends BaseIntegration {
     @Test
     @DisplayName("editar una dirección tampoco deja colar un código postal inválido")
     void alEditarTampocoCuela() {
-        String creada = crearDireccion("ES", "28001").expectStatus().isCreated()
-                .expectBody(String.class).returnResult().getResponseBody();
+        String creada = crearDireccion("ES", "28001").expectStatus().isCreated().expectBody(String.class).returnResult()
+                .getResponseBody();
         String id = idDe(creada);
 
-        client.put().uri(DIRECCIONES + "/" + id)
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(cuerpo("ES", "07001A"))
-                .exchange()
-                .expectStatus().isEqualTo(422);
+        client.put().uri(DIRECCIONES + "/" + id).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo("ES", "07001A")).exchange().expectStatus()
+                .isEqualTo(422);
     }
 
     /** El identificador de la dirección recién creada, tal como lo devuelve la API. */
@@ -107,11 +104,8 @@ class PostalCodeValidationIT extends BaseIntegration {
     }
 
     private WebTestClient.ResponseSpec crearDireccion(String pais, String cp) {
-        return client.post().uri(DIRECCIONES)
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(cuerpo(pais, cp))
-                .exchange();
+        return client.post().uri(DIRECCIONES).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo(pais, cp)).exchange();
     }
 
     private static String cuerpo(String pais, String cp) {

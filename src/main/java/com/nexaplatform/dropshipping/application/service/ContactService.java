@@ -107,8 +107,8 @@ public class ContactService {
         log.info("::> [CONTACT] Respuesta de admin enviada a {}", cleanEmail);
     }
 
-    private void notifyAdminsByEmail(List<User> admins, String name, String senderEmail, String subject,
-            String message, String title) {
+    private void notifyAdminsByEmail(List<User> admins, String name, String senderEmail, String subject, String message,
+            String title) {
         String sender = name.isBlank() ? senderEmail : name + " <" + senderEmail + ">";
         for (User admin : admins) {
             String adminEmail = admin.getEmail();

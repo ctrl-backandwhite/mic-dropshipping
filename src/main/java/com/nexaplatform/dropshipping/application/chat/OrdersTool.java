@@ -53,11 +53,8 @@ public class OrdersTool implements ChatTool {
         List<Order> mios = orders.listMyOrders(context.userId());
         ObjectNode salida = mapper.createObjectNode();
         ArrayNode items = salida.putArray("pedidos");
-        mios.stream()
-                .sorted(Comparator.comparing(Order::getPlacedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(MAX_PEDIDOS)
-                .forEach(pedido -> items.add(resumir(pedido)));
+        mios.stream().sorted(Comparator.comparing(Order::getPlacedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(MAX_PEDIDOS).forEach(pedido -> items.add(resumir(pedido)));
         return salida.toString();
     }
 

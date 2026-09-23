@@ -57,8 +57,8 @@ public class ObjectStorageService {
             client = MinioClient.builder().endpoint(endpoint).credentials(accessKey, secretKey).region(region).build();
             if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build())) {
                 client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-                client.setBucketPolicy(SetBucketPolicyArgs.builder().bucket(bucket)
-                        .config(publicReadPolicy(bucket)).build());
+                client.setBucketPolicy(
+                        SetBucketPolicyArgs.builder().bucket(bucket).config(publicReadPolicy(bucket)).build());
                 log.info("Bucket '{}' creado y configurado de lectura pública", bucket);
             }
             log.info("Object storage listo: endpoint={} bucket={} publicUrl={}", endpoint, bucket, publicUrl);
@@ -84,8 +84,8 @@ public class ObjectStorageService {
             return keys;
         }
         try {
-            for (io.minio.Result<io.minio.messages.Item> r : client.listObjects(
-                    io.minio.ListObjectsArgs.builder().bucket(bucket).recursive(true).build())) {
+            for (io.minio.Result<io.minio.messages.Item> r : client
+                    .listObjects(io.minio.ListObjectsArgs.builder().bucket(bucket).recursive(true).build())) {
                 keys.add(r.get().objectName());
             }
         } catch (Exception e) {

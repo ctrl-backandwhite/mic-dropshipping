@@ -41,9 +41,8 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
                 moneda_vista = EXCLUDED.moneda_vista,
                 precio_visto_formateado = EXCLUDED.precio_visto_formateado
             """, nativeQuery = true)
-    void registrarVisita(@Param("userId") UUID userId, @Param("productId") UUID productId,
-            @Param("now") Instant now, @Param("precio") BigDecimal precio, @Param("moneda") String moneda,
-            @Param("formateado") String formateado);
+    void registrarVisita(@Param("userId") UUID userId, @Param("productId") UUID productId, @Param("now") Instant now,
+            @Param("precio") BigDecimal precio, @Param("moneda") String moneda, @Param("formateado") String formateado);
 
     /**
      * El historial del usuario con el PRECIO QUE VIO, de la visita más reciente a la más antigua.
@@ -54,8 +53,7 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
     @Query("select new com.nexaplatform.dropshipping.application.service.ProductViewHistoryService"
             + "$FichaVista(v.productId, v.precioVisto, v.monedaVista, v.precioVistoFormateado) "
             + "from ProductViewEntity v where v.userId = :userId order by v.viewedAt desc")
-    List<ProductViewHistoryService.FichaVista> findFichasVistasByUserId(@Param("userId") UUID userId,
-            Limit limit);
+    List<ProductViewHistoryService.FichaVista> findFichasVistasByUserId(@Param("userId") UUID userId, Limit limit);
 
     /** IDs del historial del usuario, de la visita más reciente a la más antigua. */
     @Query("select v.productId from ProductViewEntity v where v.userId = :userId order by v.viewedAt desc")
@@ -64,8 +62,7 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
     /** IDs visitados por el usuario DENTRO de la ventana del correo, del más reciente al más antiguo. */
     @Query("select v.productId from ProductViewEntity v where v.userId = :userId and v.viewedAt >= :since "
             + "order by v.viewedAt desc")
-    List<UUID> findProductIdsByUserIdSince(@Param("userId") UUID userId, @Param("since") Instant since,
-            Limit limit);
+    List<UUID> findProductIdsByUserIdSince(@Param("userId") UUID userId, @Param("since") Instant since, Limit limit);
 
     /**
      * Usuarios con alguna visita en la ventana. Es el punto de partida del correo: se parte de QUIÉN ha
@@ -95,7 +92,6 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
      */
     @Modifying(clearAutomatically = true)
     @Query(value = "DELETE FROM product_view WHERE user_id = :userId AND id NOT IN ("
-            + "SELECT id FROM product_view WHERE user_id = :userId ORDER BY viewed_at DESC LIMIT :tope)",
-            nativeQuery = true)
+            + "SELECT id FROM product_view WHERE user_id = :userId ORDER BY viewed_at DESC LIMIT :tope)", nativeQuery = true)
     int podarExcedente(@Param("userId") UUID userId, @Param("tope") int tope);
 }

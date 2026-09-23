@@ -23,8 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OptionalPrimitiveFieldsTest {
 
     /** Mismo ajuste que aplica application.yml (spring.jackson.deserialization). */
-    private final ObjectMapper mapper = JsonMapper.builder()
-            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+    private final ObjectMapper mapper = JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
             .build();
 
     @Test
@@ -37,16 +36,16 @@ class OptionalPrimitiveFieldsTest {
 
     @Test
     void elLoginSigueLeyendoElCampoCuandoSiViene() throws IOException {
-        LoginDtoIn dto = mapper.readValue(
-                "{\"email\":\"a@b.com\",\"password\":\"secreto123\",\"linkSocial\":true}", LoginDtoIn.class);
+        LoginDtoIn dto = mapper.readValue("{\"email\":\"a@b.com\",\"password\":\"secreto123\",\"linkSocial\":true}",
+                LoginDtoIn.class);
 
         assertThat(dto.isLinkSocial()).isTrue();
     }
 
     @Test
     void unNullExplicitoTampocoRompe() throws IOException {
-        LoginDtoIn dto = mapper.readValue(
-                "{\"email\":\"a@b.com\",\"password\":\"secreto123\",\"linkSocial\":null}", LoginDtoIn.class);
+        LoginDtoIn dto = mapper.readValue("{\"email\":\"a@b.com\",\"password\":\"secreto123\",\"linkSocial\":null}",
+                LoginDtoIn.class);
 
         assertThat(dto.isLinkSocial()).isFalse();
     }

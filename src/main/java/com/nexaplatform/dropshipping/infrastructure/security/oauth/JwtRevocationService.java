@@ -82,10 +82,11 @@ public class JwtRevocationService {
                 redis.opsForValue().set(PREFIX + clientId, Long.toString(now), TTL);
             } catch (RuntimeException e) {
                 fallback.put(clientId, now);
-                log.warn("::> [REVOCACION] Redis no responde al revocar client_id={} ({}). La revocación "
-                        + "queda en memoria: la credencial YA está borrada, pero un token vivo podría "
-                        + "seguir siéndolo en otras réplicas hasta que caduque.", clientId,
-                        e.getClass().getSimpleName());
+                log.warn(
+                        "::> [REVOCACION] Redis no responde al revocar client_id={} ({}). La revocación "
+                                + "queda en memoria: la credencial YA está borrada, pero un token vivo podría "
+                                + "seguir siéndolo en otras réplicas hasta que caduque.",
+                        clientId, e.getClass().getSimpleName());
             }
         }
         log.info("Revoked all tokens for client_id={} at epoch={}", clientId, now);
@@ -148,8 +149,9 @@ public class JwtRevocationService {
             String v = redis.opsForValue().get(PREFIX + clientId);
             return v != null ? Long.parseLong(v) : null;
         } catch (RuntimeException e) {
-            log.warn("::> [REVOCACION] Redis no responde ({}), se usa el registro en memoria. "
-                    + "Las revocaciones masivas pueden no llegar a todas las réplicas mientras dure.",
+            log.warn(
+                    "::> [REVOCACION] Redis no responde ({}), se usa el registro en memoria. "
+                            + "Las revocaciones masivas pueden no llegar a todas las réplicas mientras dure.",
                     e.getClass().getSimpleName());
             return fallback.get(clientId);
         }

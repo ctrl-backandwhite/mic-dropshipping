@@ -46,18 +46,10 @@ class OperatorEarningsServiceTest {
     OperatorEarningsService service;
 
     private static OperatorOrderActionEntity action(String subject, long cnyCents, int items, Instant processedAt) {
-        OperatorOrderActionEntity e = OperatorOrderActionEntity.builder()
-                .operatorSubject(subject)
-                .operatorEmail("ops@nx036.local")
-                .operatorName("Carlos")
-                .orderId(UUID.randomUUID())
-                .orderNumber("NX-9")
-                .action("DELIVERED")
-                .commissionCnyCents(cnyCents)
-                .itemCount(items)
-                .orderSource("PLATFORM")
-                .processedAt(processedAt)
-                .build();
+        OperatorOrderActionEntity e = OperatorOrderActionEntity.builder().operatorSubject(subject)
+                .operatorEmail("ops@nx036.local").operatorName("Carlos").orderId(UUID.randomUUID()).orderNumber("NX-9")
+                .action("DELIVERED").commissionCnyCents(cnyCents).itemCount(items).orderSource("PLATFORM")
+                .processedAt(processedAt).build();
         e.setId(UUID.randomUUID());
         return e;
     }

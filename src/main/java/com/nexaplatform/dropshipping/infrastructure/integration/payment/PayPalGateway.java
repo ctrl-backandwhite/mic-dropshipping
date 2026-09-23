@@ -31,9 +31,8 @@ import java.util.Map;
 public class PayPalGateway implements PaymentGateway {
 
     /** Tipo de respuesta de PayPal. Con {@code Map.class} el genérico se pierde y hace falta castear. */
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
-            new ParameterizedTypeReference<>() {
-            };
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE = new ParameterizedTypeReference<>() {
+    };
 
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String APPLICATION_JSON = "application/json";
@@ -136,11 +135,11 @@ public class PayPalGateway implements PaymentGateway {
             purchase.put("invoice_id", p.getOrderId().toString());
 
         Map<String, Object> body = Map.of("intent", "CAPTURE", "purchase_units", List.of(purchase),
-                "application_context", Map.of("brand_name", "NX036 (" + platformEnv + ")", "user_action",
-                        "PAY_NOW", "return_url", effReturnUrl, "cancel_url", effCancelUrl));
+                "application_context", Map.of("brand_name", "NX036 (" + platformEnv + ")", "user_action", "PAY_NOW",
+                        "return_url", effReturnUrl, "cancel_url", effCancelUrl));
 
-        Map<String, Object> resp = webClientBuilder.build().post()
-                .uri(baseUrl + "/v2/checkout/orders").header(AUTHORIZATION, BEARER + token)
+        Map<String, Object> resp = webClientBuilder.build().post().uri(baseUrl + "/v2/checkout/orders")
+                .header(AUTHORIZATION, BEARER + token)
                 .header("PayPal-Request-Id",
                         p.getIdempotencyKey() != null ? p.getIdempotencyKey() : p.getId().toString())
                 .header(CONTENT_TYPE, APPLICATION_JSON).bodyValue(body).retrieve().bodyToMono(MAP_TYPE)
@@ -168,8 +167,8 @@ public class PayPalGateway implements PaymentGateway {
         String token = fetchAccessToken();
         Map<String, Object> resp = webClientBuilder.build().post()
                 .uri(baseUrl + "/v2/checkout/orders/" + paypalOrderId + "/capture")
-                .header(AUTHORIZATION, BEARER + token).header(CONTENT_TYPE, APPLICATION_JSON)
-                .bodyValue(Map.of()).retrieve().bodyToMono(MAP_TYPE).timeout(Duration.ofSeconds(20)).block();
+                .header(AUTHORIZATION, BEARER + token).header(CONTENT_TYPE, APPLICATION_JSON).bodyValue(Map.of())
+                .retrieve().bodyToMono(MAP_TYPE).timeout(Duration.ofSeconds(20)).block();
         return resp != null ? resp : new HashMap<>();
     }
 
@@ -190,14 +189,15 @@ public class PayPalGateway implements PaymentGateway {
             return Map.of(STATUS, COMPLETED, "mock", true);
         String token = fetchAccessToken();
         Map<String, Object> body = amountCents > 0
-                ? Map.of("amount", Map.of("currency_code", "USD", "value",
-                        BigDecimal.valueOf(amountCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
-                                .toPlainString()))
+                ? Map.of("amount",
+                        Map.of("currency_code", "USD", "value",
+                                BigDecimal.valueOf(amountCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                                        .toPlainString()))
                 : Map.of();
         Map<String, Object> resp = webClientBuilder.build().post()
-                .uri(baseUrl + "/v2/payments/captures/" + captureId + "/refund")
-                .header(AUTHORIZATION, BEARER + token).header(CONTENT_TYPE, APPLICATION_JSON).bodyValue(body)
-                .retrieve().bodyToMono(MAP_TYPE).timeout(Duration.ofSeconds(20)).block();
+                .uri(baseUrl + "/v2/payments/captures/" + captureId + "/refund").header(AUTHORIZATION, BEARER + token)
+                .header(CONTENT_TYPE, APPLICATION_JSON).bodyValue(body).retrieve().bodyToMono(MAP_TYPE)
+                .timeout(Duration.ofSeconds(20)).block();
         return resp != null ? resp : new HashMap<>();
     }
 
@@ -227,10 +227,10 @@ public class PayPalGateway implements PaymentGateway {
 
     private String fetchAccessToken() {
         String basic = Base64.getEncoder().encodeToString((clientId + ":" + clientSecret).getBytes());
-        Map<String, Object> body = webClientBuilder.build().post()
-                .uri(baseUrl + "/v1/oauth2/token").header(AUTHORIZATION, "Basic " + basic)
-                .header(CONTENT_TYPE, "application/x-www-form-urlencoded").bodyValue("grant_type=client_credentials")
-                .retrieve().bodyToMono(MAP_TYPE).timeout(Duration.ofSeconds(15)).block();
+        Map<String, Object> body = webClientBuilder.build().post().uri(baseUrl + "/v1/oauth2/token")
+                .header(AUTHORIZATION, "Basic " + basic).header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .bodyValue("grant_type=client_credentials").retrieve().bodyToMono(MAP_TYPE)
+                .timeout(Duration.ofSeconds(15)).block();
         return String.valueOf(body.get("access_token"));
     }
 

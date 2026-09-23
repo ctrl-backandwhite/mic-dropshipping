@@ -107,7 +107,8 @@ class CategorySearchServiceTest {
     void listFromIndex_withNeedle_buildsMultiMatchQueryOverNameAndSlugFields() throws Exception {
         String body = """
                 {"hits":{"hits":[{"_source":{"id":"%s","slug":"phones","nameEs":"Teléfonos","position":1,"active":true}}]}}
-                """.formatted(ID);
+                """
+                .formatted(ID);
         when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
                 .thenReturn(response(200, body));
 

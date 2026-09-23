@@ -34,21 +34,20 @@ class YunExpressDeclaracionAgrupadaTest {
     private final ProductRepository products = mock(ProductRepository.class);
 
     /** Solo se ejercita la declaración: el resto de colaboradores no participan en este cálculo. */
-    private final YunExpressFulfillmentService service = new YunExpressFulfillmentService(null, null, null,
-            null, products, null, null, null);
+    private final YunExpressFulfillmentService service = new YunExpressFulfillmentService(null, null, null, null,
+            products, null, null, null);
 
     @Test
     void fusionaLasLineasQueSeDeclaranIgualYConservaElValorTotal() {
-        Order pedido = pedidoCon(
-                linea("Men's woven cotton trousers", "620443", 1, 1240),
+        Order pedido = pedidoCon(linea("Men's woven cotton trousers", "620443", 1, 1240),
                 linea("Men's woven cotton trousers", "620443", 1, 980),
                 linea("Knitted cotton t-shirts", "610990", 1, 620));
 
         List<ParcelDeclaration> lineas = service.declaredParcels(pedido);
 
         assertThat(lineas).hasSize(2);
-        ParcelDeclaration pantalones = lineas.stream()
-                .filter(l -> "Men's woven cotton trousers".equals(l.eName())).findFirst().orElseThrow();
+        ParcelDeclaration pantalones = lineas.stream().filter(l -> "Men's woven cotton trousers".equals(l.eName()))
+                .findFirst().orElseThrow();
         assertThat(pantalones.quantity()).isEqualTo(2);
         assertThat(pantalones.quantity() * pantalones.unitPrice()).isEqualTo(22.20, within(0.01));
 
@@ -60,8 +59,7 @@ class YunExpressDeclaracionAgrupadaTest {
     void laMismaPartidaConDescripcionesDISTINTASSiguenSiendoDosLineas() {
         // Sin grupo aprobado cada producto conserva su descripción, y la aduana los cuenta por separado.
         // Fusionarlos aquí cobraría de menos y la diferencia la pondría el comercio.
-        Order pedido = pedidoCon(
-                linea("Blue denim jeans", "620443", 1, 1240),
+        Order pedido = pedidoCon(linea("Blue denim jeans", "620443", 1, 1240),
                 linea("Beige chino trousers", "620443", 1, 980));
 
         assertThat(service.declaredParcels(pedido)).hasSize(2);
@@ -80,20 +78,16 @@ class YunExpressDeclaracionAgrupadaTest {
      */
     @Test
     void sinPartidaArancelariaCadaProductoEsSuPropiaLineaComoAlCobrar() {
-        Order pedido = pedidoCon(
-                linea("Cotton tote bag", null, 1, 1240),
-                linea("Cotton tote bag", null, 1, 1240));
+        Order pedido = pedidoCon(linea("Cotton tote bag", null, 1, 1240), linea("Cotton tote bag", null, 1, 1240));
 
         assertThat(service.declaredParcels(pedido))
-                .as("sin HS el cobro cuenta dos derechos; la guía tiene que declarar dos líneas")
-                .hasSize(2);
+                .as("sin HS el cobro cuenta dos derechos; la guía tiene que declarar dos líneas").hasSize(2);
     }
 
     @Test
     void laCantidadSeSumaSinMultiplicarElDerecho() {
         // Cinco unidades de la misma referencia son UNA línea: la cantidad no multiplica el derecho.
-        Order pedido = pedidoCon(
-                linea("Knitted cotton t-shirts", "610990", 3, 620),
+        Order pedido = pedidoCon(linea("Knitted cotton t-shirts", "610990", 3, 620),
                 linea("Knitted cotton t-shirts", "610990", 2, 620));
 
         List<ParcelDeclaration> lineas = service.declaredParcels(pedido);
@@ -112,8 +106,7 @@ class YunExpressDeclaracionAgrupadaTest {
 
         List<ParcelDeclaration> lineas = service.declaredParcels(pedido);
 
-        assertThat(lineas).singleElement()
-                .extracting(ParcelDeclaration::cName).isEqualTo("女式合成纤维制连衣裙");
+        assertThat(lineas).singleElement().extracting(ParcelDeclaration::cName).isEqualTo("女式合成纤维制连衣裙");
     }
 
     @Test
@@ -121,8 +114,8 @@ class YunExpressDeclaracionAgrupadaTest {
         // Los pedidos anteriores a la columna no tienen snapshot en chino y se declaran como siempre.
         Order pedido = pedidoCon(lineaZh("Blue denim jeans", null, "620443", 1, 1240));
 
-        assertThat(service.declaredParcels(pedido)).singleElement()
-                .extracting(ParcelDeclaration::cName).isEqualTo("蓝色牛仔裤");
+        assertThat(service.declaredParcels(pedido)).singleElement().extracting(ParcelDeclaration::cName)
+                .isEqualTo("蓝色牛仔裤");
     }
 
     private Order pedidoCon(OrderItem... items) {
@@ -141,8 +134,8 @@ class YunExpressDeclaracionAgrupadaTest {
         p.setCustomsUsage("CASUAL WEAR");
         p.setPackageWeightGrams(200);
         lenient().when(products.findById(productId)).thenReturn(Optional.of(p));
-        return OrderItem.builder().productId(productId).declaredDescription(descripcionDeclarada)
-                .quantity(cantidad).unitPriceCents(unitarioCents).build();
+        return OrderItem.builder().productId(productId).declaredDescription(descripcionDeclarada).quantity(cantidad)
+                .unitPriceCents(unitarioCents).build();
     }
 
     private OrderItem lineaZh(String descripcionDeclarada, String chinoCongelado, String hs, int cantidad,

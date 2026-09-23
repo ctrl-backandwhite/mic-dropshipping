@@ -209,8 +209,8 @@ class Cov01EmailDispatchConsumerTest {
         when(emailQueue.enqueue(anyString(), anyString(), anyString(), anyMap()))
                 .thenThrow(new IllegalStateException("smtp caído"));
 
-        assertThatCode(() -> consumer.onDispatch(
-                kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, notification("ana@test.com", "Aviso"))))
+        assertThatCode(() -> consumer
+                .onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, notification("ana@test.com", "Aviso"))))
                 .doesNotThrowAnyException();
     }
 

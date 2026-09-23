@@ -161,10 +161,8 @@ class Cov08OrderIndexerTest {
 
     @Test
     void reindexarDevuelveCuantosPedidosSeIndexaron() throws IOException {
-        when(orderRepository.findAll())
-                .thenReturn(List.of(order(OrderStatus.PAID, Instant.now(), null),
-                        order(OrderStatus.SHIPPED, Instant.now(), null),
-                        order(OrderStatus.DELIVERED, Instant.now(), null)));
+        when(orderRepository.findAll()).thenReturn(List.of(order(OrderStatus.PAID, Instant.now(), null),
+                order(OrderStatus.SHIPPED, Instant.now(), null), order(OrderStatus.DELIVERED, Instant.now(), null)));
 
         assertThat(indexer.reindexAll()).isEqualTo(3);
         verify(client, times(3)).index(any(IndexRequest.class));

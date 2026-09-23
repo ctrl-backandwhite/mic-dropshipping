@@ -66,16 +66,14 @@ public class ProductRawConsumer {
                 supplierId = supplier.getId();
             }
 
-            IngestProductRequest req = new IngestProductRequest(textOrNull(root, SOURCE),
-                    textOrNull(root, EXTERNAL_ID), textOrNull(root, "title_zh"),
-                    textOrNull(root, "short_description_zh"), textOrNull(root, "description_zh"),
-                    textOrNull(root, "brand"), intOrNull(root, "moq"), bdOrNull(root, "base_price"),
-                    textOrNull(root, "currency"), intOrNull(root, "weight_grams"), intOrNull(root, "monthly_sales"),
-                    bdOrNull(root, "repurchase_rate"), bdOrNull(root, "rating"), intOrNull(root, "review_count"),
-                    textOrNull(root, "source_url"), supplierId, uuidOrNull(root, "category_id"),
-                    mapImages(root.get("images")),
-                    mapOptions(root.get("options")), mapVariants(root.get("variants")),
-                    mapPriceTiers(root.get("price_tiers")));
+            IngestProductRequest req = new IngestProductRequest(textOrNull(root, SOURCE), textOrNull(root, EXTERNAL_ID),
+                    textOrNull(root, "title_zh"), textOrNull(root, "short_description_zh"),
+                    textOrNull(root, "description_zh"), textOrNull(root, "brand"), intOrNull(root, "moq"),
+                    bdOrNull(root, "base_price"), textOrNull(root, "currency"), intOrNull(root, "weight_grams"),
+                    intOrNull(root, "monthly_sales"), bdOrNull(root, "repurchase_rate"), bdOrNull(root, "rating"),
+                    intOrNull(root, "review_count"), textOrNull(root, "source_url"), supplierId,
+                    uuidOrNull(root, "category_id"), mapImages(root.get("images")), mapOptions(root.get("options")),
+                    mapVariants(root.get("variants")), mapPriceTiers(root.get("price_tiers")));
 
             catalogService.upsertProduct(req);
         } catch (Exception e) {

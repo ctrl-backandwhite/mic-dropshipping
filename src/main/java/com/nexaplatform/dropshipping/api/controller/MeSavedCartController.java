@@ -40,8 +40,7 @@ public class MeSavedCartController {
 
     /** Guarda (o suma sobre) una línea; devuelve la lista completa actualizada. */
     @PutMapping
-    public ResponseEntity<List<SavedCartItemDto>> save(Authentication auth,
-            @Valid @RequestBody SavedCartItemDto item) {
+    public ResponseEntity<List<SavedCartItemDto>> save(Authentication auth, @Valid @RequestBody SavedCartItemDto item) {
         return ResponseEntity.ok(savedCartService.upsert(userId(auth), item));
     }
 
@@ -53,8 +52,8 @@ public class MeSavedCartController {
     }
 
     @DeleteMapping("/{productId}")
-    public ResponseEntity<List<SavedCartItemDto>> remove(Authentication auth,
-            @PathVariable UUID productId, @RequestParam(required = false) UUID variantId) {
+    public ResponseEntity<List<SavedCartItemDto>> remove(Authentication auth, @PathVariable UUID productId,
+            @RequestParam(required = false) UUID variantId) {
         return ResponseEntity.ok(savedCartService.remove(userId(auth), productId, variantId));
     }
 

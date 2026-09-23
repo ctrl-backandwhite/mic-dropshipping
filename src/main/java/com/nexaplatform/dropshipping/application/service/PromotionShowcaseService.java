@@ -48,18 +48,15 @@ public class PromotionShowcaseService {
     public List<LivePromotionView> live(String lang) {
         Instant now = Instant.now();
         List<PromotionEntity> vivas = promotionRepository.findAll().stream()
-                .filter(p -> p.getCode() == null || p.getCode().isBlank())
-                .filter(p -> p.isLiveAt(now))
-                .sorted(Comparator.comparing(this::descuentoAparente).reversed())
-                .toList();
+                .filter(p -> p.getCode() == null || p.getCode().isBlank()).filter(p -> p.isLiveAt(now))
+                .sorted(Comparator.comparing(this::descuentoAparente).reversed()).toList();
 
         List<LivePromotionView> out = new ArrayList<>();
         for (PromotionEntity p : vivas) {
             out.add(new LivePromotionView(p.getId(), p.getName(),
                     p.getPercentOff() != null ? p.getPercentOff().intValue() : null,
                     p.getEndsAt() != null ? p.getEndsAt().toString() : null,
-                    p.getScope() != null ? p.getScope().name() : null,
-                    muestraDe(p, lang)));
+                    p.getScope() != null ? p.getScope().name() : null, muestraDe(p, lang)));
         }
         return out;
     }
@@ -90,8 +87,7 @@ public class PromotionShowcaseService {
                 return storefrontRead.productList(0, ESCAPARATE, lang, null, categoria, null, null, null, "trending")
                         .items();
             }
-            return storefrontRead.productList(0, ESCAPARATE, lang, null, null, null, null, null, "trending")
-                    .items();
+            return storefrontRead.productList(0, ESCAPARATE, lang, null, null, null, null, null, "trending").items();
         } catch (RuntimeException e) {
             // El banner es decoración: si el catálogo falla, se anuncia la rebaja sin fotos antes que
             // tumbar la portada entera.

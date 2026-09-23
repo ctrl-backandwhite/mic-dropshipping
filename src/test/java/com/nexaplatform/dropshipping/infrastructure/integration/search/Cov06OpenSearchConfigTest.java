@@ -33,8 +33,9 @@ class Cov06OpenSearchConfigTest {
      */
     @Test
     void conCredencialesYSinTlsElArranqueFalla() {
-        assertThatThrownBy(() -> config.openSearchClient("http://opensearch:9200", "admin", "secreta", false,
-                objectMapper)).isInstanceOf(IllegalStateException.class).hasMessageContaining("https");
+        assertThatThrownBy(
+                () -> config.openSearchClient("http://opensearch:9200", "admin", "secreta", false, objectMapper))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("https");
     }
 
     /**
@@ -43,8 +44,7 @@ class Cov06OpenSearchConfigTest {
      * sobrantes rompan la URI; y una URI sin puerto, donde se asume el 9200 de OpenSearch en vez de fallar.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"http://localhost:9200", " http://localhost:9200 , http://otro:9200",
-            "http://opensearch"})
+    @ValueSource(strings = {"http://localhost:9200", " http://localhost:9200 , http://otro:9200", "http://opensearch"})
     void sinCredencialesElClientePlanoSeConstruyeSeaCualSeaLaFormaDeLaUri(String uris) throws IOException {
         OpenSearchClient cliente = config.openSearchClient(uris, "", "", false, objectMapper);
 

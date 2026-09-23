@@ -167,16 +167,10 @@ class ResilientOidcIdTokenDecoderFactoryTest {
 
     @Test
     void unProveedorSinClavesPublicasNoDejaAbiertaLaPuerta() {
-        ClientRegistration sinJwkSet = ClientRegistration.withRegistrationId("google")
-                .clientId(CLIENT_ID)
-                .clientSecret("secreto")
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("http://localhost/login/oauth2/code/google")
-                .scope("openid")
-                .authorizationUri(ISSUER + "/auth")
-                .tokenUri(ISSUER + "/token")
-                .issuerUri(ISSUER)
-                .build();
+        ClientRegistration sinJwkSet = ClientRegistration.withRegistrationId("google").clientId(CLIENT_ID)
+                .clientSecret("secreto").authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("http://localhost/login/oauth2/code/google").scope("openid")
+                .authorizationUri(ISSUER + "/auth").tokenUri(ISSUER + "/token").issuerUri(ISSUER).build();
 
         assertThatThrownBy(() -> new ResilientOidcIdTokenDecoderFactory().createDecoder(sinJwkSet))
                 .isInstanceOf(RuntimeException.class);
@@ -211,30 +205,19 @@ class ResilientOidcIdTokenDecoderFactoryTest {
     }
 
     private static ClientRegistration registro(String jwkSetUri) {
-        return ClientRegistration.withRegistrationId("google")
-                .clientId(CLIENT_ID)
-                .clientSecret("secreto")
+        return ClientRegistration.withRegistrationId("google").clientId(CLIENT_ID).clientSecret("secreto")
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("http://localhost/login/oauth2/code/google")
-                .scope("openid")
-                .authorizationUri(ISSUER + "/auth")
-                .tokenUri(ISSUER + "/token")
-                .jwkSetUri(jwkSetUri)
-                .issuerUri(ISSUER)
+                .redirectUri("http://localhost/login/oauth2/code/google").scope("openid")
+                .authorizationUri(ISSUER + "/auth").tokenUri(ISSUER + "/token").jwkSetUri(jwkSetUri).issuerUri(ISSUER)
                 .build();
     }
 
     private static String idToken(String issuer, String audience, Instant expiration) {
         try {
-            JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                    .issuer(issuer)
-                    .subject("105815860537719339869")
-                    .audience(List.of(audience))
-                    .expirationTime(Date.from(expiration))
-                    .issueTime(Date.from(Instant.now().minusSeconds(5)))
-                    .claim("email", "persona@example.com")
-                    .claim("email_verified", true)
-                    .build();
+            JWTClaimsSet claims = new JWTClaimsSet.Builder().issuer(issuer).subject("105815860537719339869")
+                    .audience(List.of(audience)).expirationTime(Date.from(expiration))
+                    .issueTime(Date.from(Instant.now().minusSeconds(5))).claim("email", "persona@example.com")
+                    .claim("email_verified", true).build();
             SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(KEY_ID).build(), claims);
             jwt.sign(new RSASSASigner(privateKey));
             return jwt.serialize();

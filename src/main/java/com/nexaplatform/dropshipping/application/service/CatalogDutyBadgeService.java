@@ -63,8 +63,7 @@ public class CatalogDutyBadgeService {
      *                            {@code extraDutyCents}, NO depende del carrito —es una propiedad del
      *                            producto—, así que se sabe también con el carrito vacío
      */
-    public record DutyBadge(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
-            boolean dutyCovered) {
+    public record DutyBadge(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered) {
     }
 
     /**
@@ -96,8 +95,7 @@ public class CatalogDutyBadgeService {
      * @return un distintivo por producto; vacío cuando ese país ya no cobra derecho por artículo
      */
     @Transactional(readOnly = true)
-    public Map<UUID, DutyBadge> badgesFor(List<UUID> cartProductIds, List<UUID> pageProductIds,
-            String countryCode) {
+    public Map<UUID, DutyBadge> badgesFor(List<UUID> cartProductIds, List<UUID> pageProductIds, String countryCode) {
         if (pageProductIds == null || pageProductIds.isEmpty()
                 || customsValuation.perArticleFeeUsdCents(countryCode) <= 0) {
             return Map.of();
@@ -205,9 +203,9 @@ public class CatalogDutyBadgeService {
      * aquí prometería una agrupación que después no ocurre.
      */
     private Line lineaDe(ProductEntity p, String countryCode) {
-        return new Line(p.getId(), p.getHsCode(), declarationGroups.describeFor(p, countryCode),
-                p.getCountryOfOrigin(), 1, 0, ParcelAggregator.unitWeightGrams(p, null), dimension(p, 0),
-                dimension(p, 1), dimension(p, 2), ParcelAggregator.hasBattery(p));
+        return new Line(p.getId(), p.getHsCode(), declarationGroups.describeFor(p, countryCode), p.getCountryOfOrigin(),
+                1, 0, ParcelAggregator.unitWeightGrams(p, null), dimension(p, 0), dimension(p, 1), dimension(p, 2),
+                ParcelAggregator.hasBattery(p));
     }
 
     private static int dimension(ProductEntity p, int cual) {
@@ -239,9 +237,9 @@ public class CatalogDutyBadgeService {
             if (hs6 == null) {
                 continue;
             }
-            UUID grupo = porTerna.get(hs6 + '|'
-                    + CustomsDeclarationGroupService.normalizeKeyPart(p.getCustomsMaterial()) + '|'
-                    + CustomsDeclarationGroupService.normalizeKeyPart(p.getCustomsUsage()));
+            UUID grupo = porTerna
+                    .get(hs6 + '|' + CustomsDeclarationGroupService.normalizeKeyPart(p.getCustomsMaterial()) + '|'
+                            + CustomsDeclarationGroupService.normalizeKeyPart(p.getCustomsUsage()));
             if (grupo != null) {
                 deCadaProducto.put(p.getId(), grupo);
             }
@@ -256,9 +254,8 @@ public class CatalogDutyBadgeService {
 
     /** El importe ya escrito en la moneda del comprador: el front no calcula ni formatea importes. */
     private String formateado(int usdCents) {
-        BigDecimal display = currencyService
-                .usdToDisplay(BigDecimal.valueOf(usdCents).movePointLeft(2))
-                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal display = currencyService.usdToDisplay(BigDecimal.valueOf(usdCents).movePointLeft(2)).setScale(2,
+                RoundingMode.HALF_UP);
         return currencyService.formatDisplay(display, CurrencyHolder.get());
     }
 }

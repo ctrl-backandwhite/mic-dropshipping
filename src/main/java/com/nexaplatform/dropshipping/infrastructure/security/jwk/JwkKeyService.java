@@ -73,8 +73,7 @@ public class JwkKeyService {
      * y falla con "multiple keys for the signing algorithm".
      */
     public String activeKid() {
-        return jwkKeyRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream().findFirst()
-                .map(JwkKeyEntity::getKid)
+        return jwkKeyRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream().findFirst().map(JwkKeyEntity::getKid)
                 .orElseThrow(() -> new IllegalStateException("No active JWK key available to sign tokens"));
     }
 
@@ -96,8 +95,8 @@ public class JwkKeyService {
     }
 
     public JWKSet loadJwkSet() {
-        List<JWK> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(entity -> (JWK) toRsaKey(entity)).toList();
+        List<JWK> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream().map(entity -> (JWK) toRsaKey(entity))
+                .toList();
         return new JWKSet(keys);
     }
 

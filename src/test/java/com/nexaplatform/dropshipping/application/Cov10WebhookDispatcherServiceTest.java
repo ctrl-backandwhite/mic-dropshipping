@@ -278,10 +278,8 @@ class Cov10WebhookDispatcherServiceTest {
         assertThat(d.getNextRetryAt()).isNull();
         assertThat(d.getLastAttemptAt()).isNotNull();
         Map<String, String> headers = recibidas.get(0);
-        assertThat(headers).containsEntry("X-nx036-signature", "sig")
-                .containsEntry("X-nx036-event", "order.created")
-                .containsEntry("X-nx036-event-id", "evt-1")
-                .containsEntry("X-nx036-attempt", "1");
+        assertThat(headers).containsEntry("X-nx036-signature", "sig").containsEntry("X-nx036-event", "order.created")
+                .containsEntry("X-nx036-event-id", "evt-1").containsEntry("X-nx036-attempt", "1");
     }
 
     @Test

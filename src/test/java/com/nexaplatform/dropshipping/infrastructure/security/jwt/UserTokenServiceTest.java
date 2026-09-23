@@ -81,15 +81,12 @@ class UserTokenServiceTest {
         KeyPair pair = PAR_RSA;
         kid = UUID.randomUUID().toString();
         RSAKey rsaKey = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
-                .privateKey((RSAPrivateKey) pair.getPrivate())
-                .keyID(kid)
-                .build();
+                .privateKey((RSAPrivateKey) pair.getPrivate()).keyID(kid).build();
         JWKSource<SecurityContext> jwkSource = new ImmutableJWKSet<>(new JWKSet(rsaKey));
 
         jwtEncoder = new NimbusJwtEncoder(jwkSource);
         jwtDecoder = NimbusJwtDecoder.withPublicKey((RSAPublicKey) pair.getPublic())
-                .signatureAlgorithm(SignatureAlgorithm.RS256)
-                .build();
+                .signatureAlgorithm(SignatureAlgorithm.RS256).build();
 
         service = new UserTokenService(jwtEncoder, jwtDecoder, revocationService, jwkKeyService);
         ReflectionTestUtils.setField(service, "issuer", ISSUER);
@@ -100,8 +97,8 @@ class UserTokenServiceTest {
         when(jwkKeyService.activeKid()).thenReturn(kid);
         UUID userId = UUID.randomUUID();
 
-        UserTokenService.Tokens tokens = service.issue(
-                userId, "user@test.local", "ADMIN", List.of("ROLE_ADMIN", "ROLE_USER"));
+        UserTokenService.Tokens tokens = service.issue(userId, "user@test.local", "ADMIN",
+                List.of("ROLE_ADMIN", "ROLE_USER"));
 
         assertThat(tokens.expiresInSeconds()).isEqualTo(3600L);
 
@@ -111,8 +108,7 @@ class UserTokenServiceTest {
         assertThat(access.getSubject()).isEqualTo(userId.toString());
         assertThat(access.getClaimAsString("email")).isEqualTo("user@test.local");
         assertThat(access.getClaimAsString("role")).isEqualTo("ADMIN");
-        assertThat(access.getClaimAsStringList("authorities"))
-                .containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_USER");
+        assertThat(access.getClaimAsStringList("authorities")).containsExactlyInAnyOrder("ROLE_ADMIN", "ROLE_USER");
         assertThat(access.getIssuer()).hasToString(ISSUER);
 
         // Refresh: typ=refresh, sub, con jti; sin role/authorities/email.
@@ -149,8 +145,7 @@ class UserTokenServiceTest {
         // El access token (typ=access) no debe aceptarse en /refresh.
         String accessToken = service.issue(userId, "u@t.local", "USER", List.of("ROLE_USER")).accessToken();
 
-        assertThatThrownBy(() -> service.validateAndRotate(accessToken))
-                .isInstanceOf(BadCredentialsException.class)
+        assertThatThrownBy(() -> service.validateAndRotate(accessToken)).isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("Not a refresh token");
     }
 
@@ -162,8 +157,7 @@ class UserTokenServiceTest {
 
         when(revocationService.isStillValid(anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(false);
 
-        assertThatThrownBy(() -> service.validateAndRotate(refreshToken))
-                .isInstanceOf(BadCredentialsException.class)
+        assertThatThrownBy(() -> service.validateAndRotate(refreshToken)).isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("revoked");
     }
 
@@ -177,24 +171,21 @@ class UserTokenServiceTest {
         // jti ya consumido → reuso → revoca todo el sujeto y rechaza.
         when(revocationService.consumeRefreshJti(anyString())).thenReturn(false);
 
-        assertThatThrownBy(() -> service.validateAndRotate(refreshToken))
-                .isInstanceOf(BadCredentialsException.class)
+        assertThatThrownBy(() -> service.validateAndRotate(refreshToken)).isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("reuse");
         verify(revocationService).revokeAllForClient(userId.toString());
     }
 
     @Test
     void validateAndRotate_rejectsBlankToken() {
-        assertThatThrownBy(() -> service.validateAndRotate("  "))
-                .isInstanceOf(BadCredentialsException.class)
+        assertThatThrownBy(() -> service.validateAndRotate("  ")).isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("Missing refresh token");
     }
 
     @Test
     void validateAndRotate_rejectsUndecodableToken() {
         assertThatThrownBy(() -> service.validateAndRotate("not-a-valid-jwt"))
-                .isInstanceOf(BadCredentialsException.class)
-                .hasMessageContaining("Invalid or expired refresh token");
+                .isInstanceOf(BadCredentialsException.class).hasMessageContaining("Invalid or expired refresh token");
     }
 
     @Test

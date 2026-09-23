@@ -33,8 +33,8 @@ public class GeolocalizacionDelCdn {
     public static final String HEADER_CDN = "X-Nexadrop-Edge";
 
     /** Cabeceras de país por IP que inyectan los CDN/proxys. Las pone la infraestructura, no el cliente. */
-    private static final String[] GEO_HEADERS = { "CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country",
-            "X-Country-Code" };
+    private static final String[] GEO_HEADERS = {"CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country",
+            "X-Country-Code"};
 
     @Value("${nexadrop.security.cdn-shared-secret:}")
     private String secreto;

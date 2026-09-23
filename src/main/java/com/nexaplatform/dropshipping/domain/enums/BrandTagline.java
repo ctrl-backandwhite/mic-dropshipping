@@ -18,16 +18,16 @@ import java.util.Locale;
 public enum BrandTagline {
 
     /** «Moda y complementos» en los ocho idiomas de la plataforma. Es lo que ve quien compra. */
-    DEFAULT("Moda y complementos", "Fashion and accessories", "Moda e acessórios", "时尚与配饰",
-            "Mode et accessoires", "Mode und Accessoires", "Moda e accessori", "Mode en accessoires"),
+    DEFAULT("Moda y complementos", "Fashion and accessories", "Moda e acessórios", "时尚与配饰", "Mode et accessoires",
+            "Mode und Accessoires", "Moda e accessori", "Mode en accessoires"),
 
     /**
      * Lo que ve un socio de integración. Para él la palabra no es un demérito sino el servicio que
      * contrata: vende en su tienda y nosotros enviamos. En chino se usa el término del sector,
      * «一件代发», porque «dropshipping» no se lee allí.
      */
-    PARTNER("Dropshipping", "Dropshipping", "Dropshipping", "一件代发",
-            "Dropshipping", "Dropshipping", "Dropshipping", "Dropshipping");
+    PARTNER("Dropshipping", "Dropshipping", "Dropshipping", "一件代发", "Dropshipping", "Dropshipping", "Dropshipping",
+            "Dropshipping");
 
     private final String es;
     private final String en;

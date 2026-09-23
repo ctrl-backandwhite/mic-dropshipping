@@ -54,15 +54,12 @@ class PartnerPlanSyncServiceTest {
     void syncForUser_withPaidPlan_writesPaidTierAndPlanCodeToClientSettings() throws Exception {
         UUID userId = UUID.randomUUID();
         when(subsRepo.findActiveByUserId(userId)).thenReturn(List.of(sub("PRO")));
-        when(jdbc.queryForList(anyString(), eq(userId.toString())))
-                .thenReturn(List.of(clientRow("cli-1", "{}")));
+        when(jdbc.queryForList(anyString(), eq(userId.toString()))).thenReturn(List.of(clientRow("cli-1", "{}")));
 
         service.syncForUser(userId);
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written)
-                .containsEntry("nexadrop.plan", "paid")
-                .containsEntry("nexadrop.plan_code", "PRO")
+        assertThat(written).containsEntry("nexadrop.plan", "paid").containsEntry("nexadrop.plan_code", "PRO")
                 .hasEntrySatisfying("nexadrop.plan_synced_at", syncedAt -> assertThat(syncedAt).isNotNull());
         verify(revocationService).revokeAllForClients(List.of("cli-1"));
     }
@@ -71,15 +68,12 @@ class PartnerPlanSyncServiceTest {
     void syncForUser_withFreePlan_mapsToSandboxTier() throws Exception {
         UUID userId = UUID.randomUUID();
         when(subsRepo.findActiveByUserId(userId)).thenReturn(List.of(sub("FREE")));
-        when(jdbc.queryForList(anyString(), eq(userId.toString())))
-                .thenReturn(List.of(clientRow("cli-1", "{}")));
+        when(jdbc.queryForList(anyString(), eq(userId.toString()))).thenReturn(List.of(clientRow("cli-1", "{}")));
 
         service.syncForUser(userId);
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written)
-                .containsEntry("nexadrop.plan", "sandbox")
-                .containsEntry("nexadrop.plan_code", "FREE");
+        assertThat(written).containsEntry("nexadrop.plan", "sandbox").containsEntry("nexadrop.plan_code", "FREE");
     }
 
     @Test
@@ -92,8 +86,7 @@ class PartnerPlanSyncServiceTest {
         service.syncForUser(userId);
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written)
-                .containsEntry("nexadrop.plan", "sandbox")
+        assertThat(written).containsEntry("nexadrop.plan", "sandbox")
                 // planCode is null → key left as the previous value, never overwritten
                 .containsEntry("nexadrop.plan_code", "PRO");
     }
@@ -114,9 +107,8 @@ class PartnerPlanSyncServiceTest {
     void syncForUser_skipsRowWithUnparseableSettingsButStillProcessesOthers() throws Exception {
         UUID userId = UUID.randomUUID();
         when(subsRepo.findActiveByUserId(userId)).thenReturn(List.of(sub("ENTERPRISE")));
-        when(jdbc.queryForList(anyString(), eq(userId.toString()))).thenReturn(List.of(
-                clientRow("bad", "not-json"),
-                clientRow("good", "{}")));
+        when(jdbc.queryForList(anyString(), eq(userId.toString())))
+                .thenReturn(List.of(clientRow("bad", "not-json"), clientRow("good", "{}")));
 
         service.syncForUser(userId);
 
@@ -147,8 +139,7 @@ class PartnerPlanSyncServiceTest {
         sub.setUser(user);
         when(subsRepo.findByStripeSubscriptionId("sub_K")).thenReturn(Optional.of(sub));
         when(subsRepo.findActiveByUserId(userId)).thenReturn(List.of(sub("PRO")));
-        when(jdbc.queryForList(anyString(), eq(userId.toString())))
-                .thenReturn(List.of(clientRow("cli-1", "{}")));
+        when(jdbc.queryForList(anyString(), eq(userId.toString()))).thenReturn(List.of(clientRow("cli-1", "{}")));
 
         service.onSubscriptionEvent("sub_K", "active", "customer.subscription.updated");
 

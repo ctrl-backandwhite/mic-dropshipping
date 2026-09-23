@@ -13,9 +13,7 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum OverThresholdPolicy {
 
-    SURCHARGE,
-    ALLOW,
-    BLOCK;
+    SURCHARGE, ALLOW, BLOCK;
 
     /** Convierte el texto persistido; cualquier valor desconocido o nulo cae a {@link #SURCHARGE}. */
     public static OverThresholdPolicy from(String value) {

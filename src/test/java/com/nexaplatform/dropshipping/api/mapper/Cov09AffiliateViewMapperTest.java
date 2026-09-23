@@ -41,8 +41,8 @@ class Cov09AffiliateViewMapperTest {
     }
 
     private static AffiliateReferralCodeEntity codigo(String code, int clicks) {
-        AffiliateReferralCodeEntity c = AffiliateReferralCodeEntity.builder().code(code).label("verano")
-                .active(true).clicks(clicks).build();
+        AffiliateReferralCodeEntity c = AffiliateReferralCodeEntity.builder().code(code).label("verano").active(true)
+                .clicks(clicks).build();
         c.setId(UUID.randomUUID());
         return c;
     }
@@ -102,16 +102,16 @@ class Cov09AffiliateViewMapperTest {
         // Un valor negativo en la configuración pondría la fecha de aprobación ANTES de la propia comisión.
         Instant creada = Instant.parse("2026-01-01T00:00:00Z");
 
-        CommissionView view = subject.toCommissionView(comision("PENDING", 500L, UUID.randomUUID(), creada),
-                Map.of(), -30);
+        CommissionView view = subject.toCommissionView(comision("PENDING", 500L, UUID.randomUUID(), creada), Map.of(),
+                -30);
 
         assertThat(view.approvesAt()).isEqualTo(creada);
     }
 
     @Test
     void unaComisionSinFechaDeCreacionNoInventaFechaDeAprobacion() {
-        CommissionView view = subject.toCommissionView(comision("PENDING", 500L, UUID.randomUUID(), null),
-                Map.of(), 14);
+        CommissionView view = subject.toCommissionView(comision("PENDING", 500L, UUID.randomUUID(), null), Map.of(),
+                14);
 
         assertThat(view.approvesAt()).isNull();
     }
@@ -119,8 +119,8 @@ class Cov09AffiliateViewMapperTest {
     @Test
     void unaComisionCuyaConversionNoSeEncuentraNoRompeLaVista() {
         // El pedido de origen puede haberse borrado: la comisión sigue teniendo que poder listarse.
-        CommissionView view = subject.toCommissionView(
-                comision("PAID", 500L, UUID.randomUUID(), Instant.now()), Map.of(), 14);
+        CommissionView view = subject.toCommissionView(comision("PAID", 500L, UUID.randomUUID(), Instant.now()),
+                Map.of(), 14);
 
         assertThat(view.orderId()).isNull();
         assertThat(view.baseAmountCents()).isZero();
@@ -161,8 +161,7 @@ class Cov09AffiliateViewMapperTest {
     @Test
     void losClicsNuncaPuedenSerMenosQueLasConversiones() {
         // Datos heredados dejaban el contador a 0 con comisiones pagadas: "0 clics pero comisiones cobradas".
-        List<AffiliateConversionEntity> conversiones = List.of(
-                conversion(UUID.randomUUID(), UUID.randomUUID(), 100L),
+        List<AffiliateConversionEntity> conversiones = List.of(conversion(UUID.randomUUID(), UUID.randomUUID(), 100L),
                 conversion(UUID.randomUUID(), UUID.randomUUID(), 100L),
                 conversion(UUID.randomUUID(), UUID.randomUUID(), 100L));
 
@@ -189,8 +188,7 @@ class Cov09AffiliateViewMapperTest {
         user.setEmail("ada@example.com");
         user.setDisplayName("Ada");
         AffiliateEntity afiliado = AffiliateEntity.builder().user(user).status("ACTIVE").referralsCount(2)
-                .earningsUsdCents(5000).payoutUsdCents(1000).commissionPercentOverride(new BigDecimal("12.5"))
-                .build();
+                .earningsUsdCents(5000).payoutUsdCents(1000).commissionPercentOverride(new BigDecimal("12.5")).build();
         afiliado.setId(UUID.randomUUID());
 
         AdminAffiliateRow row = subject.toAdminRow(afiliado, List.of(codigo("A", 9)),
@@ -238,8 +236,8 @@ class Cov09AffiliateViewMapperTest {
     void laConfiguracionDelProgramaSePublicaEntera() {
         AffiliateProgramConfigEntity config = AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.00")).attributionWindowDays(30).returnPeriodDays(14)
-                .minPayoutCents(5000).currency("USD").attributionModel("LAST_CLICK")
-                .maxCommissionPeriodCents(100000).maxPeriodDays(30).clickDedupMinutes(45).build();
+                .minPayoutCents(5000).currency("USD").attributionModel("LAST_CLICK").maxCommissionPeriodCents(100000)
+                .maxPeriodDays(30).clickDedupMinutes(45).build();
 
         ProgramConfigView view = subject.toConfigView(config);
 

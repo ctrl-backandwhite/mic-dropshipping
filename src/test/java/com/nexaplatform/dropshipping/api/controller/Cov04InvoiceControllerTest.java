@@ -75,8 +75,7 @@ class Cov04InvoiceControllerTest {
         pedido = Order.builder().id(orderId).orderNumber("NX-100").userId(userId).currency("USD").build();
         auth = mock(Authentication.class);
         when(auth.getName()).thenReturn(userId.toString());
-        when(invoiceService.renderPdf(any(Order.class), anyString(), anyString()))
-                .thenReturn("%PDF".getBytes());
+        when(invoiceService.renderPdf(any(Order.class), anyString(), anyString())).thenReturn("%PDF".getBytes());
         when(orderUseCase.getMyOrderDetail(eq(userId), eq(orderId), anyString())).thenReturn(pedido);
         when(orderUseCase.getAdminOrderDetail(eq(orderId), any())).thenReturn(pedido);
     }
@@ -153,8 +152,7 @@ class Cov04InvoiceControllerTest {
     void unPagoEnCriptoNoSeFacturaEnUsdtSinoEnLaMonedaDelPedido() {
         // USDT no es una divisa de facturación: la factura debe ir en la moneda canónica del pedido.
         usuarioConIdioma("es");
-        when(paymentRepository.findSettlementCurrenciesByOrderId(orderId))
-                .thenReturn(List.of("USDT", "EUR"));
+        when(paymentRepository.findSettlementCurrenciesByOrderId(orderId)).thenReturn(List.of("USDT", "EUR"));
 
         controller.myInvoice(auth, orderId, null);
 
@@ -215,8 +213,8 @@ class Cov04InvoiceControllerTest {
         ResponseEntity<Map<String, Object>> resp = controller.sendTest(orderId, "qa@test", null);
 
         verify(orderEmailService).paymentConfirmed(pedido, "qa@test", "es", "CARD", "USD");
-        assertThat(resp.getBody()).containsEntry("sent", true).containsEntry("to", "qa@test")
-                .containsEntry("order", "NX-100");
+        assertThat(resp.getBody()).containsEntry("sent", true).containsEntry("to", "qa@test").containsEntry("order",
+                "NX-100");
     }
 
     @Test

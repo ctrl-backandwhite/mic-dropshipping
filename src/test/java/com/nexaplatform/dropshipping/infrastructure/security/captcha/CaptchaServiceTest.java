@@ -37,15 +37,15 @@ class CaptchaServiceTest {
                 break;
             }
         }
-        String json = "{\"algorithm\":\"" + c.algorithm() + "\",\"challenge\":\"" + c.challenge()
-                + "\",\"number\":" + number + ",\"salt\":\"" + c.salt() + "\",\"signature\":\"" + c.signature() + "\"}";
+        String json = "{\"algorithm\":\"" + c.algorithm() + "\",\"challenge\":\"" + c.challenge() + "\",\"number\":"
+                + number + ",\"salt\":\"" + c.salt() + "\",\"signature\":\"" + c.signature() + "\"}";
         return Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String sha256Hex(String in) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(in.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(in.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -74,8 +74,8 @@ class CaptchaServiceTest {
     void firmaManipuladaNoValida() {
         CaptchaService s = service(2000, 300, true);
         CaptchaChallengeDtoOut c = s.createChallenge();
-        String json = new String(Base64.getDecoder().decode(solve(c)), StandardCharsets.UTF_8)
-                .replace(c.signature(), "0000" + c.signature().substring(4));
+        String json = new String(Base64.getDecoder().decode(solve(c)), StandardCharsets.UTF_8).replace(c.signature(),
+                "0000" + c.signature().substring(4));
         assertThat(s.verify(Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8)))).isFalse();
     }
 

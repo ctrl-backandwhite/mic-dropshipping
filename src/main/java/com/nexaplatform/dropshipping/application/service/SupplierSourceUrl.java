@@ -23,8 +23,7 @@ public final class SupplierSourceUrl {
     /** Mercados de origen admitidos. Se acepta el dominio y cualquier subdominio suyo (detail., m., …). */
     private enum AllowedMarketplace {
 
-        ALIBABA_1688("1688.com"),
-        ALIBABA("alibaba.com");
+        ALIBABA_1688("1688.com"), ALIBABA("alibaba.com");
 
         private final String domain;
 

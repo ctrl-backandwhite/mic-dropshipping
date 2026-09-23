@@ -124,8 +124,7 @@ class UserUseCaseImplTest {
     void register_weak_password() {
         User candidate = User.builder().email("a@b.com").language("es").build();
 
-        assertThatThrownBy(() -> useCase.register(candidate, "weak"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.register(candidate, "weak")).isInstanceOf(BusinessException.class);
         verify(userRepository, never()).save(any());
     }
 
@@ -194,9 +193,8 @@ class UserUseCaseImplTest {
         when(userRepository.findByEmail("known@x.com")).thenReturn(
                 Optional.of(User.builder().id(knownId).email("known@x.com").role(UserRole.USER).active(true).build()));
         when(userRepository.findByEmail("unknown@x.com")).thenReturn(Optional.empty());
-        when(userJpaRepository.findById(knownId))
-                .thenReturn(Optional.of(UserEntity
-                        .builder().email("known@x.com").role(UserRole.USER).active(true).build()));
+        when(userJpaRepository.findById(knownId)).thenReturn(
+                Optional.of(UserEntity.builder().email("known@x.com").role(UserRole.USER).active(true).build()));
 
         useCase.requestPasswordReset("known@x.com");
         useCase.requestPasswordReset("unknown@x.com");
@@ -271,8 +269,7 @@ class UserUseCaseImplTest {
         UUID id = UUID.randomUUID();
         autenticadoComo(id);
 
-        assertThatThrownBy(() -> useCase.changeRole(id, "user"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> useCase.changeRole(id, "user")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("propio rol");
 
         verify(userRepository, never()).update(any());
@@ -302,8 +299,8 @@ class UserUseCaseImplTest {
 
     /** Deja en el contexto de seguridad al usuario indicado, como haría el filtro del token. */
     private static void autenticadoComo(UUID id) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(id.toString(), "n/a", List.of()));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(id.toString(), "n/a", List.of()));
     }
 
     @Test

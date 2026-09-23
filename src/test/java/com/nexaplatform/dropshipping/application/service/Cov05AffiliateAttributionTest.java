@@ -314,8 +314,8 @@ class Cov05AffiliateAttributionTest {
 
     private AffiliateCommissionEntity commission(String status, Instant createdAt, long cents) {
         AffiliateCommissionEntity c = AffiliateCommissionEntity.builder().affiliateId(AFFILIATE_ID)
-                .conversionId(UUID.randomUUID()).amountCents(cents).currency("EUR")
-                .percentage(new BigDecimal("10.000")).status(status).build();
+                .conversionId(UUID.randomUUID()).amountCents(cents).currency("EUR").percentage(new BigDecimal("10.000"))
+                .status(status).build();
         c.setId(UUID.randomUUID());
         c.setCreatedAt(createdAt);
         return c;

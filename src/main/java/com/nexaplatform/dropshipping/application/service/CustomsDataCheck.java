@@ -32,11 +32,9 @@ public final class CustomsDataCheck {
      */
     public enum CustomsField {
 
-        ENGLISH_NAME("nombre en inglés (EName)"),
-        CHINESE_NAME("nombre en chino (CName)"),
-        HS_CODE("partida arancelaria (HSCode)"),
-        UNIT_WEIGHT("peso unitario (UnitWeight)"),
-        DECLARED_VALUE("valor declarado (UnitPrice)");
+        ENGLISH_NAME("nombre en inglés (EName)"), CHINESE_NAME("nombre en chino (CName)"), HS_CODE(
+                "partida arancelaria (HSCode)"), UNIT_WEIGHT(
+                        "peso unitario (UnitWeight)"), DECLARED_VALUE("valor declarado (UnitPrice)");
 
         private final String etiqueta;
 
@@ -179,7 +177,8 @@ public final class CustomsDataCheck {
         if (variantes == null || variantes.isEmpty()) {
             return false;
         }
-        return variantes.stream().allMatch(v -> esPositivo(v.getPackageWeightGrams()) || esPositivo(v.getWeightGrams()));
+        return variantes.stream()
+                .allMatch(v -> esPositivo(v.getPackageWeightGrams()) || esPositivo(v.getWeightGrams()));
     }
 
     /** Mismo criterio para el valor declarado: el precio base sirve para todas, si no lo trae cada variante. */

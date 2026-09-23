@@ -30,8 +30,7 @@ import java.util.UUID;
  * poder mover una línea de una lista a la otra sin transformaciones.
  */
 @Entity
-@Table(name = "cart_item",
-        uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "product_id", "variant_id" }))
+@Table(name = "cart_item", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "product_id", "variant_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

@@ -74,13 +74,12 @@ class WalletLedgerInvariantsTest {
         when(txRepository.save(any())).thenAnswer(i -> {
             WalletTransaction tx = i.getArgument(0);
             if (tx.getId() == null) {
-                tx.setId(UUID.randomUUID());   // la auditoría lo mete en un Map.of, que no admite nulos
+                tx.setId(UUID.randomUUID()); // la auditoría lo mete en un Map.of, que no admite nulos
             }
             return tx;
         });
         return w;
     }
-
 
     /**
      * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
@@ -102,7 +101,8 @@ class WalletLedgerInvariantsTest {
         // entidad: es lo que impide el doble gasto entre checkouts simultáneos. Aquí se reproduce esa misma
         // semántica sobre la wallet simulada — aplica el delta solo si no deja el saldo en negativo — para
         // que las pruebas sigan comprobando la regla y no el mecanismo.
-        org.mockito.Mockito.lenient().when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
+        org.mockito.Mockito.lenient()
+                .when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenAnswer(inv -> {
                     var actual = walletRepository.findByUserId(inv.getArgument(0));
                     if (actual.isEmpty()) {
@@ -115,9 +115,8 @@ class WalletLedgerInvariantsTest {
                     actual.get().setBalanceUsdCents(nuevo);
                     return true;
                 });
-        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any()))
-                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0))
-                        .map(w -> w.getBalanceUsdCents()).orElse(0L));
+        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any())).thenAnswer(
+                inv -> walletRepository.findByUserId(inv.getArgument(0)).map(w -> w.getBalanceUsdCents()).orElse(0L));
 
     }
 
@@ -128,8 +127,7 @@ class WalletLedgerInvariantsTest {
         Wallet w = wallet(5_000L, 0L);
 
         assertThatThrownBy(() -> subject.charge(userId, 5_001L, orderId, "k1", "Pedido"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Insufficient");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Insufficient");
 
         assertThat(w.getBalanceUsdCents()).isEqualTo(5_000L);
         verify(txRepository, never()).save(any());
@@ -142,7 +140,7 @@ class WalletLedgerInvariantsTest {
         WalletTransaction tx = useCase().charge(userId, 5_000L, orderId, "k1", "Pedido");
 
         assertThat(w.getBalanceUsdCents()).isZero();
-        assertThat(tx.getAmountUsdCents()).isEqualTo(-5_000L);   // el cargo se anota en negativo
+        assertThat(tx.getAmountUsdCents()).isEqualTo(-5_000L); // el cargo se anota en negativo
         assertThat(tx.getBalanceAfterCents()).isZero();
     }
 
@@ -153,8 +151,7 @@ class WalletLedgerInvariantsTest {
         wallet(5_000L, 0L);
 
         assertThatThrownBy(() -> subject.charge(userId, amount, orderId, "k1", "Pedido"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("positive");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("positive");
 
         verify(txRepository, never()).save(any());
     }
@@ -165,8 +162,7 @@ class WalletLedgerInvariantsTest {
         wallet(5_000L, 0L);
 
         assertThatThrownBy(() -> subject.deposit(userId, amount, null, "k1", "Recarga"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("positive");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("positive");
     }
 
     // ---------------------------------------------------------------- idempotencia
@@ -217,10 +213,8 @@ class WalletLedgerInvariantsTest {
         wallet(10_000L, 0L);
         UUID paymentId = UUID.randomUUID();
 
-        assertThat(useCase().deposit(userId, 2_500L, paymentId, "d1", "Recarga").getPaymentId())
-                .isEqualTo(paymentId);
-        assertThat(useCase().charge(userId, 2_000L, orderId, "c1", "Pedido").getOrderId())
-                .isEqualTo(orderId);
+        assertThat(useCase().deposit(userId, 2_500L, paymentId, "d1", "Recarga").getPaymentId()).isEqualTo(paymentId);
+        assertThat(useCase().charge(userId, 2_000L, orderId, "c1", "Pedido").getOrderId()).isEqualTo(orderId);
     }
 
     // ---------------------------------------------------------------- ajustes manuales del admin
@@ -230,8 +224,7 @@ class WalletLedgerInvariantsTest {
         Wallet w = wallet(1_000L, 0L);
 
         assertThatThrownBy(() -> subject.adminAdjustEntry(userId, -1_001L, "Corrección", "a1"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("negative");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("negative");
 
         assertThat(w.getBalanceUsdCents()).isEqualTo(1_000L);
     }

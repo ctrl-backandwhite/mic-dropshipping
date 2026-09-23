@@ -132,8 +132,8 @@ class EuComplianceServiceTest {
     }
 
     @ParameterizedTest(name = "idioma {0} → figura \"{1}\"")
-    @CsvSource({"es,Importador", "en,Importer", "pt,Importador", "fr,Importateur", "de,Importeur",
-            "it,Importatore", "nl,Importeur"})
+    @CsvSource({"es,Importador", "en,Importer", "pt,Importador", "fr,Importateur", "de,Importeur", "it,Importatore",
+            "nl,Importeur"})
     @DisplayName("la figura del art. 4.2 viaja traducida: el front no la traduce")
     void traduceLaFigura(String lang, String esperado) {
         assertThat(EuComplianceLookup.toView(completo, lang).roleLabel()).isEqualTo(esperado);
@@ -164,14 +164,10 @@ class EuComplianceServiceTest {
         when(lookup.safetyWarnings(eq(cat), anyString())).thenReturn(List.of());
         when(lookup.responsible(anyString())).thenReturn(Optional.empty());
 
-        assertThat(service.forProduct(cat, "Fábrica S.L.", "Calle 1", "a@b.com", "es").manufacturerComplete())
-                .isTrue();
-        assertThat(service.forProduct(cat, "Fábrica S.L.", "Calle 1", null, "es").manufacturerComplete())
-                .isFalse();
-        assertThat(service.forProduct(cat, "Fábrica S.L.", "  ", "a@b.com", "es").manufacturerComplete())
-                .isFalse();
-        assertThat(service.forProduct(cat, null, "Calle 1", "a@b.com", "es").manufacturerComplete())
-                .isFalse();
+        assertThat(service.forProduct(cat, "Fábrica S.L.", "Calle 1", "a@b.com", "es").manufacturerComplete()).isTrue();
+        assertThat(service.forProduct(cat, "Fábrica S.L.", "Calle 1", null, "es").manufacturerComplete()).isFalse();
+        assertThat(service.forProduct(cat, "Fábrica S.L.", "  ", "a@b.com", "es").manufacturerComplete()).isFalse();
+        assertThat(service.forProduct(cat, null, "Calle 1", "a@b.com", "es").manufacturerComplete()).isFalse();
     }
 
     @Test
@@ -193,11 +189,10 @@ class EuComplianceServiceTest {
         when(responsibleRepository.findById((short) 1)).thenReturn(Optional.empty());
         when(responsibleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.updateResponsible(new ResponsiblePersonView("  Nombre  ", " Calle 1 ", " 50001 ", "Zaragoza",
-                null, "es", "  MAYUS@Ejemplo.COM ", null, "importer", null, true, false), "admin@x", "es");
+        service.updateResponsible(new ResponsiblePersonView("  Nombre  ", " Calle 1 ", " 50001 ", "Zaragoza", null,
+                "es", "  MAYUS@Ejemplo.COM ", null, "importer", null, true, false), "admin@x", "es");
 
-        ArgumentCaptor<EuResponsiblePersonEntity> captor =
-                ArgumentCaptor.forClass(EuResponsiblePersonEntity.class);
+        ArgumentCaptor<EuResponsiblePersonEntity> captor = ArgumentCaptor.forClass(EuResponsiblePersonEntity.class);
         verify(responsibleRepository).save(captor.capture());
         EuResponsiblePersonEntity guardado = captor.getValue();
         assertThat(guardado.getEmail()).isEqualTo("mayus@ejemplo.com");
@@ -214,11 +209,10 @@ class EuComplianceServiceTest {
         when(responsibleRepository.findById((short) 1)).thenReturn(Optional.empty());
         when(responsibleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.updateResponsible(new ResponsiblePersonView("N", "C", "50001", "Z", null, "ES", "a@b.com",
-                null, "NO_EXISTE", null, true, false), "admin@x", "es");
+        service.updateResponsible(new ResponsiblePersonView("N", "C", "50001", "Z", null, "ES", "a@b.com", null,
+                "NO_EXISTE", null, true, false), "admin@x", "es");
 
-        ArgumentCaptor<EuResponsiblePersonEntity> captor =
-                ArgumentCaptor.forClass(EuResponsiblePersonEntity.class);
+        ArgumentCaptor<EuResponsiblePersonEntity> captor = ArgumentCaptor.forClass(EuResponsiblePersonEntity.class);
         verify(responsibleRepository).save(captor.capture());
         assertThat(captor.getValue().getRole()).isEqualTo("IMPORTER");
     }
@@ -229,11 +223,10 @@ class EuComplianceServiceTest {
         when(responsibleRepository.findById((short) 1)).thenReturn(Optional.empty());
         when(responsibleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.updateResponsible(new ResponsiblePersonView("N", "C", "  ", "Z", "   ", "ES", "a@b.com",
-                "", "IMPORTER", null, false, false), "admin@x", "es");
+        service.updateResponsible(new ResponsiblePersonView("N", "C", "  ", "Z", "   ", "ES", "a@b.com", "", "IMPORTER",
+                null, false, false), "admin@x", "es");
 
-        ArgumentCaptor<EuResponsiblePersonEntity> captor =
-                ArgumentCaptor.forClass(EuResponsiblePersonEntity.class);
+        ArgumentCaptor<EuResponsiblePersonEntity> captor = ArgumentCaptor.forClass(EuResponsiblePersonEntity.class);
         verify(responsibleRepository).save(captor.capture());
         // Importa porque la comprobación de completitud mira "en blanco": un "" guardado haría que el
         // registro pareciera relleno y se publicara un bloque sin código postal.

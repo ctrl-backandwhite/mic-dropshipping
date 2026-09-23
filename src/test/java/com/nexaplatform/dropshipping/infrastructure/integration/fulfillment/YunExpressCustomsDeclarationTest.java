@@ -18,20 +18,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class YunExpressCustomsDeclarationTest {
 
-    private final YunExpressFulfillmentService service =
-            new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), null, null, null, null);
+    private final YunExpressFulfillmentService service = new YunExpressFulfillmentService(null, null, null,
+            new CustomsDutyLinesService(null), null, null, null, null);
 
     private static ParcelDeclaration linea(String eName, String cName) {
-        return new ParcelDeclaration(eName, cName, "6109100000", 1, 12.5, "USD", 0.3,
-                "Cotton", "Daily wear", "https://example.com/p/1", "SKU-1");
+        return new ParcelDeclaration(eName, cName, "6109100000", 1, 12.5, "USD", 0.3, "Cotton", "Daily wear",
+                "https://example.com/p/1", "SKU-1");
     }
 
     @Test
     void detectaElNombreChinoAusenteOEnAlfabetoLatino() {
-        List<ParcelDeclaration> parcels = List.of(
-                linea("Men's quartz watch", "Reloj de pulsera para hombre"),  // el bug real: español en CName
-                linea("Mesh office chair", null),
-                linea("Cotton T-shirt", "1234"));
+        List<ParcelDeclaration> parcels = List.of(linea("Men's quartz watch", "Reloj de pulsera para hombre"), // el bug real: español en CName
+                linea("Mesh office chair", null), linea("Cotton T-shirt", "1234"));
 
         List<String> gaps = service.customsGaps(parcels);
 
@@ -40,8 +38,7 @@ class YunExpressCustomsDeclarationTest {
 
     @Test
     void unaDeclaracionCompletaNoTieneHuecos() {
-        assertThat(service.customsGaps(List.of(linea("Men's quartz watch", "男士石英手表长方形表壳不锈钢表带"))))
-                .isEmpty();
+        assertThat(service.customsGaps(List.of(linea("Men's quartz watch", "男士石英手表长方形表壳不锈钢表带")))).isEmpty();
     }
 
     @Test
@@ -57,15 +54,13 @@ class YunExpressCustomsDeclarationTest {
 
     @Test
     void sigueDetectandoElRestoDeHuecosAduaneros() {
-        ParcelDeclaration sinPartida = new ParcelDeclaration("Watch", "手表", null, 1, 12.5, "USD", 0.3,
-                null, null, null, "SKU-2");
-        ParcelDeclaration sinPesoNiValor = new ParcelDeclaration("Watch", "手表", "9102190000", 1, 0.0, "USD", 0.0,
-                null, null, null, "SKU-3");
+        ParcelDeclaration sinPartida = new ParcelDeclaration("Watch", "手表", null, 1, 12.5, "USD", 0.3, null, null, null,
+                "SKU-2");
+        ParcelDeclaration sinPesoNiValor = new ParcelDeclaration("Watch", "手表", "9102190000", 1, 0.0, "USD", 0.0, null,
+                null, null, "SKU-3");
 
-        assertThat(service.customsGaps(List.of(sinPartida)))
-                .anyMatch(g -> g.startsWith("sin partida arancelaria"));
-        assertThat(service.customsGaps(List.of(sinPesoNiValor)))
-                .anyMatch(g -> g.startsWith("sin peso unitario"))
+        assertThat(service.customsGaps(List.of(sinPartida))).anyMatch(g -> g.startsWith("sin partida arancelaria"));
+        assertThat(service.customsGaps(List.of(sinPesoNiValor))).anyMatch(g -> g.startsWith("sin peso unitario"))
                 .anyMatch(g -> g.startsWith("sin valor declarado"));
     }
 }

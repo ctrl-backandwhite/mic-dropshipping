@@ -56,10 +56,8 @@ class Cov02CurrencyRateAdminTest {
 
     @BeforeEach
     void setUp() {
-        enBd = new ArrayList<>(List.of(
-                rate("USD", "$", "en-US", "1.00000000", true),
-                rate("EUR", "€", "es-ES", "0.90000000", true),
-                rate("CNY", "¥", "zh-CN", "7.20000000", true)));
+        enBd = new ArrayList<>(List.of(rate("USD", "$", "en-US", "1.00000000", true),
+                rate("EUR", "€", "es-ES", "0.90000000", true), rate("CNY", "¥", "zh-CN", "7.20000000", true)));
         when(repository.findAll()).thenAnswer(inv -> enBd);
     }
 
@@ -189,8 +187,8 @@ class Cov02CurrencyRateAdminTest {
         service.applyBulkSync(delProveedor);
 
         verify(repository, times(2)).save(captor.capture());
-        CurrencyRateEntity nueva = captor.getAllValues().stream()
-                .filter(c -> "JPY".equals(c.getCode())).findFirst().orElseThrow();
+        CurrencyRateEntity nueva = captor.getAllValues().stream().filter(c -> "JPY".equals(c.getCode())).findFirst()
+                .orElseThrow();
         // Una moneda nueva del proveedor NO se activa sola: solo las que la tienda usa deben ofrecerse.
         assertThat(nueva.isActive()).isFalse();
         assertThat(nueva.getLastSyncedAt()).isNotNull();

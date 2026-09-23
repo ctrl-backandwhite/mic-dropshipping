@@ -67,7 +67,7 @@ public class MeOrderPaymentController implements MeOrderPaymentApi {
     public ResponseEntity<OrderPaymentDtoOut> confirmSavedCard(Authentication auth, UUID orderId, UUID paymentId)
             throws StripeException {
         UUID userId = UUID.fromString(auth.getName());
-        return ResponseEntity.ok(orderPaymentDtoMapper
-                .toDtoOut(paymentUseCase.confirmSavedCardPayment(userId, orderId, paymentId)));
+        return ResponseEntity
+                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmSavedCardPayment(userId, orderId, paymentId)));
     }
 }

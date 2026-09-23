@@ -128,9 +128,7 @@ public class YunExpressEventCipher {
     public String ackOf(String rawBody) {
         try {
             JsonNode sobre = JSON.readTree(rawBody);
-            String contenido = sobre.hasNonNull("encrypt")
-                    ? decrypt(sobre.get("encrypt").asText())
-                    : rawBody;
+            String contenido = sobre.hasNonNull("encrypt") ? decrypt(sobre.get("encrypt").asText()) : rawBody;
             String ack = JSON.readTree(contenido).path("ack").asText("");
             return ack.isBlank() ? null : ack;
         } catch (JsonProcessingException | RuntimeException e) {

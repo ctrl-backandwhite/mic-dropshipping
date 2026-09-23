@@ -79,8 +79,7 @@ class CompresorConcurrenteTest {
                 assertThat(salida).isNotEmpty();
                 // Que se pueda volver a leer prueba que la codificación no se pisó con otra.
                 assertThat(ImageIO.read(new java.io.ByteArrayInputStream(salida)))
-                        .as("cada resultado tiene que ser una imagen entera, no un trozo de otra")
-                        .isNotNull();
+                        .as("cada resultado tiene que ser una imagen entera, no un trozo de otra").isNotNull();
             }
         } finally {
             pool.shutdownNow();

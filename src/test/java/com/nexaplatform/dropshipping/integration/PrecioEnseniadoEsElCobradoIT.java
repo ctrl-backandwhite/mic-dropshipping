@@ -68,8 +68,7 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
     private static final String MARGEN_DESTINO = "104.0000";
 
     private static final ObjectMapper JSON = JsonMapper.builder()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-            .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     @MockitoBean
     private FulfillmentProvider fulfillment;
@@ -94,35 +93,32 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
 
         clienteId = UUID.randomUUID();
         tokenCliente = jwt.userToken(clienteId, "divisas-" + clienteId + "@nx036.local", "USER");
-        jdbcTemplate.update("INSERT INTO users (id, email, role, active, language, created_at, updated_at)"
-                + " VALUES (?, ?, 'USER', true, 'es', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, role, active, language, created_at, updated_at)"
+                        + " VALUES (?, ?, 'USER', true, 'es', now(), now())",
                 clienteId, "divisas-" + clienteId + "@nx036.local");
-        jdbcTemplate.update("INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents,"
-                + " currency_default, status, created_at, updated_at)"
-                + " VALUES (gen_random_uuid(), ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents,"
+                        + " currency_default, status, created_at, updated_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
                 clienteId, SALDO_INICIAL_CENTS);
-        jdbcTemplate.update("INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
-                + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
+                        + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
                 DESTINO, IVA_BPS);
         productoId = insertarProducto();
         direccionId = crearDireccion();
 
         when(fulfillment.isSupported(anyString())).thenReturn(true);
-        when(fulfillment.quote(anyString(), any())).thenReturn(new ShippingQuote(true, DESTINO, PORTE_CENTS,
-                "Standard Shipping", "Standard Shipping", 5, 8, "EU"));
+        when(fulfillment.quote(anyString(), any())).thenReturn(
+                new ShippingQuote(true, DESTINO, PORTE_CENTS, "Standard Shipping", "Standard Shipping", 5, 8, "EU"));
     }
 
     /* ================================================================================== */
 
     @ParameterizedTest(name = "{0} ({1})")
-    @CsvSource({
-            "USD, con céntimos",
-            "EUR, con céntimos",
-            "SEK, con céntimos y el símbolo detrás",
-            "MXN, con decimales periódicos al convertir",
-            "JPY, SIN céntimos",
-            "CLP, SIN céntimos",
-    })
+    @CsvSource({"USD, con céntimos", "EUR, con céntimos", "SEK, con céntimos y el símbolo detrás",
+            "MXN, con decimales periódicos al convertir", "JPY, SIN céntimos", "CLP, SIN céntimos",})
     @DisplayName("el total cobrado es, al céntimo, el que se enseñó en la vista previa")
     void loCotizadoEsLoCobrado(String divisa, String porQue) {
         JsonNode previa = cotizar(divisa);
@@ -136,7 +132,7 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
     }
 
     @ParameterizedTest(name = "{0}")
-    @CsvSource({ "USD", "EUR", "SEK", "MXN", "JPY", "CLP" })
+    @CsvSource({"USD", "EUR", "SEK", "MXN", "JPY", "CLP"})
     @DisplayName("el desglose suma el total: subtotal + envío + impuesto, sin un céntimo suelto")
     void elDesgloseCuadra(String divisa) {
         JsonNode previa = cotizar(divisa);
@@ -192,8 +188,8 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
                 {"country":"%s","region":null,"couponCode":null,"shippingOptionCode":null,
                  "items":[{"productId":"%s","quantity":1}]}
                 """.formatted(DESTINO, productoId);
-        return cuerpo(peticion("/api/shipping/quote", divisa, paisDelComprador)
-                .bodyValue(cuerpo).exchange().expectStatus().isOk());
+        return cuerpo(peticion("/api/shipping/quote", divisa, paisDelComprador).bodyValue(cuerpo).exchange()
+                .expectStatus().isOk());
     }
 
     private JsonNode comprar(String divisa) {
@@ -205,17 +201,14 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
                 {"shippingAddressId":"%s","paymentMethod":"WALLET",
                  "items":[{"productId":"%s","quantity":1}]}
                 """.formatted(direccionId, productoId);
-        return cuerpo(peticion("/api/me/orders/checkout", divisa, paisDelComprador)
-                .bodyValue(cuerpo).exchange().expectStatus().isCreated());
+        return cuerpo(peticion("/api/me/orders/checkout", divisa, paisDelComprador).bodyValue(cuerpo).exchange()
+                .expectStatus().isCreated());
     }
 
     private WebTestClient.RequestBodySpec peticion(String uri, String divisa, String paisDelComprador) {
-        return client.post().uri(uri)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
-                .header("X-Currency", divisa)
-                .header("X-Country", paisDelComprador)
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON);
+        return client.post().uri(uri).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
+                .header("X-Currency", divisa).header("X-Country", paisDelComprador)
+                .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON);
     }
 
     /* ==================================================================================
@@ -235,32 +228,29 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
      * céntimos canónicos— porque es lo que el cliente tiene delante y lo que suma con el dedo.
      */
     private static BigDecimal importe(JsonNode nodo, String campo, String divisa) {
-        String texto = nodo.get(campo).asText()
-                .replace(" ", "").replace(" ", "").replace("‏", "")
+        String texto = nodo.get(campo).asText().replace(" ", "").replace(" ", "").replace("‏", "")
                 .replaceAll("[^0-9,.-]", "");
         boolean comaEsDecimal = texto.lastIndexOf(',') > texto.lastIndexOf('.');
-        String normalizado = comaEsDecimal
-                ? texto.replace(".", "").replace(',', '.')
-                : texto.replace(",", "");
+        String normalizado = comaEsDecimal ? texto.replace(".", "").replace(',', '.') : texto.replace(",", "");
         return new BigDecimal(normalizado.isEmpty() ? "0" : normalizado);
     }
 
     private UUID insertarProducto() {
         UUID proveedorId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO supplier (id, external_id, source, name, created_at, updated_at)"
-                + " VALUES (?, ?, '1688', 'Proveedor de prueba', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO supplier (id, external_id, source, name, created_at, updated_at)"
+                        + " VALUES (?, ?, '1688', 'Proveedor de prueba', now(), now())",
                 proveedorId, "sup-" + proveedorId);
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
         jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, supplier_id, title_zh,"
                 + " status, moq, base_price, currency, hs_code, weight_grams, created_at, updated_at)"
                 + " VALUES (?, ?, ?, '1688', ?, '棉质T恤', 'ACTIVE', 1, ?::numeric, 'USD', '610910', 500,"
-                + " now(), now())",
-                id, "producto-" + sufijo, "ext-" + sufijo, proveedorId, PRECIO_BASE);
-        for (String[] t : new String[][] { { "es", "Camiseta de algodón" }, { "en", "Cotton T-Shirt" },
-                { "zh", "棉质T恤" } }) {
-            jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title,"
-                    + " created_at, updated_at) VALUES (gen_random_uuid(), ?, ?, ?, now(), now())",
+                + " now(), now())", id, "producto-" + sufijo, "ext-" + sufijo, proveedorId, PRECIO_BASE);
+        for (String[] t : new String[][]{{"es", "Camiseta de algodón"}, {"en", "Cotton T-Shirt"}, {"zh", "棉质T恤"}}) {
+            jdbcTemplate.update(
+                    "INSERT INTO product_translation (id, product_id, language, title,"
+                            + " created_at, updated_at) VALUES (gen_random_uuid(), ?, ?, ?, now(), now())",
                     id, t[0], t[1]);
         }
         return id;
@@ -272,9 +262,8 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
                  "city":"Madrid","state":"M","postalCode":"28013","country":"%s","isDefault":true}
                 """.formatted(DESTINO);
         JsonNode creada = cuerpo(client.post().uri("/api/me/addresses")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente)).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(creada.get("id").asText());
     }
 
@@ -313,8 +302,7 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
         currencyRateService.applyBulkSync(tasas);
     }
 
-    private void insertarDivisa(String codigo, String nombre, String simbolo, String pais, String locale,
-            String tasa) {
+    private void insertarDivisa(String codigo, String nombre, String simbolo, String pais, String locale, String tasa) {
         jdbcTemplate.update("""
                 INSERT INTO currency_rate (id, code, name, symbol, country_code, locale, rate_vs_usd, active,
                                            last_synced_at, created_at, updated_at)

@@ -256,8 +256,7 @@ class Cov05AdminAcademyControllerTest {
 
         assertThat(row).containsEntry("slug", "").containsEntry("title", "").containsEntry("description", "")
                 .containsEntry("instructor", "").containsEntry("coverUrl", "").containsEntry("videoUrl", "")
-                .containsEntry("durationMinutes", 0).containsEntry("locale", "es")
-                .containsEntry("level", "BEGINNER");
+                .containsEntry("durationMinutes", 0).containsEntry("locale", "es").containsEntry("level", "BEGINNER");
     }
 
     @Test

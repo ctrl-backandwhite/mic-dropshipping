@@ -50,12 +50,12 @@ public class BffSecurityConfig {
                 : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Access token required", null));
         OAuth2TokenValidator<Jwt> notRevoked = jwt -> {
             long iat = jwt.getIssuedAt() != null ? jwt.getIssuedAt().getEpochSecond() : 0L;
-            return revocation.isStillValid(jwt.getSubject(), iat) ? OAuth2TokenValidatorResult.success()
+            return revocation.isStillValid(jwt.getSubject(), iat)
+                    ? OAuth2TokenValidatorResult.success()
                     : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Token revoked", null));
         };
-        decoder.setJwtValidator(
-                new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer), accessOnly,
-                        notRevoked));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer),
+                accessOnly, notRevoked));
         return decoder;
     }
 
@@ -113,147 +113,139 @@ public class BffSecurityConfig {
                 // protegida pero en realidad ni siquiera llega a evaluarse como API.
                 "/api/compliance", "/api/compliance/**",
                 // Textos legales: cualquiera debe poder leerlos ANTES de registrarse.
-                "/api/legal", "/api/legal/**",
-                "/api/captcha/**",
+                "/api/legal", "/api/legal/**", "/api/captcha/**",
                 // Vuelta del pago a la aplicación. La abre el NAVEGADOR al salir de la pasarela, sin
                 // testigo ninguno: solo redirige al esquema del teléfono y no toca dinero ni datos.
-                "/api/payments/app-return")
-                .cors(Customizer.withDefaults())
+                "/api/payments/app-return").cors(Customizer.withDefaults())
                 // NOSONAR java:S4502 — Falso positivo verificado: con STATELESS (abajo) la sesión no se lee
                 // nunca, así que ninguna ruta con efectos se autentica por cookie. Detalle en el javadoc.
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 — API stateless con Bearer, sin cookie de sesión
-                .headers(h -> h
-                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
-                        .frameOptions(fo -> fo.deny())
-                        .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                .headers(h -> h.httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(
+                        31536000)).frameOptions(fo -> fo.deny()).referrerPolicy(r -> r.policy(
+                                ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
                         // API JSON: nada debe cargarse/embeber → CSP mínima.
-                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'none'; frame-ancestors 'none'")))
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(reg -> reg.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // Endpoints públicos de auth: aún no hay token.
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/activate",
-                                "/api/auth/activate/resend", "/api/auth/refresh", "/api/auth/password-reset/**",
-                                "/api/webhooks/**")
-                        .permitAll()
-                        // Reto CAPTCHA (proof-of-work): el navegador lo pide antes de enviar un formulario público.
-                        .requestMatchers(HttpMethod.GET, "/api/captcha/challenge").permitAll()
-                        // La vuelta del pago llega desde el navegador de la pasarela, sin sesión.
-                        .requestMatchers(HttpMethod.GET, "/api/payments/app-return").permitAll()
-                        // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
-                        // Debe ir ANTES del permitAll general de GET del catálogo público.
-                        .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")
-                        .hasRole(ADMIN)
-                        // El catálogo se navega con cuenta. El muro estaba SOLO en el frontend
-                        // (ProtectedRoute), que oculta la vista pero no cierra la API: sin ninguna
-                        // credencial se podían sacar 100 productos por llamada —con precio, ventas
-                        // mensuales y trend score—, o sea el catálogo entero en ~45 peticiones. Un
-                        // scraper no usa el navegador.
-                        //
-                        // Se cierran los dos endpoints que permiten ENUMERAR, y solo esos:
-                        // la ficha individual sigue abierta (hay que conocer el slug) y también
-                        // /api/catalog/home/sections, que la portada pública necesita y devuelve un
-                        // puñado de productos por sección, no el catálogo.
-                        .requestMatchers(HttpMethod.GET, "/api/catalog/products").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/search", "/api/search/**").authenticated()
-                        // El asistente conversacional busca en el catálogo por dentro, así que dejarlo
-                        // abierto abriría por la puerta de atrás justo lo que las dos líneas de arriba
-                        // cierran: volcar el catálogo sin cuenta, preguntando. Además cada mensaje cuesta
-                        // dinero en el proveedor del modelo, y un endpoint anónimo de pago es una factura
-                        // ajena esperando a que alguien la encuentre.
-                        .requestMatchers(HttpMethod.POST, "/api/chat").authenticated()
-                        // El simulador de la guía de bienvenida. Es un POST porque manda las cantidades que
-                        // el visitante va poniendo, pero lo ve justo quien AÚN NO TIENE CUENTA: cerrarlo
-                        // dejaría la guía sin números para su único público. No es una calculadora abierta:
-                        // el controlador solo acepta los tres productos que la propia guía propone y como
-                        // mucho seis unidades de cada uno, así que no sirve para tarifar un catálogo.
-                        .requestMatchers(HttpMethod.POST, "/api/catalog/welcome/simulate").permitAll()
-                        // GET públicos de navegación (antes GET /api/storefront/**), enumerados por base.
-                        .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", API_CONTACT,
-                                "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
-                                "/api/search/**", "/api/shipping/**", "/api/currency/**", "/api/languages",
-                                "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/geo",
-                                // Operador económico de la UE (art. 16.3 del Reglamento (UE) 2023/988): la
-                                // norma obliga a que el comprador pueda verlo, así que no puede quedar
-                                // detrás del muro de cuenta. No expone nada que no deba ser público.
-                                "/api/compliance", "/api/compliance/**",
-                                // Términos, privacidad, cookies, aviso legal y desistimiento. Exigir cuenta
-                                // para leer las condiciones que uno va a aceptar no tendría sentido.
-                                "/api/legal", "/api/legal/**")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
-                        // Las sugerencias de ahorro devuelven productos del catálogo y cotizan envíos:
-                        // se cierran igual que el listado, y por el mismo motivo —no regalar el catálogo
-                        // ni el trabajo del transportista a quien no tiene cuenta.
-                        .requestMatchers(HttpMethod.POST, "/api/catalog/cart-suggestions").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/catalog/products/*/variants/match")
-                        .permitAll().requestMatchers(HttpMethod.POST, "/api/catalog/products/import-url")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/catalog/products/search-by-image")
-                        .permitAll().requestMatchers(HttpMethod.POST, "/api/shipping/calculator").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/shipping/carbon-footprint").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/affiliate/track").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/newsletter/subscribe").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/newsletter/unsubscribe").permitAll()
-                        // Baja/alta de correos de campaña por enlace de un clic (token HMAC, sin login).
-                        .requestMatchers(HttpMethod.GET, "/api/campaigns/unsubscribe", "/api/campaigns/resubscribe")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST, API_CONTACT).permitAll()
-                        // OPERATOR (soporte) SOLO puede: procesar órdenes (avanzar/enviar/entregar) y ver sus
-                        // propias ganancias/historial. Las mutaciones con impacto FINANCIERO o de CREACIÓN de
-                        // pedidos —cancelar, reembolsar (al wallet/tarjeta), crear e importar— son EXCLUSIVAS de
-                        // ADMIN: sin este gate por método, el gate por URL /api/admin/orders/** dejaba a un
-                        // OPERATOR emitir reembolsos masivos. Estas reglas MÁS ESPECÍFICAS van antes que la general.
-                        .requestMatchers(HttpMethod.POST,
-                                "/api/admin/orders",
-                                "/api/admin/orders/demo",
-                                "/api/admin/orders/import",
-                                "/api/admin/orders/*/cancel",
-                                "/api/admin/orders/*/refund",
-                                "/api/admin/orders/bulk-cancel",
-                                "/api/admin/orders/bulk-refund").hasRole(ADMIN)
-                        // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,
-                        // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.
-                        .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")
-                        .requestMatchers("/api/admin/operator/**").hasAnyRole(ADMIN, "OPERATOR")
-                        // REVIEWER (revisión del material gráfico) solo puede lo que se enumera AQUÍ, y se
-                        // enumera por método y ruta exacta —no por prefijo— a propósito: /api/admin/catalog/**
-                        // incluye el precio, el margen, las subvenciones, el borrado del producto y el import
-                        // masivo. Un prefijo se los daría todos de una vez, y la regla general de abajo ya no
-                        // llegaría a evaluarse.
-                        //
-                        // Lo que NO está aquí y es deliberado: PUT /products/{id} (la edición rápida, que lleva
-                        // «Verificado» y los importes en yuanes) y DELETE /products/{id} (borrar el producto).
-                        // Nótese que DELETE /products/images/{id} tiene un segmento MÁS que DELETE /products/{id}:
-                        // son rutas distintas y el comodín de una sola posición no cruza de una a la otra.
-                        .requestMatchers(HttpMethod.POST, "/api/admin/catalog/products/*/images")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/products/*/images/order")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/products/images/*")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/products/*/video")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/products/*/source-url")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/variant-values/*/image")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/variant-values/*")
-                        .hasAnyRole(ADMIN, REVIEWER)
-                        .requestMatchers("/api/admin/**").hasRole(ADMIN)
-                        // Envío de cotizaciones de sourcing = operación de AGENTE/soporte, NO de cliente. Vivía
-                        // bajo /api/me/** (solo "authenticated") sin comprobar rol y aceptando ?asAgent=<id>, así
-                        // que cualquier usuario podía inyectar cotizaciones falsas en la petición de otro e
-                        // IMPERSONAR a cualquier agente. Se restringe a ADMIN/OPERATOR. El cliente solo crea la
-                        // petición y SELECCIONA la cotización ganadora (esas rutas siguen siendo suyas).
-                        .requestMatchers(HttpMethod.POST, "/api/me/sourcing/requests/*/quotes")
-                        .hasAnyRole(ADMIN, "OPERATOR")
-                        // /api/me is the auth-bootstrap probe — it must succeed even when
-                        // unauthenticated (the controller returns null), otherwise the SPA
-                        // sees a noisy 401 on every cold load before login.
-                        .requestMatchers(HttpMethod.GET, "/api/me").permitAll().requestMatchers("/api/me/**")
-                        .authenticated().anyRequest().authenticated())
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'none'; frame-ancestors 'none'")))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).authorizeHttpRequests(
+                        reg -> reg.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                                // Endpoints públicos de auth: aún no hay token.
+                                .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/activate",
+                                        "/api/auth/activate/resend", "/api/auth/refresh", "/api/auth/password-reset/**",
+                                        "/api/webhooks/**")
+                                .permitAll()
+                                // Reto CAPTCHA (proof-of-work): el navegador lo pide antes de enviar un formulario público.
+                                .requestMatchers(HttpMethod.GET, "/api/captcha/challenge").permitAll()
+                                // La vuelta del pago llega desde el navegador de la pasarela, sin sesión.
+                                .requestMatchers(HttpMethod.GET, "/api/payments/app-return").permitAll()
+                                // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
+                                // Debe ir ANTES del permitAll general de GET del catálogo público.
+                                .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")
+                                .hasRole(ADMIN)
+                                // El catálogo se navega con cuenta. El muro estaba SOLO en el frontend
+                                // (ProtectedRoute), que oculta la vista pero no cierra la API: sin ninguna
+                                // credencial se podían sacar 100 productos por llamada —con precio, ventas
+                                // mensuales y trend score—, o sea el catálogo entero en ~45 peticiones. Un
+                                // scraper no usa el navegador.
+                                //
+                                // Se cierran los dos endpoints que permiten ENUMERAR, y solo esos:
+                                // la ficha individual sigue abierta (hay que conocer el slug) y también
+                                // /api/catalog/home/sections, que la portada pública necesita y devuelve un
+                                // puñado de productos por sección, no el catálogo.
+                                .requestMatchers(HttpMethod.GET, "/api/catalog/products").authenticated()
+                                .requestMatchers(HttpMethod.GET, "/api/search", "/api/search/**").authenticated()
+                                // El asistente conversacional busca en el catálogo por dentro, así que dejarlo
+                                // abierto abriría por la puerta de atrás justo lo que las dos líneas de arriba
+                                // cierran: volcar el catálogo sin cuenta, preguntando. Además cada mensaje cuesta
+                                // dinero en el proveedor del modelo, y un endpoint anónimo de pago es una factura
+                                // ajena esperando a que alguien la encuentre.
+                                .requestMatchers(HttpMethod.POST, "/api/chat").authenticated()
+                                // El simulador de la guía de bienvenida. Es un POST porque manda las cantidades que
+                                // el visitante va poniendo, pero lo ve justo quien AÚN NO TIENE CUENTA: cerrarlo
+                                // dejaría la guía sin números para su único público. No es una calculadora abierta:
+                                // el controlador solo acepta los tres productos que la propia guía propone y como
+                                // mucho seis unidades de cada uno, así que no sirve para tarifar un catálogo.
+                                .requestMatchers(HttpMethod.POST, "/api/catalog/welcome/simulate").permitAll()
+                                // GET públicos de navegación (antes GET /api/storefront/**), enumerados por base.
+                                .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", API_CONTACT,
+                                        "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
+                                        "/api/search/**", "/api/shipping/**", "/api/currency/**", "/api/languages",
+                                        "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
+                                        "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/geo",
+                                        // Operador económico de la UE (art. 16.3 del Reglamento (UE) 2023/988): la
+                                        // norma obliga a que el comprador pueda verlo, así que no puede quedar
+                                        // detrás del muro de cuenta. No expone nada que no deba ser público.
+                                        "/api/compliance", "/api/compliance/**",
+                                        // Términos, privacidad, cookies, aviso legal y desistimiento. Exigir cuenta
+                                        // para leer las condiciones que uno va a aceptar no tendría sentido.
+                                        "/api/legal", "/api/legal/**")
+                                .permitAll().requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
+                                // Las sugerencias de ahorro devuelven productos del catálogo y cotizan envíos:
+                                // se cierran igual que el listado, y por el mismo motivo —no regalar el catálogo
+                                // ni el trabajo del transportista a quien no tiene cuenta.
+                                .requestMatchers(HttpMethod.POST, "/api/catalog/cart-suggestions").authenticated()
+                                .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/catalog/products/*/variants/match").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/catalog/products/import-url").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/catalog/products/search-by-image").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/shipping/calculator").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/shipping/carbon-footprint").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/affiliate/track").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/newsletter/subscribe").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/newsletter/unsubscribe").permitAll()
+                                // Baja/alta de correos de campaña por enlace de un clic (token HMAC, sin login).
+                                .requestMatchers(HttpMethod.GET, "/api/campaigns/unsubscribe",
+                                        "/api/campaigns/resubscribe")
+                                .permitAll().requestMatchers(HttpMethod.POST, API_CONTACT).permitAll()
+                                // OPERATOR (soporte) SOLO puede: procesar órdenes (avanzar/enviar/entregar) y ver sus
+                                // propias ganancias/historial. Las mutaciones con impacto FINANCIERO o de CREACIÓN de
+                                // pedidos —cancelar, reembolsar (al wallet/tarjeta), crear e importar— son EXCLUSIVAS de
+                                // ADMIN: sin este gate por método, el gate por URL /api/admin/orders/** dejaba a un
+                                // OPERATOR emitir reembolsos masivos. Estas reglas MÁS ESPECÍFICAS van antes que la general.
+                                .requestMatchers(HttpMethod.POST, "/api/admin/orders", "/api/admin/orders/demo",
+                                        "/api/admin/orders/import", "/api/admin/orders/*/cancel",
+                                        "/api/admin/orders/*/refund", "/api/admin/orders/bulk-cancel",
+                                        "/api/admin/orders/bulk-refund")
+                                .hasRole(ADMIN)
+                                // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,
+                                // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.
+                                .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")
+                                .requestMatchers("/api/admin/operator/**").hasAnyRole(ADMIN, "OPERATOR")
+                                // REVIEWER (revisión del material gráfico) solo puede lo que se enumera AQUÍ, y se
+                                // enumera por método y ruta exacta —no por prefijo— a propósito: /api/admin/catalog/**
+                                // incluye el precio, el margen, las subvenciones, el borrado del producto y el import
+                                // masivo. Un prefijo se los daría todos de una vez, y la regla general de abajo ya no
+                                // llegaría a evaluarse.
+                                //
+                                // Lo que NO está aquí y es deliberado: PUT /products/{id} (la edición rápida, que lleva
+                                // «Verificado» y los importes en yuanes) y DELETE /products/{id} (borrar el producto).
+                                // Nótese que DELETE /products/images/{id} tiene un segmento MÁS que DELETE /products/{id}:
+                                // son rutas distintas y el comodín de una sola posición no cruza de una a la otra.
+                                .requestMatchers(HttpMethod.POST, "/api/admin/catalog/products/*/images")
+                                .hasAnyRole(ADMIN, REVIEWER)
+                                .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/products/*/images/order")
+                                .hasAnyRole(ADMIN, REVIEWER)
+                                .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/products/images/*")
+                                .hasAnyRole(ADMIN, REVIEWER)
+                                .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/products/*/video")
+                                .hasAnyRole(ADMIN, REVIEWER)
+                                .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/products/*/source-url")
+                                .hasAnyRole(ADMIN, REVIEWER)
+                                .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/variant-values/*/image")
+                                .hasAnyRole(ADMIN, REVIEWER)
+                                .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/variant-values/*")
+                                .hasAnyRole(ADMIN, REVIEWER).requestMatchers("/api/admin/**").hasRole(ADMIN)
+                                // Envío de cotizaciones de sourcing = operación de AGENTE/soporte, NO de cliente. Vivía
+                                // bajo /api/me/** (solo "authenticated") sin comprobar rol y aceptando ?asAgent=<id>, así
+                                // que cualquier usuario podía inyectar cotizaciones falsas en la petición de otro e
+                                // IMPERSONAR a cualquier agente. Se restringe a ADMIN/OPERATOR. El cliente solo crea la
+                                // petición y SELECCIONA la cotización ganadora (esas rutas siguen siendo suyas).
+                                .requestMatchers(HttpMethod.POST, "/api/me/sourcing/requests/*/quotes")
+                                .hasAnyRole(ADMIN, "OPERATOR")
+                                // /api/me is the auth-bootstrap probe — it must succeed even when
+                                // unauthenticated (the controller returns null), otherwise the SPA
+                                // sees a noisy 401 on every cold load before login.
+                                .requestMatchers(HttpMethod.GET, "/api/me").permitAll().requestMatchers("/api/me/**")
+                                .authenticated().anyRequest().authenticated())
                 .oauth2ResourceServer(
                         oauth -> oauth.jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
                 // Revoca en caliente los tokens de usuario (p.ej. tras un cambio de rol): un access token

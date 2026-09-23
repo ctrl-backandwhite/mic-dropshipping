@@ -57,6 +57,18 @@ public class ProductVariantEntity extends BaseEntity {
     @Column(name = "package_weight_grams")
     private Integer packageWeightGrams;
 
+    /**
+     * Envío nacional chino de ESTA variante, en CNY.
+     *
+     * <p>Lo calcula el scraper por tramos de peso (6 / 10 / 16 CNY). Va por variante porque una
+     * misma ficha puede tener una talla de 800 g y otra de 1,2 kg, y el flete no es el mismo.
+     *
+     * <p>Nullable: un null significa "no declara envío propio" y entonces manda el del producto.
+     * No es lo mismo que un cero, que sí es un importe.
+     */
+    @Column(name = "shipping_cny", precision = 12, scale = 4)
+    private BigDecimal shippingCny;
+
     @Column(name = "length_mm")
     private Integer lengthMm;
 

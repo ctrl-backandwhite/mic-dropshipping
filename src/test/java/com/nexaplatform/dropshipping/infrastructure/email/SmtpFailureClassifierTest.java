@@ -17,22 +17,16 @@ class SmtpFailureClassifierTest {
     @ValueSource(strings = {
             "Failed messages: org.eclipse.angus.mail.smtp.SMTPSendFailedException: "
                     + "451 4.7.1 Ratelimit \"hostinger_out_ratelimit\" exceeded for key \"RL9\"",
-            "421 4.7.0 Try again later, closing connection",
-            "450 4.2.1 Mailbox temporarily unavailable",
-            "452 4.5.3 Too many recipients",
-            "Connection timed out"
-    })
+            "421 4.7.0 Try again later, closing connection", "450 4.2.1 Mailbox temporarily unavailable",
+            "452 4.5.3 Too many recipients", "Connection timed out"})
     void losFallosTemporalesSeReintentan(String message) {
         assertThat(SmtpFailureClassifier.classify(new RuntimeException(message)))
                 .isEqualTo(SmtpFailureClassifier.Kind.TRANSIENT);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "550 5.1.1 <no@existe.com>: Recipient address rejected: User unknown",
-            "553 5.7.1 Sender address rejected",
-            "554 5.7.1 Message rejected as spam"
-    })
+    @ValueSource(strings = {"550 5.1.1 <no@existe.com>: Recipient address rejected: User unknown",
+            "553 5.7.1 Sender address rejected", "554 5.7.1 Message rejected as spam"})
     void losFallosPermanentesSeDescartan(String message) {
         assertThat(SmtpFailureClassifier.classify(new RuntimeException(message)))
                 .isEqualTo(SmtpFailureClassifier.Kind.PERMANENT);
@@ -49,17 +43,15 @@ class SmtpFailureClassifierTest {
         Throwable root = new IllegalStateException("450 4.2.0 greylisted");
         Throwable wrapper = new RuntimeException("fallo al enviar", root);
 
-        assertThat(SmtpFailureClassifier.classify(wrapper))
-                .isEqualTo(SmtpFailureClassifier.Kind.TRANSIENT);
+        assertThat(SmtpFailureClassifier.classify(wrapper)).isEqualTo(SmtpFailureClassifier.Kind.TRANSIENT);
     }
 
     @Test
     void unaCadenaDeCausasCiclicaNoCuelgaLaClasificacion() {
         RuntimeException a = new RuntimeException("550 5.0.0 rejected");
         RuntimeException b = new RuntimeException("wrapper", a);
-        a.initCause(b);   // ciclo deliberado
+        a.initCause(b); // ciclo deliberado
 
-        assertThat(SmtpFailureClassifier.classify(b))
-                .isEqualTo(SmtpFailureClassifier.Kind.PERMANENT);
+        assertThat(SmtpFailureClassifier.classify(b)).isEqualTo(SmtpFailureClassifier.Kind.PERMANENT);
     }
 }

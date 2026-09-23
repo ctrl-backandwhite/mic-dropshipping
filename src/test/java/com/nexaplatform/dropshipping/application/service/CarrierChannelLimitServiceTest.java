@@ -86,8 +86,7 @@ class CarrierChannelLimitServiceTest {
 
         ChannelLimit limite = service.resolve(ROPA, "DK");
 
-        assertThat(limite.maxWeightGrams()).as("Dinamarca solo admite 15 kg en la línea de ropa")
-                .isEqualTo(15000);
+        assertThat(limite.maxWeightGrams()).as("Dinamarca solo admite 15 kg en la línea de ropa").isEqualTo(15000);
         assertThat(limite.origen()).isEqualTo(Origen.EXACTA);
     }
 

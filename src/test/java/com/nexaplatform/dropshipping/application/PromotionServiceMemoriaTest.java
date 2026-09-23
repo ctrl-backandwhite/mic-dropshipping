@@ -103,8 +103,8 @@ class PromotionServiceMemoriaTest {
     void los_destinos_de_una_promocion_se_piden_una_vez_por_promocion_no_una_por_producto() {
         UUID categoria = UUID.randomUUID();
         PromotionEntity p = PromotionEntity.builder().id(UUID.randomUUID()).name("Rebajas")
-                .percentOff(new BigDecimal("10")).scope(PromotionScope.CATEGORY)
-                .kind(PromotionKind.SEASONAL).active(true).createdAt(Instant.now()).build();
+                .percentOff(new BigDecimal("10")).scope(PromotionScope.CATEGORY).kind(PromotionKind.SEASONAL)
+                .active(true).createdAt(Instant.now()).build();
         when(promotionRepository.findLive(any())).thenReturn(List.of(p));
         when(targetRepository.findByPromotionId(p.getId()))
                 .thenReturn(List.of(PromotionTargetEntity.builder().categoryId(categoria).build()));

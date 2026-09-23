@@ -55,8 +55,7 @@ public class MeOrderDtoMapper {
         return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
                 .filter(p -> p.getSettlementAmount() != null && ccy.equalsIgnoreCase(p.getSettlementCurrency()))
-                .map(p -> p.getSettlementAmount())
-                .findFirst().orElse(null);
+                .map(p -> p.getSettlementAmount()).findFirst().orElse(null);
     }
 
     public MeOrderDetailDtoOut toDetailDtoOut(Order model) {
@@ -82,10 +81,10 @@ public class MeOrderDtoMapper {
         // línea es exactamente el subtotal de arriba.
         List<MeOrderItemDetailDtoOut> items = new ArrayList<>();
         for (OrderItem item : model.getItems() == null ? List.<OrderItem>of() : model.getItems()) {
-            BigDecimal unit = currencyRateService.usdTo(
-                    BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2), ccy);
-            items.add(toItemDetail(item,
-                    unit, orderAmounts.lineSubtotal(item.getUnitPriceCents(), item.getQuantity(), ccy), ccy));
+            BigDecimal unit = currencyRateService.usdTo(BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2),
+                    ccy);
+            items.add(toItemDetail(item, unit,
+                    orderAmounts.lineSubtotal(item.getUnitPriceCents(), item.getQuantity(), ccy), ccy));
         }
         // Pedido ya pagado: mostramos EXACTAMENTE lo cobrado (settlement), no la re-conversión a la tasa
         // actual. Escalamos el desglose por settlement/total (la conversión es lineal) para que cuadre.
@@ -104,9 +103,8 @@ public class MeOrderDtoMapper {
 
         return MeOrderDetailDtoOut.builder().id(model.getId()).orderNumber(model.getOrderNumber())
                 .externalOrderId(model.getExternalOrderId())
-                .status(model.getStatus() != null ? model.getStatus().name() : null)
-                .subtotal(subtotal).shipping(shipping).customsDuty(customsDuty).tax(tax).total(total)
-                .discount(discount).currency(ccy)
+                .status(model.getStatus() != null ? model.getStatus().name() : null).subtotal(subtotal)
+                .shipping(shipping).customsDuty(customsDuty).tax(tax).total(total).discount(discount).currency(ccy)
                 .subtotalFormatted(currencyRateService.formatDisplay(subtotal, ccy))
                 .shippingFormatted(currencyRateService.formatDisplay(shipping, ccy))
                 .customsDutyFormatted(currencyRateService.formatDisplay(customsDuty, ccy))
@@ -117,8 +115,8 @@ public class MeOrderDtoMapper {
                 // Transportista y nº de seguimiento reales: la ficha del pedido los muestra en cuanto el
                 // envío existe, sin obligar al comprador a abrir el bloque de seguimiento para verlos.
                 .trackingCarrier(model.getCarrier()).trackingNumber(model.getTrackingNumber())
-                .placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
-                .deliveredAt(model.getDeliveredAt()).cancelledAt(model.getCancelledAt()).items(items).build();
+                .placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt()).deliveredAt(model.getDeliveredAt())
+                .cancelledAt(model.getCancelledAt()).items(items).build();
     }
 
     /**
@@ -142,9 +140,8 @@ public class MeOrderDtoMapper {
 
     private MeOrderItemDetailDtoOut toItemDetail(OrderItem item, BigDecimal unit, BigDecimal lineTotal, String ccy) {
         return MeOrderItemDetailDtoOut.builder().id(item.getId()).productId(item.getProductId())
-                .variantId(item.getVariantId()).productTitle(item.getTitleSnapshot())
-                .variantName(item.getVariantName()).imageUrl(image(item)).quantity(item.getQuantity())
-                .unitPrice(unit).lineTotal(lineTotal)
+                .variantId(item.getVariantId()).productTitle(item.getTitleSnapshot()).variantName(item.getVariantName())
+                .imageUrl(image(item)).quantity(item.getQuantity()).unitPrice(unit).lineTotal(lineTotal)
                 .unitPriceFormatted(currencyRateService.formatDisplay(unit, ccy))
                 .lineTotalFormatted(currencyRateService.formatDisplay(lineTotal, ccy)).build();
     }

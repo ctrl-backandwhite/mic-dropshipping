@@ -63,11 +63,9 @@ public class MeOrderController implements MeOrderApi {
         List<MeOrderRowDtoOut> out = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             Order order = orders.get(i);
-            out.add(rows.get(i).toBuilder()
-                    .totalFormatted(meOrderDtoMapper.formatOrderTotal(order))
+            out.add(rows.get(i).toBuilder().totalFormatted(meOrderDtoMapper.formatOrderTotal(order))
                     .paymentMethod(resolvePaymentMethod(order.getId())) // para el botón de cancelar de la lista
-                    .cancellable(order.getStatus() == OrderStatus.PAID
-                            && !conGeneroComprado.contains(order.getId()))
+                    .cancellable(order.getStatus() == OrderStatus.PAID && !conGeneroComprado.contains(order.getId()))
                     .build());
         }
         return ResponseEntity.ok(out);
@@ -106,8 +104,7 @@ public class MeOrderController implements MeOrderApi {
     /** Método de pago ORIGINAL (CARD/PAYPAL/USDT) del pago satisfactorio; WALLET si no hubo pago externo. */
     private String resolvePaymentMethod(UUID orderId) {
         return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
-                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
-                .map(PaymentEntity::getMethod).filter(Objects::nonNull).map(PaymentMethod::name)
-                .findFirst().orElse("WALLET");
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED).map(PaymentEntity::getMethod)
+                .filter(Objects::nonNull).map(PaymentMethod::name).findFirst().orElse("WALLET");
     }
 }

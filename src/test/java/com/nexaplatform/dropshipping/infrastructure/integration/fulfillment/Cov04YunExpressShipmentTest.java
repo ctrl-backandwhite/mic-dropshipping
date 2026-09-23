@@ -79,8 +79,8 @@ class Cov04YunExpressShipmentTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(null), productRepository,
-                currencyRateService, new MockEnvironment(), null);
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation,
+                new CustomsDutyLinesService(null), productRepository, currencyRateService, new MockEnvironment(), null);
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "productCode", "BPA");
         ReflectionTestUtils.setField(service, "productGroupCode", "");
@@ -99,11 +99,9 @@ class Cov04YunExpressShipmentTest {
 
         when(client.hasCredentials()).thenReturn(true);
         when(zoneRepository.findByCountryCodeIgnoreCase(anyString()))
-                .thenReturn(Optional.of(CainiaoZoneEntity.builder().countryCode("ES").countryName("España")
-                        .zone("EU").baseCents(500).perKgCents(1000).etaMinDays(5).etaMaxDays(12).enabled(true)
-                        .build()));
-        when(customsValuation.valuate(anyString(), anyInt(), anyInt(), anyList()))
-                .thenReturn(valoracion(false));
+                .thenReturn(Optional.of(CainiaoZoneEntity.builder().countryCode("ES").countryName("España").zone("EU")
+                        .baseCents(500).perKgCents(1000).etaMinDays(5).etaMaxDays(12).enabled(true).build()));
+        when(customsValuation.valuate(anyString(), anyInt(), anyInt(), anyList())).thenReturn(valoracion(false));
         when(client.post(eq(PATH_SUBSCRIBE), any(Object.class))).thenReturn(ok("{\"success\":true}"));
     }
 
@@ -116,8 +114,8 @@ class Cov04YunExpressShipmentTest {
      * uno de esos, y entonces no debe pedirse ningún extra.
      */
     private static CustomsValuation valoracion(boolean deMinimisExceeded) {
-        return new CustomsValuation("ES", TaxMode.DDP, 4500, deMinimisExceeded, OverThresholdPolicy.ALLOW, 0,
-                false, "", true, "V1");
+        return new CustomsValuation("ES", TaxMode.DDP, 4500, deMinimisExceeded, OverThresholdPolicy.ALLOW, 0, false, "",
+                true, "V1");
     }
 
     private JsonNode ok(String raw) {
@@ -213,8 +211,8 @@ class Cov04YunExpressShipmentTest {
         assertThat(results).extracting(FulfillmentResult::sequenceNo).containsExactly(1, 2);
         ArgumentCaptor<Object> captor = payloadCaptor();
         verify(client, times(2)).post(eq(PATH_CREATE), captor.capture());
-        assertThat(captor.getAllValues()).extracting(p -> ((YunExpressRequests.CreateShipment) p)
-                .customerOrderNumber()).containsExactly("NX-1-1", "NX-1-2");
+        assertThat(captor.getAllValues()).extracting(p -> ((YunExpressRequests.CreateShipment) p).customerOrderNumber())
+                .containsExactly("NX-1-1", "NX-1-2");
     }
 
     @Test
@@ -264,19 +262,16 @@ class Cov04YunExpressShipmentTest {
         Order order = pedido(linea(1, 1000));
 
         assertThatThrownBy(() -> service.createShipment(order))
-                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class))
-                .matches(f -> !f.isPermanent());
+                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class)).matches(f -> !f.isPermanent());
     }
 
     @Test
     void unFalloDeRedAlCrearElEnvioEsTransitorioPorqueNoSeSabeSiLlegoACrearse() {
-        when(client.post(eq(PATH_CREATE), any(Object.class)))
-                .thenThrow(new IllegalStateException("connection reset"));
+        when(client.post(eq(PATH_CREATE), any(Object.class))).thenThrow(new IllegalStateException("connection reset"));
         Order order = pedido(linea(1, 1000));
 
         assertThatThrownBy(() -> service.createShipment(order))
-                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class))
-                .matches(f -> !f.isPermanent());
+                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class)).matches(f -> !f.isPermanent());
     }
 
     @Test
@@ -285,8 +280,7 @@ class Cov04YunExpressShipmentTest {
                 .thenReturn(ok("{\"success\":true,\"result\":{\"waybill_number\":\"\"}}"));
         Order order = pedido(linea(1, 1000));
 
-        assertThatThrownBy(() -> service.createShipment(order))
-                .isInstanceOf(FulfillmentFailure.class)
+        assertThatThrownBy(() -> service.createShipment(order)).isInstanceOf(FulfillmentFailure.class)
                 .hasMessageContaining("no devolvió número de guía");
     }
 
@@ -306,8 +300,7 @@ class Cov04YunExpressShipmentTest {
                 ok("{\"success\":true,\"result\":{\"waybill_number\":\"\"}}"));
         Order order = pedido(linea(3, 1000));
 
-        assertThatThrownBy(() -> service.createShipments(order))
-                .isInstanceOf(EnvioParcialException.class)
+        assertThatThrownBy(() -> service.createShipments(order)).isInstanceOf(EnvioParcialException.class)
                 .hasCauseInstanceOf(FulfillmentFailure.class)
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(EnvioParcialException.class))
                 .satisfies(e -> assertThat(e.yaCreados()).extracting(FulfillmentResult::trackingNumber)
@@ -333,8 +326,7 @@ class Cov04YunExpressShipmentTest {
         // El paquete ya está dado de alta; perder la suscripción es degradación (queda el sondeo).
         when(client.post(eq(PATH_CREATE), any(Object.class)))
                 .thenReturn(ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-A\"}}"));
-        when(client.post(eq(PATH_SUBSCRIBE), any(Object.class)))
-                .thenThrow(new IllegalStateException("subscribe down"));
+        when(client.post(eq(PATH_SUBSCRIBE), any(Object.class))).thenThrow(new IllegalStateException("subscribe down"));
         Order order = pedido(linea(1, 1000));
 
         assertThatCode(() -> service.createShipment(order)).doesNotThrowAnyException();
@@ -381,10 +373,10 @@ class Cov04YunExpressShipmentTest {
         ReflectionTestUtils.setField(service, "iossNumber", "IM2760000742");
         Order order = pedido(linea(1, 4500));
 
-        YunExpressRequests.CreateShipment bajoUmbral = service.createPayload(order, ParcelSpec.ofWeight(500),
-                "BPA", valoracion(false));
-        YunExpressRequests.CreateShipment sobreUmbral = service.createPayload(order, ParcelSpec.ofWeight(500),
-                "BPA", valoracion(true));
+        YunExpressRequests.CreateShipment bajoUmbral = service.createPayload(order, ParcelSpec.ofWeight(500), "BPA",
+                valoracion(false));
+        YunExpressRequests.CreateShipment sobreUmbral = service.createPayload(order, ParcelSpec.ofWeight(500), "BPA",
+                valoracion(true));
 
         assertThat(bajoUmbral.customsNumber()).isNotNull();
         assertThat(bajoUmbral.customsNumber().iossCode()).isEqualTo("IM2760000742");
@@ -417,7 +409,7 @@ class Cov04YunExpressShipmentTest {
 
     @Test
     void sinEleccionDelClienteSeUsaElCanalDeConfiguracion() {
-        Order order = pedido(linea(1, 4500));   // sin canal elegido
+        Order order = pedido(linea(1, 4500)); // sin canal elegido
 
         assertThat(service.channelFor(order, ParcelSpec.ofWeight(500))).isEqualTo("BPA");
     }
@@ -454,8 +446,8 @@ class Cov04YunExpressShipmentTest {
         // El servicio V1 liquida el IVA de la UE con el IOSS del transportista: fuera de ahí no hay nada
         // que prepagar. Y TODOS los destinos activos están en DDP, así que sin este filtro se pediría
         // también para Estados Unidos o Brasil y el alta del envío fallaría.
-        CustomsValuation fueraDeLaUe = new CustomsValuation("US", TaxMode.DDP, 4500, false,
-                OverThresholdPolicy.ALLOW, 0, false, "", false);
+        CustomsValuation fueraDeLaUe = new CustomsValuation("US", TaxMode.DDP, 4500, false, OverThresholdPolicy.ALLOW,
+                0, false, "", false);
 
         YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
                 ParcelSpec.ofWeight(500), "BPA", fueraDeLaUe);
@@ -466,8 +458,8 @@ class Cov04YunExpressShipmentTest {
     @Test
     void noPideElPrepagoCuandoElDestinoPagaElImpuesto() {
         // DDU: el impuesto lo paga el destinatario. Pedir prepago aquí lo cobraría dos veces.
-        CustomsValuation ddu = new CustomsValuation("MX", TaxMode.DDU, 4500, false,
-                OverThresholdPolicy.ALLOW, 0, false, "", true);
+        CustomsValuation ddu = new CustomsValuation("MX", TaxMode.DDU, 4500, false, OverThresholdPolicy.ALLOW, 0, false,
+                "", true);
 
         YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
                 ParcelSpec.ofWeight(500), "BPA", ddu);
@@ -494,8 +486,8 @@ class Cov04YunExpressShipmentTest {
         // Antes solo quedaba el RESULTADO (guía, canal, peso y valor): ante un rechazo de aduana no había
         // forma de comprobar qué se declaró sin entrar al panel del transportista.
         OrderItem item = linea(2, 1500);
-        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(400)
-                .customsMaterial("cotton").customsUsage("daily use").build();
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(400).customsMaterial("cotton")
+                .customsUsage("daily use").build();
         producto.setId(item.getProductId());
         when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
         when(client.post(eq(PATH_CREATE), any(Object.class)))
@@ -543,8 +535,8 @@ class Cov04YunExpressShipmentTest {
         order.setShippingCountry("es");
         order.setShippingLine2("  ");
 
-        YunExpressRequests.CreateShipment payload = service.createPayload(order, ParcelSpec.ofWeight(500),
-                "BPA", valoracion(false));
+        YunExpressRequests.CreateShipment payload = service.createPayload(order, ParcelSpec.ofWeight(500), "BPA",
+                valoracion(false));
 
         assertThat(payload.receiver().countryCode()).isEqualTo("ES");
         assertThat(payload.receiver().firstName()).isEqualTo("Ana");

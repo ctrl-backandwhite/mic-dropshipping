@@ -185,13 +185,10 @@ class Cov09WalletIndexerTest {
         assertThat(captor.getValue().index()).isEqualTo(INDICE);
         assertThat(captor.getValue().id()).isEqualTo(id.toString());
         Map<String, Object> doc = captor.getValue().document();
-        assertThat(doc).containsEntry("id", id.toString())
-                .containsEntry("userEmail", "ada@example.com")
-                .containsEntry("userName", "Ada Lovelace")
-                .containsEntry("status", "ACTIVE")
+        assertThat(doc).containsEntry("id", id.toString()).containsEntry("userEmail", "ada@example.com")
+                .containsEntry("userName", "Ada Lovelace").containsEntry("status", "ACTIVE")
                 // La divisa se normaliza a mayúsculas: el filtro del admin compara por término exacto.
-                .containsEntry("currency", "USD")
-                .containsEntry("createdAt", "2026-01-02T03:04:05Z")
+                .containsEntry("currency", "USD").containsEntry("createdAt", "2026-01-02T03:04:05Z")
                 .doesNotContainKeys("balanceUsdCents", "balance", "holdUsdCents");
     }
 
@@ -205,8 +202,7 @@ class Cov09WalletIndexerTest {
 
         ArgumentCaptor<IndexRequest<Map<String, Object>>> captor = captorDeIndexado();
         verify(client).index(captor.capture());
-        assertThat(captor.getValue().document()).containsEntry("currency", null)
-                .containsEntry("createdAt", null);
+        assertThat(captor.getValue().document()).containsEntry("currency", null).containsEntry("createdAt", null);
     }
 
     @Test
@@ -233,8 +229,8 @@ class Cov09WalletIndexerTest {
         indexer.deleteFromIndex(id);
 
         @SuppressWarnings({"unchecked", "rawtypes"})
-        ArgumentCaptor<Function<DeleteRequest.Builder, ObjectBuilder<DeleteRequest>>> captor =
-                ArgumentCaptor.forClass((Class) Function.class);
+        ArgumentCaptor<Function<DeleteRequest.Builder, ObjectBuilder<DeleteRequest>>> captor = ArgumentCaptor
+                .forClass((Class) Function.class);
         verify(client).delete(captor.capture());
         DeleteRequest req = captor.getValue().apply(new DeleteRequest.Builder()).build();
         assertThat(req.index()).isEqualTo(INDICE);

@@ -40,15 +40,15 @@ public class MeBillingController implements MeBillingApi {
     @Override
     public ResponseEntity<BillingConfigDtoOut> billingConfig(Authentication auth) {
         CustomerSubscriptionUseCase.BillingConfigInfo c = useCase.billingConfig(UUID.fromString(auth.getName()));
-        return ResponseEntity.ok(BillingConfigDtoOut.builder()
-                .publishableKey(c.publishableKey()).enabled(c.enabled()).freeTrialUsed(c.freeTrialUsed()).build());
+        return ResponseEntity.ok(BillingConfigDtoOut.builder().publishableKey(c.publishableKey()).enabled(c.enabled())
+                .freeTrialUsed(c.freeTrialUsed()).build());
     }
 
     @Override
     public ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws StripeException {
         UUID userId = UUID.fromString(auth.getName());
-        return ResponseEntity.ok(SetupIntentDtoOut.builder()
-                .clientSecret(useCase.createSetupIntentSecret(userId)).build());
+        return ResponseEntity
+                .ok(SetupIntentDtoOut.builder().clientSecret(useCase.createSetupIntentSecret(userId)).build());
     }
 
     @Override
@@ -83,7 +83,8 @@ public class MeBillingController implements MeBillingApi {
     }
 
     @Override
-    public ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, SubscribeDtoIn req) throws StripeException {
+    public ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, SubscribeDtoIn req)
+            throws StripeException {
         CustomerSubscriptionUseCase.SubscribeOutcome outcome = useCase
                 .subscribeWithSavedCard(UUID.fromString(auth.getName()), req.getPlanCode(), req.getPeriod());
         return ResponseEntity.ok(SubscribeStatusDtoOut.builder().subscriptionId(outcome.subscriptionId())
@@ -96,11 +97,11 @@ public class MeBillingController implements MeBillingApi {
         if (s == null) {
             return ResponseEntity.noContent().build();
         }
-        return ResponseEntity.ok(MySubscriptionDtoOut.builder()
-                .planId(s.getPlanId() != null ? s.getPlanId().toString() : null)
-                .status(s.getStatus() != null ? s.getStatus().name() : null).billingPeriod(s.getBillingPeriod())
-                .currentPeriodEnd(s.getCurrentPeriodEnd()).cancelAt(s.getCancelAt())
-                .pendingPlanCode(s.getPendingPlanCode()).pendingPlanAt(s.getPendingPlanAt()).build());
+        return ResponseEntity
+                .ok(MySubscriptionDtoOut.builder().planId(s.getPlanId() != null ? s.getPlanId().toString() : null)
+                        .status(s.getStatus() != null ? s.getStatus().name() : null).billingPeriod(s.getBillingPeriod())
+                        .currentPeriodEnd(s.getCurrentPeriodEnd()).cancelAt(s.getCancelAt())
+                        .pendingPlanCode(s.getPendingPlanCode()).pendingPlanAt(s.getPendingPlanAt()).build());
     }
 
     @Override

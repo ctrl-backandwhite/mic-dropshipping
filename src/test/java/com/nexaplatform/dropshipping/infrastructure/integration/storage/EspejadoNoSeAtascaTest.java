@@ -87,8 +87,8 @@ class EspejadoNoSeAtascaTest {
     }
 
     private static byte[] jpegDe(int ancho, int alto) throws Exception {
-        java.awt.image.BufferedImage img =
-                new java.awt.image.BufferedImage(ancho, alto, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(ancho, alto,
+                java.awt.image.BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < alto; y++) {
             for (int x = 0; x < ancho; x++) {
                 img.setRGB(x, y, (x * 255 / ancho) << 16 | (y * 255 / alto) << 8);

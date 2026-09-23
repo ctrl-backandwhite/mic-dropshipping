@@ -31,8 +31,7 @@ public class UserAddressRepositoryImpl implements UserAddressRepository {
     @Override
     public UserAddress save(UserAddress model) {
         UserAddressEntity entity = userAddressEntityMapper.toEntity(model);
-        UserEntity user = userRepository.findById(model.getUserId())
-                .orElseThrow(() -> new NotFoundException("User"));
+        UserEntity user = userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User"));
         entity.setUser(user);
         return userAddressEntityMapper.toDomain(userAddressJpaRepositoryAdapter.save(entity));
     }

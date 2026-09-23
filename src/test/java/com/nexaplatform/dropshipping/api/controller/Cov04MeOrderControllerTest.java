@@ -99,8 +99,7 @@ class Cov04MeOrderControllerTest {
         // Lista y detalle mostraban importes distintos porque la fila traía el total sin convertir.
         when(orderUseCase.listMyOrders(userId)).thenReturn(List.of(pedido));
         when(adminOrderMapper.toMeRows(List.of(pedido)))
-                .thenReturn(List.of(MeOrderRowDtoOut.builder().id(orderId).totalFormatted("SIN FORMATO")
-                        .build()));
+                .thenReturn(List.of(MeOrderRowDtoOut.builder().id(orderId).totalFormatted("SIN FORMATO").build()));
         when(meOrderDtoMapper.formatOrderTotal(pedido)).thenReturn("19,22 €");
 
         ResponseEntity<List<MeOrderRowDtoOut>> resp = controller.list(auth);
@@ -115,13 +114,12 @@ class Cov04MeOrderControllerTest {
         // género en 1688, y esa compra avanza en su propio tablero sin mover el estado del pedido. Si la
         // fila no lo dijera, la pantalla ofrecería un botón que el servidor va a rechazar.
         UUID compradoId = UUID.randomUUID();
-        Order comprado = Order.builder().id(compradoId).orderNumber("NX-300").userId(userId)
-                .status(OrderStatus.PAID).build();
+        Order comprado = Order.builder().id(compradoId).orderNumber("NX-300").userId(userId).status(OrderStatus.PAID)
+                .build();
         pedido.setStatus(OrderStatus.PAID);
         when(orderUseCase.listMyOrders(userId)).thenReturn(List.of(pedido, comprado));
-        when(adminOrderMapper.toMeRows(List.of(pedido, comprado))).thenReturn(List.of(
-                MeOrderRowDtoOut.builder().id(orderId).build(),
-                MeOrderRowDtoOut.builder().id(compradoId).build()));
+        when(adminOrderMapper.toMeRows(List.of(pedido, comprado))).thenReturn(List
+                .of(MeOrderRowDtoOut.builder().id(orderId).build(), MeOrderRowDtoOut.builder().id(compradoId).build()));
         when(supplierPurchaseService.ordersAlreadyBought(List.of(orderId, compradoId)))
                 .thenReturn(java.util.Set.of(compradoId));
 
@@ -147,9 +145,8 @@ class Cov04MeOrderControllerTest {
         UUID otroId = UUID.randomUUID();
         Order otro = Order.builder().id(otroId).orderNumber("NX-200").userId(userId).build();
         when(orderUseCase.listMyOrders(userId)).thenReturn(List.of(pedido, otro));
-        when(adminOrderMapper.toMeRows(List.of(pedido, otro))).thenReturn(List.of(
-                MeOrderRowDtoOut.builder().id(orderId).build(),
-                MeOrderRowDtoOut.builder().id(otroId).build()));
+        when(adminOrderMapper.toMeRows(List.of(pedido, otro))).thenReturn(
+                List.of(MeOrderRowDtoOut.builder().id(orderId).build(), MeOrderRowDtoOut.builder().id(otroId).build()));
         when(meOrderDtoMapper.formatOrderTotal(pedido)).thenReturn("10,00 €");
         when(meOrderDtoMapper.formatOrderTotal(otro)).thenReturn("20,00 €");
         when(paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId))
@@ -158,8 +155,7 @@ class Cov04MeOrderControllerTest {
         List<MeOrderRowDtoOut> filas = controller.list(auth).getBody();
 
         assertThat(filas).extracting(MeOrderRowDtoOut::getId).containsExactly(orderId, otroId);
-        assertThat(filas).extracting(MeOrderRowDtoOut::getTotalFormatted)
-                .containsExactly("10,00 €", "20,00 €");
+        assertThat(filas).extracting(MeOrderRowDtoOut::getTotalFormatted).containsExactly("10,00 €", "20,00 €");
         // El pedido sin pago externo se paga con saldo: el botón de cancelar debe ofrecer la wallet.
         assertThat(filas).extracting(MeOrderRowDtoOut::getPaymentMethod).containsExactly("CARD", "WALLET");
     }

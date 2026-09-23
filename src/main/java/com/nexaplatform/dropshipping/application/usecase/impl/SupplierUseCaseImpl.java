@@ -62,8 +62,8 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     @Transactional(readOnly = true)
     public SupplierPage pageAdmin(String q, String country, Boolean verified, int page, int size) {
         // Primario: OpenSearch (índice `suppliers`, orden createdAt desc, productCount embebido).
-        Optional<SupplierSearchService.IndexedPage> idx = supplierSearchService.pageFromIndex(q, country, verified, page,
-                size);
+        Optional<SupplierSearchService.IndexedPage> idx = supplierSearchService.pageFromIndex(q, country, verified,
+                page, size);
         if (idx.isPresent()) {
             List<Supplier> items = idx.get().items().stream().map(this::fromIndex).map(this::enrichKpis).toList();
             return new SupplierPage(items, page, size, idx.get().total());
@@ -189,13 +189,20 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
         if (Objects.isNull(existing)) {
             throw new NotFoundException("Proveedor no encontrado");
         }
-        if (model.getName() != null && !model.getName().isBlank()) existing.setName(model.getName());
-        if (model.getNameZh() != null) existing.setNameZh(model.getNameZh());
-        if (model.getCountry() != null && !model.getCountry().isBlank()) existing.setCountry(model.getCountry());
-        if (model.getCity() != null) existing.setCity(model.getCity());
-        if (model.getRating() != null) existing.setRating(model.getRating());
-        if (model.getYearsActive() != null) existing.setYearsActive(model.getYearsActive());
-        if (model.getProfileUrl() != null) existing.setProfileUrl(model.getProfileUrl());
+        if (model.getName() != null && !model.getName().isBlank())
+            existing.setName(model.getName());
+        if (model.getNameZh() != null)
+            existing.setNameZh(model.getNameZh());
+        if (model.getCountry() != null && !model.getCountry().isBlank())
+            existing.setCountry(model.getCountry());
+        if (model.getCity() != null)
+            existing.setCity(model.getCity());
+        if (model.getRating() != null)
+            existing.setRating(model.getRating());
+        if (model.getYearsActive() != null)
+            existing.setYearsActive(model.getYearsActive());
+        if (model.getProfileUrl() != null)
+            existing.setProfileUrl(model.getProfileUrl());
         existing.setVerified(model.isVerified());
         existing.setTrustPass(model.isTrustPass());
         Supplier updated = supplierRepository.update(existing);

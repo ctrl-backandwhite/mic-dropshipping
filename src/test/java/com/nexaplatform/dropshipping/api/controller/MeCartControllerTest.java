@@ -46,8 +46,8 @@ class MeCartControllerTest {
     }
 
     private CartItemDto dto() {
-        return new CartItemDto(productId, null, "SKU1", "slug", "Título", null, null,
-                new BigDecimal("10.00"), "EUR", 1, null, null, null, null);
+        return new CartItemDto(productId, null, "SKU1", "slug", "Título", null, null, new BigDecimal("10.00"), "EUR", 1,
+                null, null, null, null);
     }
 
     @Test

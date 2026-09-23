@@ -54,9 +54,7 @@ class OpsAlertServiceTest {
 
         assertThat(to.getValue()).isEqualTo("jfinol02@gmail.com");
         assertThat(subject.getValue()).contains("envío");
-        assertThat(vars.getValue().get("body").toString())
-                .contains("NX-1784936692-7159")
-                .contains("02039171")
+        assertThat(vars.getValue().get("body").toString()).contains("NX-1784936692-7159").contains("02039171")
                 .contains("3 intento");
     }
 
@@ -78,8 +76,8 @@ class OpsAlertServiceTest {
     @Test
     void laClaveDeAgrupacionIgnoraElPedidoYSeQuedaConLaCausa() {
         // Mismo código de error en pedidos distintos -> misma clave.
-        assertThat(OpsAlertService.causeKey(
-                "YunExpress rechazó el envío del pedido NX-1: 02039171 Order rule verification failed"))
+        assertThat(OpsAlertService
+                .causeKey("YunExpress rechazó el envío del pedido NX-1: 02039171 Order rule verification failed"))
                 .isEqualTo(OpsAlertService.causeKey(
                         "YunExpress rechazó el envío del pedido NX-2: 02039171 Order rule verification failed"));
         // Causas distintas -> claves distintas, para no silenciar un problema nuevo.
@@ -109,8 +107,7 @@ class OpsAlertServiceTest {
         verify(emailQueue).enqueue(anyString(), subject.capture(), anyString(), vars.capture());
 
         assertThat(subject.getValue()).contains("stripe");
-        assertThat(vars.getValue().get("body").toString())
-                .contains("cobro del pedido").contains("connection refused");
+        assertThat(vars.getValue().get("body").toString()).contains("cobro del pedido").contains("connection refused");
     }
 
     @Test
@@ -127,8 +124,7 @@ class OpsAlertServiceTest {
         when(emailQueue.enqueue(anyString(), anyString(), anyString(), anyMap()))
                 .thenThrow(new IllegalStateException("SMTP caído"));
 
-        assertThatCode(() -> service.fulfillmentFailed("NX-1", "ES", 3, "error"))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> service.fulfillmentFailed("NX-1", "ES", 3, "error")).doesNotThrowAnyException();
     }
 
     @Test
@@ -144,8 +140,8 @@ class OpsAlertServiceTest {
         String body = vars.getValue().get("body").toString();
 
         // El texto original se conserva, pero etiquetado y separado del mensaje en español.
-        assertThat(body).contains("no cumple las reglas del canal contratado")
-                .contains("Detalle técnico").contains("Order rule verification failed");
+        assertThat(body).contains("no cumple las reglas del canal contratado").contains("Detalle técnico")
+                .contains("Order rule verification failed");
         // El asunto identifica el PEDIDO, no la causa técnica truncada.
         assertThat(subject.getValue()).contains("NX-1").doesNotContain("Order rule verification");
     }

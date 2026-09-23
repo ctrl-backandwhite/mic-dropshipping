@@ -55,8 +55,7 @@ class Cov06ErrorMessagesTest {
     /** Constraint con nombre conocido: se traduce a su mensaje propio, que es el más preciso. */
     @Test
     void traduceLaConstraintConNombreConocido() {
-        SQLException e = new SQLException(
-                "ERROR: duplicate key value violates unique constraint \"users_email_key\"");
+        SQLException e = new SQLException("ERROR: duplicate key value violates unique constraint \"users_email_key\"");
 
         assertThat(ErrorMessages.humanize(e)).isEqualTo("Ya existe un usuario con ese email.");
     }
@@ -75,8 +74,8 @@ class Cov06ErrorMessagesTest {
     void duplicadoSinDetalleCaeAlMensajeGenericoDeDuplicado() {
         SQLException e = new SQLException("ERROR: duplicate key value violates unique index");
 
-        assertThat(ErrorMessages.humanize(e))
-                .isEqualTo("Ya existe un registro con esos datos (valor duplicado). Revisa los campos que deben ser únicos.");
+        assertThat(ErrorMessages.humanize(e)).isEqualTo(
+                "Ya existe un registro con esos datos (valor duplicado). Revisa los campos que deben ser únicos.");
     }
 
     @Test
@@ -112,8 +111,8 @@ class Cov06ErrorMessagesTest {
     void claveForaneaSeExplicaComoReferenciaInexistente() {
         SQLException e = new SQLException("ERROR: insert violates foreign key restriction");
 
-        assertThat(ErrorMessages.humanize(e))
-                .isEqualTo("Se hace referencia a un registro que no existe (categoría, proveedor o relación inválida).");
+        assertThat(ErrorMessages.humanize(e)).isEqualTo(
+                "Se hace referencia a un registro que no existe (categoría, proveedor o relación inválida).");
     }
 
     /** Un check con nombre NO mapeado no puede quedarse sin mensaje: cae al genérico de validación. */
@@ -157,7 +156,6 @@ class Cov06ErrorMessagesTest {
     void causaRaizSinMensajeDaErrorInesperado() {
         RuntimeException e = new RuntimeException(new IllegalStateException((String) null));
 
-        assertThat(ErrorMessages.humanize(e))
-                .isEqualTo("No se pudo completar la operación por un error inesperado.");
+        assertThat(ErrorMessages.humanize(e)).isEqualTo("No se pudo completar la operación por un error inesperado.");
     }
 }

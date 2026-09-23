@@ -67,8 +67,7 @@ class YunExpressEventCipherTest {
     @Test
     void laFirmaEsElSha256HexDeTimestampMasClaveMasCuerpo() {
         // hex(SHA-256("1" + "test key" + "{}")), calculado con el algoritmo documentado.
-        assertThat(YunExpressEventCipher.signature("1", KEY, "{}"))
-                .hasSize(64)
+        assertThat(YunExpressEventCipher.signature("1", KEY, "{}")).hasSize(64)
                 .isEqualTo(YunExpressEventCipher.signature("1", KEY, "{}"))
                 .isNotEqualTo(YunExpressEventCipher.signature("2", KEY, "{}"));
     }

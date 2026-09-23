@@ -41,8 +41,8 @@ class YunExpressOrderSplitTest {
 
     /** Servicio con los topes del canal de pruebas: 2 kg, 24 $ y 10 unidades por bulto. */
     private YunExpressFulfillmentService service(int maxWeightGrams, int maxValueCents, int maxUnits) {
-        YunExpressFulfillmentService s =
-                new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), productRepository, null, null, null);
+        YunExpressFulfillmentService s = new YunExpressFulfillmentService(null, null, null,
+                new CustomsDutyLinesService(null), productRepository, null, null, null);
         ReflectionTestUtils.setField(s, "maxParcelWeightGrams", maxWeightGrams);
         ReflectionTestUtils.setField(s, "maxParcelValueCents", maxValueCents);
         ReflectionTestUtils.setField(s, "maxParcelUnits", maxUnits);
@@ -100,7 +100,7 @@ class YunExpressOrderSplitTest {
 
     @Test
     void sePartePorPesoCuandoElCanalNoAdmiteMas() {
-        UUID p = productWeighing(800);   // 3 unidades = 2400 g > 2000 g
+        UUID p = productWeighing(800); // 3 unidades = 2400 g > 2000 g
 
         assertThat(bins(service(2000, 100_000, 100), order(line(p, 3, 100)))).hasSize(2);
     }
@@ -126,8 +126,7 @@ class YunExpressOrderSplitTest {
         UUID ligero1 = productWeighing(200);
         UUID ligero2 = productWeighing(200);
 
-        assertThat(bins(service(2000, 100_000, 100), order(line(ligero1, 1, 100), line(ligero2, 1, 100))))
-                .hasSize(1);
+        assertThat(bins(service(2000, 100_000, 100), order(line(ligero1, 1, 100), line(ligero2, 1, 100)))).hasSize(1);
     }
 
     // ---------------------------------------------------------------- datos incompletos
@@ -157,11 +156,11 @@ class YunExpressOrderSplitTest {
         UUID id = UUID.randomUUID();
         ProductEntity p = new ProductEntity();
         p.setId(id);
-        p.setPackageWeightGrams(100);          // el genérico es ligero...
+        p.setPackageWeightGrams(100); // el genérico es ligero...
         UUID variantId = UUID.randomUUID();
         ProductVariantEntity v = new ProductVariantEntity();
         v.setId(variantId);
-        v.setPackageWeightGrams(900);          // ...pero la variante comprada pesa
+        v.setPackageWeightGrams(900); // ...pero la variante comprada pesa
         p.setVariants(List.of(v));
         when(productRepository.findById(id)).thenReturn(Optional.of(p));
 
@@ -179,7 +178,6 @@ class YunExpressOrderSplitTest {
         UUID pesado = productWeighing(5000);
         UUID ligero = productWeighing(100);
 
-        assertThat(bins(service(2000, 100_000, 100), order(line(pesado, 1, 100), line(ligero, 1, 100))))
-                .hasSize(2);
+        assertThat(bins(service(2000, 100_000, 100), order(line(pesado, 1, 100), line(ligero, 1, 100)))).hasSize(2);
     }
 }

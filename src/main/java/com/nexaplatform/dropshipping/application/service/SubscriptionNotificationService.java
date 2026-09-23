@@ -66,8 +66,8 @@ public class SubscriptionNotificationService {
 
         // Notificación in-app (campana).
         try {
-            notificationRepository.save(PlatformNotification.builder().userId(userId)
-                    .eventType("PLAN_PAYMENT_FAILED").channel("IN_APP").title(TITLE).body(BODY).build());
+            notificationRepository.save(PlatformNotification.builder().userId(userId).eventType("PLAN_PAYMENT_FAILED")
+                    .channel("IN_APP").title(TITLE).body(BODY).build());
         } catch (RuntimeException e) {
             log.warn("::> [BILLING] no se pudo crear la notificación in-app de pago fallido user={}: {}", userId,
                     e.getMessage());
@@ -83,14 +83,14 @@ public class SubscriptionNotificationService {
             Map<String, Object> vars = new HashMap<>();
             vars.put("title", TITLE);
             vars.put("preheader", TITLE);
-            vars.put("bodyHtml", "No hemos podido procesar el cobro de la cuota de tu plan. "
-                    + "Para mantener tu plan activo y no perder el acceso, entra en tu perfil y revisa o "
-                    + "actualiza tu método de pago. Volveremos a intentar el cobro automáticamente.");
+            vars.put("bodyHtml",
+                    "No hemos podido procesar el cobro de la cuota de tu plan. "
+                            + "Para mantener tu plan activo y no perder el acceso, entra en tu perfil y revisa o "
+                            + "actualiza tu método de pago. Volveremos a intentar el cobro automáticamente.");
             vars.put("ctaUrl", baseUrl + "/profile");
             vars.put("ctaLabel", "Revisar mi método de pago");
             vars.put("footer", "NX036");
-            emailQueue.enqueue(email, "Problema con el pago de tu plan — NX036", "emails/notification",
-                    vars);
+            emailQueue.enqueue(email, "Problema con el pago de tu plan — NX036", "emails/notification", vars);
         } catch (RuntimeException e) {
             log.warn("::> [BILLING] no se pudo encolar el email de pago fallido user={}: {}", userId, e.getMessage());
         }
@@ -121,15 +121,15 @@ public class SubscriptionNotificationService {
             String lang = user.getLanguage();
             String plan = SubscriptionPlanLabel.planName(planCode, lang);
             String date = cancelAt != null ? DATE.format(cancelAt) : "";
-            String body = SubscriptionCancelReminderEmailLabel.BODY.of(lang).replace("{plan}", plan)
-                    .replace("{date}", date);
+            String body = SubscriptionCancelReminderEmailLabel.BODY.of(lang).replace("{plan}", plan).replace("{date}",
+                    date);
             try {
                 notificationRepository.save(PlatformNotification.builder().userId(userId)
                         .eventType("PLAN_CANCEL_REMINDER").channel("IN_APP")
                         .title(SubscriptionCancelReminderEmailLabel.TITLE.of(lang)).body(body).build());
             } catch (RuntimeException e) {
-                log.warn("::> [BILLING] no se pudo crear la notificación in-app de recordatorio user={}: {}",
-                        userId, e.getMessage());
+                log.warn("::> [BILLING] no se pudo crear la notificación in-app de recordatorio user={}: {}", userId,
+                        e.getMessage());
             }
             Map<String, Object> vars = new HashMap<>();
             vars.put("title", SubscriptionCancelReminderEmailLabel.TITLE.of(lang));
@@ -166,17 +166,16 @@ public class SubscriptionNotificationService {
             // Nombre del plan traducido al idioma del usuario (no el nombre crudo de la BD "Starter").
             String plan = SubscriptionPlanLabel.planName(planCode, lang);
             String tpl = trial ? SubscriptionEmailLabel.BODY_TRIAL.of(lang) : SubscriptionEmailLabel.BODY_PAID.of(lang);
-            String body = tpl.replace("{name}", name).replace("{plan}", plan).replace("{date}", date)
-                    .replace("  ", " ").replace(" ,", ",");
+            String body = tpl.replace("{name}", name).replace("{plan}", plan).replace("{date}", date).replace("  ", " ")
+                    .replace(" ,", ",");
 
             // Notificación in-app (campana): la contratación queda en el buzón del usuario.
             try {
-                notificationRepository.save(PlatformNotification.builder().userId(userId)
-                        .eventType("PLAN_ACTIVATED").channel("IN_APP")
-                        .title(SubscriptionEmailLabel.TITLE.of(lang)).body(body).build());
+                notificationRepository.save(PlatformNotification.builder().userId(userId).eventType("PLAN_ACTIVATED")
+                        .channel("IN_APP").title(SubscriptionEmailLabel.TITLE.of(lang)).body(body).build());
             } catch (RuntimeException e) {
-                log.warn("::> [BILLING] no se pudo crear la notificación in-app de plan contratado user={}: {}",
-                        userId, e.getMessage());
+                log.warn("::> [BILLING] no se pudo crear la notificación in-app de plan contratado user={}: {}", userId,
+                        e.getMessage());
             }
 
             Map<String, Object> vars = new HashMap<>();
@@ -196,7 +195,8 @@ public class SubscriptionNotificationService {
             log.info("::> [BILLING] Email de plan contratado encolado user={} plan={} trial={} conFactura={}", userId,
                     plan, trial, invoicePdf != null);
         } catch (RuntimeException e) {
-            log.warn("::> [BILLING] no se pudo encolar el email de plan contratado user={}: {}", userId, e.getMessage());
+            log.warn("::> [BILLING] no se pudo encolar el email de plan contratado user={}: {}", userId,
+                    e.getMessage());
         }
     }
 }

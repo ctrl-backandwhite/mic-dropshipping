@@ -68,8 +68,7 @@ class UnserviceableZoneIT extends BaseIntegration {
         assertThat(zones.isUnserviceable("ES", "28001")).as("Madrid").isFalse();
         assertThat(zones.isUnserviceable("ES", "08001")).as("Barcelona").isFalse();
         assertThat(zones.isUnserviceable("ES", "50004")).as("Zaragoza").isFalse();
-        assertThat(zones.isUnserviceable("ES", "36001")).as("Pontevedra, justo por encima del rango canario")
-                .isFalse();
+        assertThat(zones.isUnserviceable("ES", "36001")).as("Pontevedra, justo por encima del rango canario").isFalse();
     }
 
     @Test
@@ -115,12 +114,11 @@ class UnserviceableZoneIT extends BaseIntegration {
     @Test
     @DisplayName("la migración ha cargado la lista completa del transportista")
     void laListaEstaSembrada() {
-        Integer total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM carrier_unserviceable_zone",
-                Integer.class);
+        Integer total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM carrier_unserviceable_zone", Integer.class);
         assertThat(total).as("los 635 rangos de la lista 不可到地区清单").isGreaterThan(600);
 
-        Integer paises = jdbcTemplate.queryForObject(
-                "SELECT COUNT(DISTINCT country_code) FROM carrier_unserviceable_zone", Integer.class);
+        Integer paises = jdbcTemplate
+                .queryForObject("SELECT COUNT(DISTINCT country_code) FROM carrier_unserviceable_zone", Integer.class);
         assertThat(paises).as("los 12 países de la UE con exclusiones numéricas").isEqualTo(12);
     }
 }

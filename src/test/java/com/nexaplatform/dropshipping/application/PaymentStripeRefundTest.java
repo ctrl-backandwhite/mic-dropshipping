@@ -107,19 +107,18 @@ class PaymentStripeRefundTest {
         when(stripeGateway.supports(PaymentMethod.CARD)).thenReturn(true);
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         subject = new PaymentUseCaseImpl(List.<PaymentGateway>of(stripeGateway), paymentRepository,
-                paymentJpaRepositoryAdapter, userRepository, orderRepository, walletUseCase,
-                mock(StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
-                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService,
-                new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class),
-                mock(OpsAlertService.class), mock(CartService.class));
+                paymentJpaRepositoryAdapter, userRepository, orderRepository, walletUseCase, mock(StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class),
+                mock(CartService.class));
     }
 
     /** Pago de pedido ya cobrado, con la respuesta del proveedor tal cual quedó guardada. */
     private Payment cardPayment(Map<String, Object> providerResponse) {
-        Payment p = Payment.builder().method(PaymentMethod.CARD).status(PaymentStatus.SUCCEEDED)
-                .amountUsdCents(3209).provider("stripe").providerRef(SESSION_ID).orderId(orderId)
-                .userId(UUID.randomUUID()).userEmail("comprador@nx036.test").providerResponse(providerResponse)
-                .build();
+        Payment p = Payment.builder().method(PaymentMethod.CARD).status(PaymentStatus.SUCCEEDED).amountUsdCents(3209)
+                .provider("stripe").providerRef(SESSION_ID).orderId(orderId).userId(UUID.randomUUID())
+                .userEmail("comprador@nx036.test").providerResponse(providerResponse).build();
         p.setId(paymentId);
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
         return p;
@@ -174,9 +173,9 @@ class PaymentStripeRefundTest {
     @Test
     void elCobroConTarjetaGuardadaSeReembolsaPorSuPropioPaymentIntent() {
         // Vía off-session/3DS: el identificador viaja bajo otra clave y el providerRef ya es un pi_…
-        Payment p = Payment.builder().method(PaymentMethod.CARD).status(PaymentStatus.SUCCEEDED)
-                .amountUsdCents(3209).provider("stripe").providerRef(REAL_INTENT).orderId(orderId)
-                .userId(UUID.randomUUID()).userEmail("comprador@nx036.test")
+        Payment p = Payment.builder().method(PaymentMethod.CARD).status(PaymentStatus.SUCCEEDED).amountUsdCents(3209)
+                .provider("stripe").providerRef(REAL_INTENT).orderId(orderId).userId(UUID.randomUUID())
+                .userEmail("comprador@nx036.test")
                 .providerResponse(new HashMap<>(Map.of("stripe_payment_intent", REAL_INTENT, "off_session", true)))
                 .build();
         p.setId(paymentId);
@@ -198,8 +197,7 @@ class PaymentStripeRefundTest {
                 .thenReturn(Map.of("status", "failed", "error", "No such payment_intent: 'null'"));
 
         assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 0))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No such payment_intent");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("No such payment_intent");
     }
 
     @Test
@@ -210,8 +208,7 @@ class PaymentStripeRefundTest {
                 .thenReturn(Map.of("status", "error", "error", "No such checkout.session"));
 
         assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 0))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PaymentIntent");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("PaymentIntent");
         verify(stripeGateway, never()).refund(anyString(), anyLong());
         // El pago NO puede quedar marcado como devuelto si Stripe no ha devuelto nada.
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
@@ -227,8 +224,7 @@ class PaymentStripeRefundTest {
         p.setId(paymentId);
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
         String evento = """
-                {"data":{"object":{"id":"%s","metadata":{"paymentId":"%s"}}}}"""
-                .formatted(REAL_INTENT, paymentId);
+                {"data":{"object":{"id":"%s","metadata":{"paymentId":"%s"}}}}""".formatted(REAL_INTENT, paymentId);
 
         String body = subject.handleStripeEvent("payment_intent.succeeded", evento);
 

@@ -64,8 +64,7 @@ class Cov08InvoiceImagesAndStatusTest {
         PaymentJpaRepositoryAdapter payments = mock(PaymentJpaRepositoryAdapter.class);
         when(payments.findByOrderIdOrderByCreatedAtDesc(any())).thenReturn(List.of());
         service = new InvoiceService(templateEngine, currency, mock(EuComplianceService.class),
-                new OrderAmounts(currency), payments,
-                mock(ProductRepository.class), variantRepository, storage);
+                new OrderAmounts(currency), payments, mock(ProductRepository.class), variantRepository, storage);
     }
 
     private static Order order(OrderStatus status, OrderItem... items) {
@@ -108,8 +107,8 @@ class Cov08InvoiceImagesAndStatusTest {
         when(variantRepository.findById(VARIANT_ID))
                 .thenReturn(Optional.of(variante("http://cdn/nueva.jpg", "http://origen/vieja.jpg")));
 
-        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/borrada.jpg", VARIANT_ID)),
-                "es", null, "USD", false);
+        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/borrada.jpg", VARIANT_ID)), "es",
+                null, "USD", false);
 
         Map<String, String> inline = inlineImages(m);
         assertThat(inline).containsEntry("invitem-0", "http://cdn/nueva.jpg");
@@ -119,8 +118,8 @@ class Cov08InvoiceImagesAndStatusTest {
     void siLaVarianteNoEstaEspejadaSeUsaSuUrlDeOrigen() {
         when(variantRepository.findById(VARIANT_ID)).thenReturn(Optional.of(variante(null, "http://origen/foto.jpg")));
 
-        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/borrada.jpg", VARIANT_ID)),
-                "es", null, "USD", false);
+        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/borrada.jpg", VARIANT_ID)), "es",
+                null, "USD", false);
 
         assertThat(inlineImages(m)).containsEntry("invitem-0", "http://origen/foto.jpg");
     }
@@ -128,8 +127,8 @@ class Cov08InvoiceImagesAndStatusTest {
     @Test
     void sinVarianteSeConservaLaFotoQueGuardoElPedido() {
         // Sin variante no hay imagen viva que resolver: el snapshot es lo que refleja lo comprado.
-        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/comprado.jpg", null)),
-                "es", null, "USD", false);
+        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/comprado.jpg", null)), "es",
+                null, "USD", false);
 
         assertThat(inlineImages(m)).containsEntry("invitem-0", "http://cdn/comprado.jpg");
     }
@@ -149,11 +148,11 @@ class Cov08InvoiceImagesAndStatusTest {
     @Test
     void enElPdfLaFotoViajaIncrustadaEnBase64() {
         // openhtmltopdf corre en el servidor: si se dejara la URL, el PDF saldría con la foto rota.
-        byte[] png = new byte[] { (byte) 0x89, 'P', 'N', 'G', 1, 2, 3, 4 };
+        byte[] png = new byte[]{(byte) 0x89, 'P', 'N', 'G', 1, 2, 3, 4};
         when(storage.bytesFromPublicUrl("http://cdn/foto.png")).thenReturn(png);
 
-        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/foto.png", null)),
-                "es", null, "USD", true);
+        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/foto.png", null)), "es", null,
+                "USD", true);
 
         assertThat(imagenDeLaPrimeraLinea(m)).startsWith("data:image/png;base64,");
         assertThat(inlineImages(m)).isEmpty();
@@ -163,11 +162,11 @@ class Cov08InvoiceImagesAndStatusTest {
     void elTipoDeImagenSeDeduceDeLosBytesYNoDeLaExtension() {
         // La extensión de la URL miente a menudo (el espejado renombra); un MIME equivocado deja la foto
         // sin pintar en el PDF.
-        byte[] jpeg = new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0, 0, 0 };
+        byte[] jpeg = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0, 0, 0};
         when(storage.bytesFromPublicUrl("http://cdn/foto.png")).thenReturn(jpeg);
 
-        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/foto.png", null)),
-                "es", null, "USD", true);
+        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://cdn/foto.png", null)), "es", null,
+                "USD", true);
 
         assertThat(imagenDeLaPrimeraLinea(m)).startsWith("data:image/jpeg;base64,");
     }
@@ -176,8 +175,8 @@ class Cov08InvoiceImagesAndStatusTest {
     void siLaFotoNoSePuedeDescargarSeDejaLaUrlEnLugarDeUnHueco() {
         when(storage.bytesFromPublicUrl("http://externo/foto.jpg")).thenReturn(new byte[0]);
 
-        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://externo/foto.jpg", null)),
-                "es", null, "USD", true);
+        Map<String, Object> m = service.model(order(OrderStatus.PAID, item("http://externo/foto.jpg", null)), "es",
+                null, "USD", true);
 
         assertThat(imagenDeLaPrimeraLinea(m)).isEqualTo("http://externo/foto.jpg");
     }

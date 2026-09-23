@@ -14,6 +14,6 @@ public interface AffiliateAttributionRepository extends JpaRepository<AffiliateA
             Instant now);
 
     /** Most recent non-expired attribution already bound to a logged-in customer. */
-    Optional<AffiliateAttributionEntity> findTopByReferredUserIdAndExpiresAtAfterOrderByClickedAtDesc(UUID referredUserId,
-            Instant now);
+    Optional<AffiliateAttributionEntity> findTopByReferredUserIdAndExpiresAtAfterOrderByClickedAtDesc(
+            UUID referredUserId, Instant now);
 }

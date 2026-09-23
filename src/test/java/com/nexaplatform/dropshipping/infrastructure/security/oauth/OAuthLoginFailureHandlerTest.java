@@ -55,11 +55,10 @@ class OAuthLoginFailureHandlerTest {
 
     @Test
     void dejaEnElRegistroElCodigoYElDetalleQueDaElProveedor() throws IOException {
-        AuthenticationException fallo = new OAuth2AuthenticationException(
-                new OAuth2Error("invalid_id_token", "An error occurred while attempting to decode the Jwt: "
+        AuthenticationException fallo = new OAuth2AuthenticationException(new OAuth2Error("invalid_id_token",
+                "An error occurred while attempting to decode the Jwt: "
                         + "I/O error on GET request for \"https://www.googleapis.com/oauth2/v3/certs\": Read timed out",
-                        null),
-                "invalid_id_token");
+                null), "invalid_id_token");
 
         handler.onAuthenticationFailure(new MockHttpServletRequest(), new MockHttpServletResponse(), fallo);
 
@@ -116,9 +115,8 @@ class OAuthLoginFailureHandlerTest {
         // Lo que se le cuenta al navegador es un código genérico: el detalle se queda en el servidor.
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        handler.onAuthenticationFailure(new MockHttpServletRequest(), response,
-                new OAuth2AuthenticationException(new OAuth2Error("invalid_id_token", "Read timed out", null),
-                        "invalid_id_token"));
+        handler.onAuthenticationFailure(new MockHttpServletRequest(), response, new OAuth2AuthenticationException(
+                new OAuth2Error("invalid_id_token", "Read timed out", null), "invalid_id_token"));
 
         assertThat(response.getRedirectedUrl()).doesNotContain("timed out").doesNotContain("invalid_id_token");
     }

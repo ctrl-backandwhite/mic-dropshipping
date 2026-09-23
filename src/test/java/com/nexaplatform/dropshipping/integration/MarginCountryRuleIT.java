@@ -53,8 +53,8 @@ class MarginCountryRuleIT extends BaseIntegration {
     private static final String CABECERA_CDN = "CF-IPCountry";
 
     /** Los 27 de la UE, tal cual los siembra la migración v107. */
-    private static final List<String> UE_27 = List.of("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
-            "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
+    private static final List<String> UE_27 = List.of("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE",
+            "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
 
     @Autowired
     private MarginService margenes;
@@ -104,8 +104,8 @@ class MarginCountryRuleIT extends BaseIntegration {
     void sinCabeceraDePaisSeAplicaLaGlobal() {
         // Es el caso del robot de indexación y del cliente que llega sin proxy geolocalizador: nunca puede
         // quedarse sin precio ni caer en la regla de un país que no es el suyo.
-        client.get().uri(FICHA, producto).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.displayFormatted").isEqualTo(PRECIO_RESTO_DEL_MUNDO);
+        client.get().uri(FICHA, producto).exchange().expectStatus().isOk().expectBody().jsonPath("$.displayFormatted")
+                .isEqualTo(PRECIO_RESTO_DEL_MUNDO);
     }
 
     @Test
@@ -159,11 +159,8 @@ class MarginCountryRuleIT extends BaseIntegration {
         // La regla de negocio —manda a dónde se ENVÍA, no desde dónde se navega— NO se pierde: para quien
         // ha entrado, el país sale de `users.country`, que es el de registro y va por delante de las dos
         // cabeceras. Lo que ya no se acepta es la palabra del navegador de un anónimo.
-        client.get().uri(FICHA, producto)
-                .header(PricingCountryFilter.HEADER_COUNTRY, "MX")
-                .header(CABECERA_CDN, "ES")
-                .exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.displayFormatted").isEqualTo(PRECIO_UE);
+        client.get().uri(FICHA, producto).header(PricingCountryFilter.HEADER_COUNTRY, "MX").header(CABECERA_CDN, "ES")
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.displayFormatted").isEqualTo(PRECIO_UE);
     }
 
     /* ==================================================================================
@@ -222,17 +219,14 @@ class MarginCountryRuleIT extends BaseIntegration {
 
     /** Pide la ficha con una cabecera de país y comprueba el precio publicado. */
     private void precioDeLaFichaCon(String cabecera, String pais, String precioEsperado) {
-        client.get().uri(FICHA, producto).header(cabecera, pais).exchange()
-                .expectStatus().isOk()
-                .expectBody().jsonPath("$.displayFormatted").isEqualTo(precioEsperado);
+        client.get().uri(FICHA, producto).header(cabecera, pais).exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.displayFormatted").isEqualTo(precioEsperado);
     }
 
     /** Ídem sobre el listado del escaparate, que exige usuario autenticado. */
     private void precioDelListado(String token, String pais, String precioEsperado) {
-        WebTestClient.BodyContentSpec body = client.get().uri(LISTADO)
-                .header("Authorization", token)
-                .header(PricingCountryFilter.HEADER_COUNTRY, pais)
-                .exchange().expectStatus().isOk().expectBody();
+        WebTestClient.BodyContentSpec body = client.get().uri(LISTADO).header("Authorization", token)
+                .header(PricingCountryFilter.HEADER_COUNTRY, pais).exchange().expectStatus().isOk().expectBody();
         body.jsonPath("$.totalElements").isEqualTo(1);
         body.jsonPath("$.items[0].displayFormatted").isEqualTo(precioEsperado);
     }
@@ -248,9 +242,10 @@ class MarginCountryRuleIT extends BaseIntegration {
 
     /** Regla GLOBAL del canal del escaparate; {@code pais} nulo = vale para cualquier país. */
     private void sembrarReglaGlobal(String pais, String porcentaje) {
-        jdbcTemplate.update("INSERT INTO price_rule (id, scope, scope_id, margin_type, margin_value, active, "
-                + "position, channel, country_code, description) VALUES (gen_random_uuid(), 'GLOBAL', NULL, "
-                + "'PERCENTAGE', ?, TRUE, 0, 'STOREFRONT', ?, ?)",
+        jdbcTemplate.update(
+                "INSERT INTO price_rule (id, scope, scope_id, margin_type, margin_value, active, "
+                        + "position, channel, country_code, description) VALUES (gen_random_uuid(), 'GLOBAL', NULL, "
+                        + "'PERCENTAGE', ?, TRUE, 0, 'STOREFRONT', ?, ?)",
                 new BigDecimal(porcentaje), pais, pais == null ? "margen global" : "margen " + pais);
     }
 
@@ -271,22 +266,25 @@ class MarginCountryRuleIT extends BaseIntegration {
      */
     private UUID sembrarProducto(String slug) {
         UUID id = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, moq, base_price, "
-                + "currency, iva_cny, shipping_cny, status, hs_code, weight_grams, inventory_count) "
-                + "VALUES (?, ?, ?, '1688', ?, 1, ?, 'CNY', 0, 0, 'ACTIVE', '610910', 500, 100)",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, moq, base_price, "
+                        + "currency, iva_cny, shipping_cny, status, hs_code, weight_grams, inventory_count) "
+                        + "VALUES (?, ?, ?, '1688', ?, 1, ?, 'CNY', 0, 0, 'ACTIVE', '610910', 500, 100)",
                 id, slug, "ext-" + slug, "测试商品 " + slug, BASE_CNY);
-        jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
-                + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)", id,
-                "https://origen.test/" + slug + ".jpg", "https://cdn.nx036.test/img/" + slug + ".jpg");
+        jdbcTemplate.update(
+                "INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
+                        + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)",
+                id, "https://origen.test/" + slug + ".jpg", "https://cdn.nx036.test/img/" + slug + ".jpg");
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, description) "
                 + "VALUES (gen_random_uuid(), ?, 'es', ?, ?)", id, "Camiseta de muestra", "Descripción");
         return id;
     }
 
     private void sembrarDivisa(String codigo, String nombre, String simbolo, String locale, String tasa) {
-        jdbcTemplate.update("INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active) "
-                + "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, TRUE) ON CONFLICT (code) DO UPDATE "
-                + "SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = TRUE",
+        jdbcTemplate.update(
+                "INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active) "
+                        + "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, TRUE) ON CONFLICT (code) DO UPDATE "
+                        + "SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = TRUE",
                 codigo, nombre, simbolo, locale, new BigDecimal(tasa));
     }
 }

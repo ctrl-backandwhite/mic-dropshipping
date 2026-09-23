@@ -98,7 +98,8 @@ public class NewProductsCampaignService {
             return 0;
         }
         Instant since = LocalDate.now(ZoneOffset.UTC).atStartOfDay(ZoneOffset.UTC).toInstant();
-        List<UUID> categoryIds = productRepository.findCategoryIdsWithProductsIngestedSince(ProductStatus.ACTIVE, since);
+        List<UUID> categoryIds = productRepository.findCategoryIdsWithProductsIngestedSince(ProductStatus.ACTIVE,
+                since);
         if (categoryIds.isEmpty()) {
             return 0;
         }
@@ -135,20 +136,18 @@ public class NewProductsCampaignService {
     @Transactional
     public boolean sendTest(String email, String lang) {
         String language = normalizeLang(lang);
-        List<UUID> categoryIds = storefrontRead.categoriesFlat(language).stream()
-                .map(CategoryView::id).limit(12).toList();
+        List<UUID> categoryIds = storefrontRead.categoriesFlat(language).stream().map(CategoryView::id).limit(12)
+                .toList();
         // La prueba tiene que salir EXACTAMENTE como el envío real, divisa incluida: si aquí se vieran
         // euros y en el envío real dólares, la prueba dejaría de servir para lo único que sirve.
-        String divisa = userRepository.findByEmail(email)
-                .map(u -> countryCurrencyService.forCountry(u.getCountry()))
+        String divisa = userRepository.findByEmail(email).map(u -> countryCurrencyService.forCountry(u.getCountry()))
                 .orElse("USD");
-        List<Map<String, Object>> categories = conDivisa(divisa,
-                () -> buildCategories(categoryIds, language)).stream().limit(4).toList();
+        List<Map<String, Object>> categories = conDivisa(divisa, () -> buildCategories(categoryIds, language)).stream()
+                .limit(4).toList();
         if (categories.isEmpty()) {
             return false;
         }
-        String unsubscribeUrl = userRepository.findByEmail(email)
-                .map(u -> unsubscribeUrl(u.getId(), language))
+        String unsubscribeUrl = userRepository.findByEmail(email).map(u -> unsubscribeUrl(u.getId(), language))
                 .orElse(storefrontBaseUrl + "/account/email-preferences");
         Map<String, Object> vars = new HashMap<>();
         vars.put(TITLE, NewProductsEmailLabel.TITLE.of(language));
@@ -174,8 +173,8 @@ public class NewProductsCampaignService {
      */
     private boolean enqueueIfDue(UserEntity user, Instant since, String ctaUrl, List<UUID> categoryIds,
             Map<String, List<Map<String, Object>>> categoriesByLang) {
-        if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
-                user.getEmail(), TEMPLATE, since)) {
+        if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(user.getEmail(), TEMPLATE,
+                since)) {
             return false;
         }
         String lang = normalizeLang(user.getLanguage());

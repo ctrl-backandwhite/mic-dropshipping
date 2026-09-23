@@ -44,8 +44,7 @@ public class LimitadorDeDescargasPorOrigen {
     private final int permisosPorHost;
     private final long esperaMaximaSegundos;
 
-    public LimitadorDeDescargasPorOrigen(
-            @Value("${nexadrop.storage.descargas-por-origen:6}") int permisosPorHost,
+    public LimitadorDeDescargasPorOrigen(@Value("${nexadrop.storage.descargas-por-origen:6}") int permisosPorHost,
             @Value("${nexadrop.storage.espera-maxima-permiso-segundos:120}") long esperaMaximaSegundos) {
         this.permisosPorHost = Math.max(1, permisosPorHost);
         this.esperaMaximaSegundos = Math.max(1, esperaMaximaSegundos);
@@ -65,8 +64,8 @@ public class LimitadorDeDescargasPorOrigen {
         }
         Semaphore semaforo = porHost.computeIfAbsent(host, h -> new Semaphore(permisosPorHost, true));
         if (!semaforo.tryAcquire(esperaMaximaSegundos, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("No hubo turno para descargar de " + host + " en "
-                    + esperaMaximaSegundos + "s; la imagen vuelve a la cola");
+            throw new IllegalStateException("No hubo turno para descargar de " + host + " en " + esperaMaximaSegundos
+                    + "s; la imagen vuelve a la cola");
         }
         try {
             return descarga.call();

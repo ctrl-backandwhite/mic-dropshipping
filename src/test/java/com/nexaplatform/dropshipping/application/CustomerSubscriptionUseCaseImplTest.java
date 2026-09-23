@@ -132,8 +132,8 @@ class CustomerSubscriptionUseCaseImplTest {
         var planEntity = SubscriptionPlanEntity.builder().code("pro").build();
         planEntity.setId(planId);
         when(planRepository.findByCode("pro")).thenReturn(Optional.of(planEntity));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(
-                mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
+        when(userRepository.findById(userId)).thenReturn(
+                Optional.of(mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
         when(stripeService.isEnabled()).thenReturn(false);
         var saved = CustomerSubscription.builder().id(subId).planId(planId).userId(userId)
                 .status(SubscriptionStatus.ACTIVE).build();
@@ -151,7 +151,8 @@ class CustomerSubscriptionUseCaseImplTest {
         UUID userId = UUID.randomUUID();
         UUID planId = UUID.randomUUID();
         // Plan de PAGO (con precio) → no cae en la prueba gratis; honra el periodo YEARLY solicitado.
-        var planEntity = SubscriptionPlanEntity.builder().code("pro").priceMonthlyCents(999).priceYearlyCents(9999).build();
+        var planEntity = SubscriptionPlanEntity.builder().code("pro").priceMonthlyCents(999).priceYearlyCents(9999)
+                .build();
         planEntity.setId(planId);
         when(planRepository.findByCode("pro")).thenReturn(Optional.of(planEntity));
         when(customerSubscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -219,8 +220,8 @@ class CustomerSubscriptionUseCaseImplTest {
         UUID userId = UUID.randomUUID();
         // Cancelación dentro de 2 días (dentro de la ventana de 3 días previos), sin recordatorio hoy.
         CustomerSubscription sub = CustomerSubscription.builder().id(UUID.randomUUID()).userId(userId)
-                .status(SubscriptionStatus.ACTIVE).planCode("PRO")
-                .cancelAt(Instant.now().plusSeconds(2 * 86400)).cancelReminderLastAt(null).build();
+                .status(SubscriptionStatus.ACTIVE).planCode("PRO").cancelAt(Instant.now().plusSeconds(2 * 86400))
+                .cancelReminderLastAt(null).build();
         when(customerSubscriptionRepository.findAll()).thenReturn(List.of(sub));
 
         useCase.sendPlanCancelReminders();
@@ -243,8 +244,8 @@ class CustomerSubscriptionUseCaseImplTest {
     @Test
     void sendPlanCancelReminders_yaEnviadoHoy_noRepite() {
         CustomerSubscription sub = CustomerSubscription.builder().id(UUID.randomUUID()).userId(UUID.randomUUID())
-                .status(SubscriptionStatus.ACTIVE).planCode("PRO")
-                .cancelAt(Instant.now().plusSeconds(2 * 86400)).cancelReminderLastAt(Instant.now()).build();
+                .status(SubscriptionStatus.ACTIVE).planCode("PRO").cancelAt(Instant.now().plusSeconds(2 * 86400))
+                .cancelReminderLastAt(Instant.now()).build();
         when(customerSubscriptionRepository.findAll()).thenReturn(List.of(sub));
 
         useCase.sendPlanCancelReminders();

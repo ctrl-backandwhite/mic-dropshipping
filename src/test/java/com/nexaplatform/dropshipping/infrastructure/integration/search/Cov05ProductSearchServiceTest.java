@@ -97,5 +97,4 @@ class Cov05ProductSearchServiceTest {
         assertThat(capturedRequest().size()).isEqualTo(expected);
     }
 
-
 }

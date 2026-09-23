@@ -68,8 +68,8 @@ class Cov04YunExpressQuoteTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(null), null,
-                currencyRateService, new MockEnvironment(), null);
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation,
+                new CustomsDutyLinesService(null), null, currencyRateService, new MockEnvironment(), null);
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "quoteTimeoutSeconds", 5L);
         ReflectionTestUtils.setField(service, "volumetricDivisor", 6000.0);
@@ -209,9 +209,8 @@ class Cov04YunExpressQuoteTest {
                   {"product_code":"FZZXR-AMZ","product_name":"Apparel AMZ","calculate_amount":55,
                    "currency":"RMB","interval_day":"5-8"}]}"""));
         when(customsValuation.carrierPrepaysVatFor("ES")).thenReturn(true);
-        when(currencyRateService.toUsd(any(BigDecimal.class), eq("CNY")))
-                .thenAnswer(inv -> inv.getArgument(0, BigDecimal.class).divide(new BigDecimal("7"), 4,
-                        java.math.RoundingMode.HALF_UP));
+        when(currencyRateService.toUsd(any(BigDecimal.class), eq("CNY"))).thenAnswer(inv -> inv
+                .getArgument(0, BigDecimal.class).divide(new BigDecimal("7"), 4, java.math.RoundingMode.HALF_UP));
 
         ShippingQuote quote = service.quote("ES", ParcelSpec.ofWeight(250));
 
@@ -242,9 +241,8 @@ class Cov04YunExpressQuoteTest {
     void siYunExpressNoRecomiendaCanalSeSigueVendiendoConLaTarifaLocal() throws IOException {
         zonaEspana();
         conYunExpressOperativo();
-        when(client.get(eq(PATH_PRICE_TRIAL), anyMap(), any(Duration.class)))
-                .thenReturn(json("""
-                        {"success":false,"code":"02030008","msg":"no product"}"""));
+        when(client.get(eq(PATH_PRICE_TRIAL), anyMap(), any(Duration.class))).thenReturn(json("""
+                {"success":false,"code":"02030008","msg":"no product"}"""));
 
         assertThat(service.quote("ES", ParcelSpec.ofWeight(250)).amountUsdCents()).isEqualTo(750);
     }
@@ -299,16 +297,12 @@ class Cov04YunExpressQuoteTest {
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(client).get(eq(PATH_PRICE_TRIAL), captor.capture(), any(Duration.class));
         Map<String, String> query = captor.getValue();
-        assertThat(query).containsEntry("country_code", "ES")
-                .containsEntry("weight", "1.500")
+        assertThat(query).containsEntry("country_code", "ES").containsEntry("weight", "1.500")
                 .containsEntry("weight_unit", "KG")
                 // "E" = 带电 (con batería): cambia de canal y de tarifa, y omitirlo hace que el
                 // transportista rechace el bulto en almacén.
-                .containsEntry("package_type", "E")
-                .containsEntry("length", "32.0")
-                .containsEntry("width", "24.0")
-                .containsEntry("height", "5.0")
-                .containsEntry("size_unit", "CM")
+                .containsEntry("package_type", "E").containsEntry("length", "32.0").containsEntry("width", "24.0")
+                .containsEntry("height", "5.0").containsEntry("size_unit", "CM")
                 .containsEntry("product_group_code", "EM");
     }
 
@@ -360,14 +354,13 @@ class Cov04YunExpressQuoteTest {
         when(client.get(eq("/v1/order/label/get"), anyMap())).thenReturn(json("""
                 {"success":false,"code":"02030014","msg":"not ready"}"""));
 
-        assertThatThrownBy(() -> service.labelFor("NX-1"))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("02030014");
+        assertThatThrownBy(() -> service.labelFor("NX-1")).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("02030014");
     }
 
     @Test
     void laAnulacionDeGuiaDevuelveSiElCarrierLaAcepto() throws IOException {
-        when(client.post(eq("/v1/order/cancel"), any(Object.class)))
-                .thenReturn(json("{\"success\":true}"));
+        when(client.post(eq("/v1/order/cancel"), any(Object.class))).thenReturn(json("{\"success\":true}"));
         assertThat(service.cancelShipment("YT1")).isTrue();
 
         when(client.post(eq("/v1/order/cancel"), any(Object.class)))

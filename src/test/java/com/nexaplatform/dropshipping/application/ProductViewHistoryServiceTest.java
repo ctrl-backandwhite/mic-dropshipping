@@ -59,8 +59,7 @@ class ProductViewHistoryServiceTest {
         service.record(userId, productId);
 
         ArgumentCaptor<Instant> momento = ArgumentCaptor.forClass(Instant.class);
-        verify(viewRepository).registrarVisita(eq(userId), eq(productId), momento.capture(),
-                any(), any(), any());
+        verify(viewRepository).registrarVisita(eq(userId), eq(productId), momento.capture(), any(), any(), any());
         assertThat(momento.getValue()).isBetween(antes.minusSeconds(5), Instant.now().plusSeconds(5));
     }
 
@@ -74,8 +73,7 @@ class ProductViewHistoryServiceTest {
         UUID productId = UUID.randomUUID();
         when(productRepository.existsById(productId)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.record(UUID.randomUUID(), productId))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.record(UUID.randomUUID(), productId)).isInstanceOf(NotFoundException.class);
 
         verify(viewRepository, never()).registrarVisita(any(), any(), any(), any(), any(), any());
     }
@@ -116,8 +114,8 @@ class ProductViewHistoryServiceTest {
         // Primero se anota la visita y DESPUÉS se poda: al revés, la ficha recién abierta podría ser la
         // que se borra cuando el historial está justo en el tope.
         InOrder enOrden = inOrder(viewRepository);
-        enOrden.verify(viewRepository).registrarVisita(eq(userId), eq(productId), any(Instant.class),
-                any(), any(), any());
+        enOrden.verify(viewRepository).registrarVisita(eq(userId), eq(productId), any(Instant.class), any(), any(),
+                any());
         enOrden.verify(viewRepository).podarExcedente(userId, 50);
     }
 
@@ -175,8 +173,8 @@ class ProductViewHistoryServiceTest {
 
         service.record(userId, productId);
 
-        verify(viewRepository).registrarVisita(eq(userId), eq(productId), any(Instant.class),
-                isNull(), isNull(), isNull());
+        verify(viewRepository).registrarVisita(eq(userId), eq(productId), any(Instant.class), isNull(), isNull(),
+                isNull());
     }
 
     /** La retención acordada con el dueño del producto: 90 días, ni el historial ni el correo más allá. */
@@ -193,11 +191,11 @@ class ProductViewHistoryServiceTest {
         Duration retencion = Duration.between(limite.getValue(), ahora);
         assertThat(retencion).isBetween(Duration.ofDays(90).minusMinutes(1), Duration.ofDays(90).plusMinutes(1));
     }
+
     /** Un precio ya resuelto, con lo único que el historial necesita: importe, moneda y su formato. */
     private static PricedAmount precioDe(String importe, String moneda, String formateado) {
-        return new PricedAmount(null, null, new BigDecimal(importe), moneda, "€", formateado,
-                null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null);
+        return new PricedAmount(null, null, new BigDecimal(importe), moneda, "€", formateado, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
 }

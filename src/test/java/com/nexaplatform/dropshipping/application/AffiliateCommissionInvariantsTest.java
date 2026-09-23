@@ -122,10 +122,9 @@ class AffiliateCommissionInvariantsTest {
     }
 
     private void defaults() {
-        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(
-                AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
-                        .attributionWindowDays(30).returnPeriodDays(14).minPayoutCents(5000)
-                        .currency("EUR").attributionModel("LAST_CLICK").build()));
+        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(AffiliateProgramConfigEntity.builder()
+                .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
+                .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build()));
         when(conversionRepo.existsByOrderId(orderId)).thenReturn(false);
         when(conversionRepo.save(any())).thenAnswer(i -> {
             AffiliateConversionEntity c = i.getArgument(0);
@@ -162,7 +161,7 @@ class AffiliateCommissionInvariantsTest {
         when(attrRepo.findTopByReferredUserIdAndExpiresAtAfterOrderByClickedAtDesc(eq(buyerId), any()))
                 .thenReturn(Optional.of(attr));
         UserEntity self = new UserEntity();
-        self.setId(buyerId);                      // el afiliado ES el comprador
+        self.setId(buyerId); // el afiliado ES el comprador
         AffiliateEntity a = new AffiliateEntity();
         a.setId(affiliateId);
         a.setUser(self);
@@ -173,7 +172,7 @@ class AffiliateCommissionInvariantsTest {
         long descuento = service().referralDiscountCents(buyerId, 10_000L);
 
         verify(commissionRepo, never()).save(any());
-        assertThat(descuento).isZero();           // tampoco se lleva el descuento de comprador
+        assertThat(descuento).isZero(); // tampoco se lleva el descuento de comprador
     }
 
     @Test
@@ -306,7 +305,7 @@ class AffiliateCommissionInvariantsTest {
     @Test
     void loDevengadoNuncaQuedaEnNegativoAlDeshacer() {
         AffiliateEntity a = affiliate("ACTIVE");
-        a.setEarningsUsdCents(500L);          // menos de lo que vale la comisión que se deshace
+        a.setEarningsUsdCents(500L); // menos de lo que vale la comisión que se deshace
         AffiliateConversionEntity conv = new AffiliateConversionEntity();
         conv.setId(UUID.randomUUID());
         conv.setOrderId(orderId);
@@ -341,8 +340,8 @@ class AffiliateCommissionInvariantsTest {
         // en vez de devengarse sin más.
         liveAttribution();
         affiliate("ACTIVE");
-        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(
-                AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
+        when(configRepo.findFirstByOrderByCreatedAtAsc())
+                .thenReturn(Optional.of(AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
                         .attributionWindowDays(30).returnPeriodDays(14).minPayoutCents(5000).currency("EUR")
                         .attributionModel("LAST_CLICK").maxCommissionPeriodCents(500L).maxPeriodDays(30).build()));
         when(conversionRepo.existsByOrderId(orderId)).thenReturn(false);

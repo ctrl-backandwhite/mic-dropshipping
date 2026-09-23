@@ -33,9 +33,8 @@ class CartSyncFlowIT extends BaseIntegration {
     private static final String CART = "/api/me/cart";
     private static final String CART_MERGE = "/api/me/cart/merge";
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> LINEAS =
-            new ParameterizedTypeReference<>() {
-            };
+    private static final ParameterizedTypeReference<List<Map<String, Object>>> LINEAS = new ParameterizedTypeReference<>() {
+    };
 
     private UUID duenoId;
     /** Dos tokens del MISMO usuario: la web y la app, cada una con su sesión. */
@@ -73,8 +72,7 @@ class CartSyncFlowIT extends BaseIntegration {
 
         assertThat(enLaApp).hasSize(1);
         assertThat(enLaApp.get(0)).containsEntry("productId", productoId.toString())
-                .containsEntry("variantId", varianteRoja.toString())
-                .containsEntry("quantity", 2)
+                .containsEntry("variantId", varianteRoja.toString()).containsEntry("quantity", 2)
                 .containsEntry("title", "Camisa");
     }
 
@@ -101,8 +99,8 @@ class CartSyncFlowIT extends BaseIntegration {
         List<Map<String, Object>> cesta = listar(tokenWeb);
 
         assertThat(cesta).hasSize(2);
-        assertThat(cesta).extracting(l -> l.get("variantId"))
-                .containsExactlyInAnyOrder(varianteRoja.toString(), varianteAzul.toString());
+        assertThat(cesta).extracting(l -> l.get("variantId")).containsExactlyInAnyOrder(varianteRoja.toString(),
+                varianteAzul.toString());
         assertThat(cantidadDe(cesta, varianteAzul)).isEqualTo(3);
     }
 
@@ -233,8 +231,8 @@ class CartSyncFlowIT extends BaseIntegration {
     @DisplayName("sin autenticación no hay carrito: 401 en todas las operaciones")
     void sinAutenticacionNoHayCarrito() {
         client.get().uri(CART).exchange().expectStatus().isUnauthorized();
-        client.put().uri(CART).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(linea(productoId, varianteRoja, 1)).exchange().expectStatus().isUnauthorized();
+        client.put().uri(CART).contentType(MediaType.APPLICATION_JSON).bodyValue(linea(productoId, varianteRoja, 1))
+                .exchange().expectStatus().isUnauthorized();
         client.post().uri(CART_MERGE).contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(List.of(linea(productoId, varianteRoja, 1))).exchange().expectStatus().isUnauthorized();
         client.delete().uri(CART + "/" + productoId).exchange().expectStatus().isUnauthorized();
@@ -244,15 +242,15 @@ class CartSyncFlowIT extends BaseIntegration {
     /* ============================== Utilidades ============================== */
 
     private List<Map<String, Object>> listar(String token) {
-        return client.get().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
-                .expectStatus().isOk().expectBody(LINEAS).returnResult().getResponseBody();
+        return client.get().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange().expectStatus().isOk()
+                .expectBody(LINEAS).returnResult().getResponseBody();
     }
 
     /** Guarda una línea y devuelve la cesta resultante (el caso bueno: 200). */
     private List<Map<String, Object>> guardar(String token, Map<String, Object> linea) {
         return client.put().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(linea).exchange()
-                .expectStatus().isOk().expectBody(LINEAS).returnResult().getResponseBody();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(linea).exchange().expectStatus().isOk()
+                .expectBody(LINEAS).returnResult().getResponseBody();
     }
 
     /**
@@ -261,26 +259,25 @@ class CartSyncFlowIT extends BaseIntegration {
      * motivo equivocado.
      */
     private void guardarRechazado(String token, Map<String, Object> linea, int estadoEsperado) {
-        client.put().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(linea).exchange()
-                .expectStatus().isEqualTo(estadoEsperado);
+        client.put().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(linea).exchange().expectStatus().isEqualTo(estadoEsperado);
     }
 
     private List<Map<String, Object>> fundir(String token, List<Map<String, Object>> lineas) {
         return client.post().uri(CART_MERGE).header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(lineas).exchange()
-                .expectStatus().isOk().expectBody(LINEAS).returnResult().getResponseBody();
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(lineas).exchange().expectStatus().isOk()
+                .expectBody(LINEAS).returnResult().getResponseBody();
     }
 
     private List<Map<String, Object>> quitar(String token, UUID producto, UUID variante) {
         String uri = CART + "/" + producto + (variante == null ? "" : "?variantId=" + variante);
-        return client.delete().uri(uri).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
-                .expectStatus().isOk().expectBody(LINEAS).returnResult().getResponseBody();
+        return client.delete().uri(uri).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange().expectStatus()
+                .isOk().expectBody(LINEAS).returnResult().getResponseBody();
     }
 
     private List<Map<String, Object>> vaciar(String token) {
-        return client.delete().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
-                .expectStatus().isOk().expectBody(LINEAS).returnResult().getResponseBody();
+        return client.delete().uri(CART).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange().expectStatus()
+                .isOk().expectBody(LINEAS).returnResult().getResponseBody();
     }
 
     /** Cantidad de la línea de esa variante ({@code null} = producto base), o 0 si no está en la cesta. */
@@ -321,9 +318,10 @@ class CartSyncFlowIT extends BaseIntegration {
     private UUID crearProducto(int moq) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, weight_grams, created_at, updated_at)"
-                + " VALUES (?, ?, ?, 'TEST', '衬衫', 'ACTIVE', ?, 10.0000, 'EUR', 500, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                        + " base_price, currency, weight_grams, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, 'TEST', '衬衫', 'ACTIVE', ?, 10.0000, 'EUR', 500, now(), now())",
                 id, "camisa-" + sufijo, "ext-" + sufijo, moq);
         return id;
     }
@@ -331,16 +329,17 @@ class CartSyncFlowIT extends BaseIntegration {
     private UUID crearVariante(UUID producto, String color) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product_variant (id, product_id, external_id, sku, title, price,"
-                + " stock, active, created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, ?, 10.0000, 100, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product_variant (id, product_id, external_id, sku, title, price,"
+                        + " stock, active, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, ?, ?, 10.0000, 100, true, now(), now())",
                 id, producto, "var-" + sufijo, "SKU-" + sufijo, color);
         return id;
     }
 
     private int lineasEnBd(UUID userId) {
-        Integer total = jdbcTemplate.queryForObject("SELECT count(*) FROM cart_item WHERE user_id = ?",
-                Integer.class, userId);
+        Integer total = jdbcTemplate.queryForObject("SELECT count(*) FROM cart_item WHERE user_id = ?", Integer.class,
+                userId);
         return total == null ? 0 : total;
     }
 }

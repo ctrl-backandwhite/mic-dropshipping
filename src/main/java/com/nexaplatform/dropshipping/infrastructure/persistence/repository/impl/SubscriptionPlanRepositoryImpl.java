@@ -24,7 +24,8 @@ public class SubscriptionPlanRepositoryImpl implements SubscriptionPlanRepositor
 
     @Override
     public SubscriptionPlan save(SubscriptionPlan model) {
-        SubscriptionPlanEntity entity = subscriptionPlanJpaRepositoryAdapter.save(subscriptionPlanEntityMapper.toEntity(model));
+        SubscriptionPlanEntity entity = subscriptionPlanJpaRepositoryAdapter
+                .save(subscriptionPlanEntityMapper.toEntity(model));
         return subscriptionPlanEntityMapper.toDomain(entity);
     }
 

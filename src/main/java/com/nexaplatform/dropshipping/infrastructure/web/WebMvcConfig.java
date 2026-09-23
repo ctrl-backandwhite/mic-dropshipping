@@ -20,12 +20,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new CaptchaVerificationInterceptor(captchaService))
-                .addPathPatterns(
-                        "/api/auth/register",
-                        "/api/auth/password-reset/request",
-                        "/api/auth/activate/resend",
-                        "/api/newsletter/subscribe",
-                        "/api/contact");
+        registry.addInterceptor(new CaptchaVerificationInterceptor(captchaService)).addPathPatterns(
+                "/api/auth/register", "/api/auth/password-reset/request", "/api/auth/activate/resend",
+                "/api/newsletter/subscribe", "/api/contact");
     }
 }

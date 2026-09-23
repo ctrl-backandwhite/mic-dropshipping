@@ -264,8 +264,8 @@ class SearchFlowIT extends BaseIntegration {
         JsonNode masAllaDelFinal = getJson(PRODUCTS + "?page=99&size=1&lang=es&q=bota", userToken);
         assertThat(slugs(masAllaDelFinal)).isEmpty();
 
-        client.get().uri(PRODUCTS + "?size=0&q=bota").header(AUTH, bearer(userToken)).exchange()
-                .expectStatus().isBadRequest();
+        client.get().uri(PRODUCTS + "?size=0&q=bota").header(AUTH, bearer(userToken)).exchange().expectStatus()
+                .isBadRequest();
     }
 
     /* ============================================================================================
@@ -329,8 +329,8 @@ class SearchFlowIT extends BaseIntegration {
 
     /** GET que exige 200; {@code vars} rellena las variables de plantilla ({@code {q}}) ya codificadas. */
     private JsonNode getJson(String uriTemplate, String token, Object... vars) {
-        JsonNode body = client.get().uri(uriTemplate, vars).header(AUTH, bearer(token)).exchange()
-                .expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode body = client.get().uri(uriTemplate, vars).header(AUTH, bearer(token)).exchange().expectStatus().isOk()
+                .expectBody(JsonNode.class).returnResult().getResponseBody();
         assertThat(body).as("cuerpo de %s", uriTemplate).isNotNull();
         return body;
     }
@@ -393,11 +393,11 @@ class SearchFlowIT extends BaseIntegration {
                 + "status, base_price, currency, rating, monthly_sales, trend_score, ship_from, free_shipping, "
                 + "self_pickup, has_video, inventory_count, moq, shipping_cny, iva_cny) "
                 + "VALUES (?, ?, ?, '1688', ?, ?, ?, 'ACTIVE', ?, 'CNY', 4.0, 10, 1, 'CN', false, false, false, "
-                + "50, 1, 5, 1)",
-                id, slug, "EXT-" + slug, proveedor, categoria, tituloZh, new BigDecimal("20.0000"));
-        jdbcTemplate.update("INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
-                + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)", id, "https://origen.test/" + slug + ".jpg",
-                IMG_CDN + slug + ".jpg");
+                + "50, 1, 5, 1)", id, slug, "EXT-" + slug, proveedor, categoria, tituloZh, new BigDecimal("20.0000"));
+        jdbcTemplate.update(
+                "INSERT INTO product_image (id, product_id, position, role, source_url, cdn_url) "
+                        + "VALUES (gen_random_uuid(), ?, 0, 'MAIN', ?, ?)",
+                id, "https://origen.test/" + slug + ".jpg", IMG_CDN + slug + ".jpg");
         for (Map.Entry<String, String> t : titulos.entrySet()) {
             jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, description) "
                     + "VALUES (gen_random_uuid(), ?, ?, ?, ?)", id, t.getKey(), t.getValue(), t.getValue());

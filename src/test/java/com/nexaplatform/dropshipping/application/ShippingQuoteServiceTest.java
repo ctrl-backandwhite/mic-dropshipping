@@ -125,7 +125,8 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(b)).thenReturn(Optional.of(product(400, null)));
         when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
-        service.quote("ES", List.of(new ShippingQuoteService.Line(a, null, 3), new ShippingQuoteService.Line(b, null, 1)));
+        service.quote("ES",
+                List.of(new ShippingQuoteService.Line(a, null, 3), new ShippingQuoteService.Line(b, null, 1)));
 
         // 100*3 + 400*1 = 700.
         assertThat(parcelCaptor.getValue().weightGrams()).isEqualTo(700);
@@ -165,8 +166,7 @@ class ShippingQuoteServiceTest {
 
     @Test
     void supportedCountries_delegaEnElProveedor() {
-        FulfillmentProvider.SupportedCountry es =
-                new FulfillmentProvider.SupportedCountry("ES", "Spain");
+        FulfillmentProvider.SupportedCountry es = new FulfillmentProvider.SupportedCountry("ES", "Spain");
         when(cainiao.supportedCountries()).thenReturn(List.of(es));
 
         List<FulfillmentProvider.SupportedCountry> result = service.supportedCountries();

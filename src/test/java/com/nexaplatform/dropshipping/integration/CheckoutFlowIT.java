@@ -61,9 +61,8 @@ class CheckoutFlowIT extends BaseIntegration {
     private static final String CESTA = "/api/me/cart";
     private static final String CABECERA_IDEMPOTENCIA = "Idempotency-Key";
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> LINEAS_DE_CESTA =
-            new ParameterizedTypeReference<>() {
-            };
+    private static final ParameterizedTypeReference<List<Map<String, Object>>> LINEAS_DE_CESTA = new ParameterizedTypeReference<>() {
+    };
 
     /** País con cobertura sembrada en cada prueba. */
     private static final String PAIS = "ES";
@@ -93,8 +92,7 @@ class CheckoutFlowIT extends BaseIntegration {
      */
     // Jackson 3: el ObjectMapper es INMUTABLE, la configuración se fija al construirlo.
     private static final ObjectMapper JSON = JsonMapper.builder()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-            .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     /**
      * Las reglas de margen viven en una caché de 5 minutos que se calienta al arrancar el contexto, ANTES
@@ -146,13 +144,11 @@ class CheckoutFlowIT extends BaseIntegration {
         assertThat(centimos(pedido, "tax")).isZero();
         assertThat(centimos(pedido, "discount")).isZero();
         assertThat(centimos(pedido, "total"))
-                .as("3 unidades a 10,00 $ más 5,00 $ de envío son 35,00 $, ni un céntimo más")
-                .isEqualTo(totalEsperado);
+                .as("3 unidades a 10,00 $ más 5,00 $ de envío son 35,00 $, ni un céntimo más").isEqualTo(totalEsperado);
 
         assertThat(pedidosEnBd()).isEqualTo(1);
         assertThat(totalCobradoEnBd()).isEqualTo(totalEsperado);
-        assertThat(saldoEnBd())
-                .as("del monedero tiene que salir EXACTAMENTE el total del pedido")
+        assertThat(saldoEnBd()).as("del monedero tiene que salir EXACTAMENTE el total del pedido")
                 .isEqualTo(saldoAntes - totalEsperado);
         assertThat(cargosAlMonedero()).isEqualTo(totalEsperado);
     }
@@ -248,8 +244,7 @@ class CheckoutFlowIT extends BaseIntegration {
         assertThat(centimos(unaUnidad, "total")).isEqualTo(UNIDAD_CENTS + ENVIO_CENTS);
         assertThat(centimos(tresUnidades, "total")).isEqualTo(3 * UNIDAD_CENTS + ENVIO_CENTS);
         assertThat(centimos(tresUnidades, "total") - centimos(unaUnidad, "total"))
-                .as("el envío es plano, así que la diferencia son dos unidades justas")
-                .isEqualTo(2 * UNIDAD_CENTS);
+                .as("el envío es plano, así que la diferencia son dos unidades justas").isEqualTo(2 * UNIDAD_CENTS);
     }
 
     @Test
@@ -442,9 +437,7 @@ class CheckoutFlowIT extends BaseIntegration {
         // El cupón vale 30% de 1500 = 450: gana, y solo se cobra la DIFERENCIA (450 − 150 = 300).
         assertThat(centimos(pedido, "subtotal")).isEqualTo(1350);
         assertThat(centimos(pedido, "discount")).isEqualTo(300);
-        assertThat(centimos(pedido, "total"))
-                .as("1350 − 300 + 500 de envío = 1550")
-                .isEqualTo(1550);
+        assertThat(centimos(pedido, "total")).as("1350 − 300 + 500 de envío = 1550").isEqualTo(1550);
         assertThat(centimos(pedido, "total"))
                 .as("sumar los dos descuentos daría 1400: eso es exactamente lo que la regla prohíbe")
                 .isNotEqualTo(1400);
@@ -504,8 +497,7 @@ class CheckoutFlowIT extends BaseIntegration {
 
         JsonNode pedido = cuerpo(checkout(pedidoDe(1), null).expectStatus().isCreated());
 
-        assertThat(centimos(pedido, "subtotal"))
-                .as("un −50% sobre 1500 daría 750; el suelo lo deja en la base, 1000")
+        assertThat(centimos(pedido, "subtotal")).as("un −50% sobre 1500 daría 750; el suelo lo deja en la base, 1000")
                 .isEqualTo(1000);
         assertThat(centimos(pedido, "subtotal")).isNotEqualTo(750);
         assertThat(centimos(pedido, "total")).isEqualTo(1000 + ENVIO_CENTS);
@@ -1014,8 +1006,8 @@ class CheckoutFlowIT extends BaseIntegration {
     @Test
     @DisplayName("el checkout sin token devuelve 401 y no toca nada")
     void checkoutSinTokenDevuelve401() {
-        client.post().uri(CHECKOUT).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(pedidoDe(1)).exchange().expectStatus().isUnauthorized();
+        client.post().uri(CHECKOUT).contentType(MediaType.APPLICATION_JSON).bodyValue(pedidoDe(1)).exchange()
+                .expectStatus().isUnauthorized();
 
         assertThat(pedidosEnBd()).isZero();
         assertThat(saldoEnBd()).isEqualTo(SALDO_HOLGADO);
@@ -1031,8 +1023,7 @@ class CheckoutFlowIT extends BaseIntegration {
         insertarUsuario(otroId, "curioso@nx036.local");
 
         client.get().uri(MIS_PEDIDOS + "/" + mio.get("id").asText())
-                .header(HttpHeaders.AUTHORIZATION, bearer(otroToken)).exchange()
-                .expectStatus().isNotFound();
+                .header(HttpHeaders.AUTHORIZATION, bearer(otroToken)).exchange().expectStatus().isNotFound();
     }
 
     @Test
@@ -1120,18 +1111,18 @@ class CheckoutFlowIT extends BaseIntegration {
                  "sourceCurrency":"USD","quantity":%d,"moq":1,"unitPriceDisplay":10.00,
                  "displayCurrency":"USD","displaySymbol":"$"}
                 """.formatted(producto, cantidad);
-        client.put().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(linea).exchange().expectStatus().isOk();
+        client.put().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(linea).exchange().expectStatus().isOk();
     }
 
     private List<Map<String, Object>> lineasEnLaCesta() {
-        return client.get().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
-                .expectStatus().isOk().expectBody(LINEAS_DE_CESTA).returnResult().getResponseBody();
+        return client.get().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange().expectStatus().isOk()
+                .expectBody(LINEAS_DE_CESTA).returnResult().getResponseBody();
     }
 
     private int lineasDeLaCestaEnBd() {
-        Integer total = jdbcTemplate.queryForObject("SELECT count(*) FROM cart_item WHERE user_id = ?",
-                Integer.class, userId);
+        Integer total = jdbcTemplate.queryForObject("SELECT count(*) FROM cart_item WHERE user_id = ?", Integer.class,
+                userId);
         return total == null ? 0 : total;
     }
 
@@ -1196,8 +1187,8 @@ class CheckoutFlowIT extends BaseIntegration {
         UUID uno = insertarProductoConMoq("10.00", 2);
         UUID otro = insertarProductoConMoq("10.00", 2);
         String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
-                + "\"items\":[{\"productId\":\"" + uno + "\",\"quantity\":1},"
-                + "{\"productId\":\"" + otro + "\",\"quantity\":1}]}";
+                + "\"items\":[{\"productId\":\"" + uno + "\",\"quantity\":1}," + "{\"productId\":\"" + otro
+                + "\",\"quantity\":1}]}";
 
         checkout(cuerpo, null).expectStatus().is4xxClientError();
     }
@@ -1208,8 +1199,7 @@ class CheckoutFlowIT extends BaseIntegration {
 
     private WebTestClient.ResponseSpec checkoutComo(String tokenDeQuien, String cuerpo, String idem) {
         WebTestClient.RequestBodySpec peticion = client.post().uri(CHECKOUT)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenDeQuien))
-                .contentType(MediaType.APPLICATION_JSON);
+                .header(HttpHeaders.AUTHORIZATION, bearer(tokenDeQuien)).contentType(MediaType.APPLICATION_JSON);
         // El checkout EXIGE la clave: identifica el intento de compra, no la petición. Sin ella el servidor
         // responde 400 en vez de crear un segundo pedido. Nueva por llamada salvo que la prueba pase la
         // suya, que es como se ejercita el reenvío del mismo intento.
@@ -1246,8 +1236,7 @@ class CheckoutFlowIT extends BaseIntegration {
             }
             items.append("{\"productId\":\"").append(productId).append("\",\"quantity\":1}");
         }
-        return "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\",\"items\":["
-                + items + "]}";
+        return "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\",\"items\":[" + items + "]}";
     }
 
     private JsonNode cuerpo(WebTestClient.ResponseSpec respuesta) {
@@ -1293,8 +1282,8 @@ class CheckoutFlowIT extends BaseIntegration {
     }
 
     private void fijarSaldo(long centimos) {
-        jdbcTemplate.update("UPDATE wallet SET balance_usd_cents = ?, updated_at = now() WHERE user_id = ?",
-                centimos, userId);
+        jdbcTemplate.update("UPDATE wallet SET balance_usd_cents = ?, updated_at = now() WHERE user_id = ?", centimos,
+                userId);
     }
 
     /** Cobertura del transportista. Con {@code per_kg_cents = 0} el porte es plano y no depende del peso. */
@@ -1313,10 +1302,11 @@ class CheckoutFlowIT extends BaseIntegration {
     private UUID insertarProducto(String basePrice, String shippingCny) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
-                + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
-                + " 'USD', ?::numeric, 0, 500, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                        + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
+                        + " 'USD', ?::numeric, 0, 500, now(), now())",
                 id, "producto-" + sufijo, "ext-" + sufijo, basePrice, shippingCny);
         return id;
     }
@@ -1325,10 +1315,11 @@ class CheckoutFlowIT extends BaseIntegration {
     private UUID insertarProductoConMoq(String basePrice, int moq) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
-                + " VALUES (?, ?, ?, 'TEST', 'Producto por lotes', 'ACTIVE', ?, ?::numeric,"
-                + " 'USD', 0, 0, 500, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                        + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, 'TEST', 'Producto por lotes', 'ACTIVE', ?, ?::numeric,"
+                        + " 'USD', 0, 0, 500, now(), now())",
                 id, "lote-" + sufijo, "extlote-" + sufijo, moq, basePrice);
         return id;
     }
@@ -1336,24 +1327,27 @@ class CheckoutFlowIT extends BaseIntegration {
     private UUID insertarVariante(UUID producto, String precio) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product_variant (id, product_id, external_id, sku, title, price,"
-                + " stock, active, created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, 'Variante', ?::numeric, 100, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product_variant (id, product_id, external_id, sku, title, price,"
+                        + " stock, active, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, ?, 'Variante', ?::numeric, 100, true, now(), now())",
                 id, producto, "var-" + sufijo, "SKU-" + sufijo, precio);
         return id;
     }
 
     private void insertarIva(String pais, int rateBps) {
-        jdbcTemplate.update("INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
-                + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
+                        + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
                 pais, rateBps);
     }
 
     /** Rebaja AUTOMÁTICA (sin código): la que se anuncia en el escaparate y compite contra el cupón. */
     private void insertarRebajaAutomatica(String nombre, String porcentaje) {
-        jdbcTemplate.update("INSERT INTO promotion (id, name, code, kind, scope, percent_off, active,"
-                + " priority, used_count, created_at)"
-                + " VALUES (gen_random_uuid(), ?, NULL, 'SEASONAL', 'ALL', ?::numeric, true, 0, 0, now())",
+        jdbcTemplate.update(
+                "INSERT INTO promotion (id, name, code, kind, scope, percent_off, active,"
+                        + " priority, used_count, created_at)"
+                        + " VALUES (gen_random_uuid(), ?, NULL, 'SEASONAL', 'ALL', ?::numeric, true, 0, 0, now())",
                 nombre, porcentaje);
     }
 
@@ -1364,15 +1358,16 @@ class CheckoutFlowIT extends BaseIntegration {
      * <p>Los parámetros van como texto con un cast explícito ({@code ?::numeric}) porque el driver de
      * PostgreSQL no puede deducir el tipo de un parámetro nulo y aborta la sentencia.
      */
-    private void insertarCupon(String codigo, String porcentaje, Integer importeCents, Instant desde,
-            Instant hasta, boolean activo, Integer maxUsos, int usosHechos, Integer pedidoMinimoCents) {
-        jdbcTemplate.update("INSERT INTO promotion (id, name, code, kind, scope, percent_off,"
-                + " amount_off_cents, starts_at, ends_at, active, priority, max_uses, used_count,"
-                + " min_order_cents, created_at)"
-                + " VALUES (gen_random_uuid(), ?, ?, 'COUPON', 'ALL', ?::numeric, ?::integer,"
-                + " ?::timestamptz, ?::timestamptz, ?, 0, ?::integer, ?, ?::integer, now())",
-                "Cupón " + codigo, codigo, porcentaje, comoTexto(importeCents), comoTexto(desde),
-                comoTexto(hasta), activo, comoTexto(maxUsos), usosHechos, comoTexto(pedidoMinimoCents));
+    private void insertarCupon(String codigo, String porcentaje, Integer importeCents, Instant desde, Instant hasta,
+            boolean activo, Integer maxUsos, int usosHechos, Integer pedidoMinimoCents) {
+        jdbcTemplate.update(
+                "INSERT INTO promotion (id, name, code, kind, scope, percent_off,"
+                        + " amount_off_cents, starts_at, ends_at, active, priority, max_uses, used_count,"
+                        + " min_order_cents, created_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, 'COUPON', 'ALL', ?::numeric, ?::integer,"
+                        + " ?::timestamptz, ?::timestamptz, ?, 0, ?::integer, ?, ?::integer, now())",
+                "Cupón " + codigo, codigo, porcentaje, comoTexto(importeCents), comoTexto(desde), comoTexto(hasta),
+                activo, comoTexto(maxUsos), usosHechos, comoTexto(pedidoMinimoCents));
     }
 
     /** Valor como texto para los parámetros con cast, o {@code null} si no hay valor. */
@@ -1389,10 +1384,8 @@ class CheckoutFlowIT extends BaseIntegration {
                 {"fullName":"Comprador de prueba","phone":"+34600000000","line1":"Gran Via 1",
                  "city":"Madrid","postalCode":"28013","country":"%s","isDefault":true}
                 """.formatted(pais);
-        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenDeQuien))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES).header(HttpHeaders.AUTHORIZATION, bearer(tokenDeQuien))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(creada.get("id").asText());
     }
 
@@ -1409,8 +1402,8 @@ class CheckoutFlowIT extends BaseIntegration {
     }
 
     private long saldoEnBd() {
-        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?",
-                Long.class, userId);
+        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?", Long.class,
+                userId);
         return saldo == null ? 0L : saldo;
     }
 
@@ -1418,8 +1411,7 @@ class CheckoutFlowIT extends BaseIntegration {
     private long cargosAlMonedero() {
         Long cargado = jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(-t.amount_usd_cents), 0) FROM wallet_transaction t"
-                        + " JOIN wallet w ON w.id = t.wallet_id"
-                        + " WHERE w.user_id = ? AND t.kind = 'PAYMENT'",
+                        + " JOIN wallet w ON w.id = t.wallet_id" + " WHERE w.user_id = ? AND t.kind = 'PAYMENT'",
                 Long.class, userId);
         return cargado == null ? 0L : cargado;
     }

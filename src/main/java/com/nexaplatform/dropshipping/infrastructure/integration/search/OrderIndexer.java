@@ -99,7 +99,7 @@ public class OrderIndexer {
      * repetir aquí {@code @Transactional} sería una anotación que nunca se aplica.
      */
     private int reindexAllOrders() {
-        int[] n = { 0 };
+        int[] n = {0};
         orderRepository.findAll().forEach(o -> {
             indexOrderModel(o);
             n[0]++;

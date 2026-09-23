@@ -94,8 +94,7 @@ class Cov09RegisteredClientConfigTest {
         // es preferible que la aplicación no arranque.
         secreto("   ");
 
-        assertThatThrownBy(() -> subject.seedClients(null))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> subject.seedClients(null)).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("partner-api.default-secret");
 
         verify(repo, never()).save(any());
@@ -111,8 +110,7 @@ class Cov09RegisteredClientConfigTest {
         assertThat(sandbox.getClientSecret()).isEqualTo("enc(s3cret0)");
         assertThat(sandbox.getClientAuthenticationMethods())
                 .containsExactly(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
-        assertThat(sandbox.getAuthorizationGrantTypes())
-                .containsExactly(AuthorizationGrantType.CLIENT_CREDENTIALS);
+        assertThat(sandbox.getAuthorizationGrantTypes()).containsExactly(AuthorizationGrantType.CLIENT_CREDENTIALS);
         assertThat(sandbox.getScopes()).containsExactlyInAnyOrder("catalog.read", "orders.write", "shop.sync");
         String plan = sandbox.getClientSettings().getSetting("nexadrop.plan");
         assertThat(plan).isEqualTo("sandbox");
@@ -161,15 +159,15 @@ class Cov09RegisteredClientConfigTest {
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scope("catalog.read")
                 .clientSettings(settings).build();
         JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder().subject("demo-partner");
-        JwtEncodingContext context = JwtEncodingContext
-                .with(JwsHeader.with(SignatureAlgorithm.RS256), claimsBuilder)
+        JwtEncodingContext context = JwtEncodingContext.with(JwsHeader.with(SignatureAlgorithm.RS256), claimsBuilder)
                 .registeredClient(client).tokenType(new OAuth2TokenType(tokenType)).build();
         customizer.customize(context);
         return claimsBuilder.build();
     }
 
     private static ClientSettings settings(String clave, String valor) {
-        return valor == null ? ClientSettings.builder().build()
+        return valor == null
+                ? ClientSettings.builder().build()
                 : ClientSettings.builder().setting(clave, valor).build();
     }
 

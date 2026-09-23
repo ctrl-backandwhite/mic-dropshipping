@@ -123,8 +123,8 @@ public final class StorefrontViews {
     }
 
     public record MarginEstimate(BigDecimal cost, BigDecimal suggestedRetail, BigDecimal shipping,
-            BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct,
-            String currency, BigDecimal appliedMarginPct, Integer appliedTierMinQty) {
+            BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct, String currency,
+            BigDecimal appliedMarginPct, Integer appliedTierMinQty) {
     }
 
     /**
@@ -138,8 +138,8 @@ public final class StorefrontViews {
      * @param dutyGroup clave opaca de agrupación arancelaria. Dos ejemplos con la MISMA clave pagan un
      *                  solo derecho por mucho que se sumen unidades; con claves distintas, uno cada uno.
      */
-    public record WelcomeExample(java.util.UUID id, String slug, String title, String imageUrl,
-            String priceFormatted, java.math.BigDecimal priceAmount, int weightGrams, String dutyGroup,
+    public record WelcomeExample(java.util.UUID id, String slug, String title, String imageUrl, String priceFormatted,
+            java.math.BigDecimal priceAmount, int weightGrams, String dutyGroup,
             /**
              * El porte del proveedor que va dentro del precio unitario, en la divisa que se mira.
              *
@@ -161,8 +161,8 @@ public final class StorefrontViews {
      * @param orderLimitFormatted     valor de mercancía por encima del cual el transportista no acepta
      *                                el pedido; vacío si ese destino no tiene tope
      */
-    public record WelcomeExamplesResponse(java.util.List<WelcomeExample> examples,
-            String perArticleDutyFormatted, int taxRateBps, String orderLimitFormatted,
+    public record WelcomeExamplesResponse(java.util.List<WelcomeExample> examples, String perArticleDutyFormatted,
+            int taxRateBps, String orderLimitFormatted,
             /**
              * El mismo tope, en la divisa que se está mirando y como número.
              *
@@ -187,8 +187,7 @@ public final class StorefrontViews {
      */
     public record WelcomeSimulationResponse(String subtotalFormatted, String dutyFormatted, int dutyLines,
             String shippingFormatted, String shippingSubsidyFormatted, String shippingNetFormatted,
-            String customsSubsidyFormatted, String customsNetFormatted, String taxFormatted,
-            int taxRateBps, String totalFormatted, int weightGrams, boolean overLimit,
-            String orderLimitFormatted) {
+            String customsSubsidyFormatted, String customsNetFormatted, String taxFormatted, int taxRateBps,
+            String totalFormatted, int weightGrams, boolean overLimit, String orderLimitFormatted) {
     }
 }

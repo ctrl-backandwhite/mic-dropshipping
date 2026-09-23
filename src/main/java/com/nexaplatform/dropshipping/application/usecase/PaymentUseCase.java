@@ -83,8 +83,8 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
      * Cobra un pedido con una tarjeta GUARDADA del usuario (off-session). Si la tarjeta exige 3DS, devuelve
      * {@code requires_action} + client_secret para que el navegador autentique y luego se confirme.
      */
-    SavedCardPayResult payOrderWithSavedCard(UUID userId, UUID orderId, String paymentMethodId,
-            String idempotencyKey) throws com.stripe.exception.StripeException;
+    SavedCardPayResult payOrderWithSavedCard(UUID userId, UUID orderId, String paymentMethodId, String idempotencyKey)
+            throws com.stripe.exception.StripeException;
 
     /** Confirma un cobro con tarjeta guardada tras completar el 3DS en el navegador. */
     Payment confirmSavedCardPayment(UUID userId, UUID orderId, UUID paymentId)

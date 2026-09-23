@@ -25,19 +25,14 @@ class ImageMirrorSecurityTest {
      * la dirección daría el test por bueno sin haber ejercitado la comprobación.
      */
     @ParameterizedTest
-    @ValueSource(strings = {
-            "http://127.0.0.1/x.jpg",
-            "http://169.254.169.254/latest/meta-data",   // endpoint de metadata del cloud (link-local)
-            "http://10.0.0.5/x.jpg",
-            "http://192.168.1.10/x.jpg"
-    })
+    @ValueSource(strings = {"http://127.0.0.1/x.jpg", "http://169.254.169.254/latest/meta-data", // endpoint de metadata del cloud (link-local)
+            "http://10.0.0.5/x.jpg", "http://192.168.1.10/x.jpg"})
     void rejects_loopback_and_metadata_and_private_ips(String url) {
         URI uri = URI.create(url);
         // Se exige que el mensaje señale el HOST rechazado, no sólo que salte una excepción: así se
         // distingue este rechazo del de esquema. Sin ese matiz, una URL descartada por otro motivo daría
         // el test por bueno sin haber llegado a resolver la dirección, que es la comprobación anti-SSRF.
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri))
-                .isInstanceOf(SecurityException.class)
+        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri)).isInstanceOf(SecurityException.class)
                 .hasMessageContaining(uri.getHost());
     }
 
@@ -46,8 +41,7 @@ class ImageMirrorSecurityTest {
     void rejects_non_http_schemes(String url) {
         URI uri = URI.create(url);
         // Aquí el mensaje debe señalar el ESQUEMA: es lo que separa este caso del rechazo por IP interna.
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri))
-                .isInstanceOf(SecurityException.class)
+        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri)).isInstanceOf(SecurityException.class)
                 .hasMessageContaining(uri.getScheme());
     }
 
@@ -62,19 +56,18 @@ class ImageMirrorSecurityTest {
 
     @Test
     void accepts_real_raster_images_by_magic_bytes() {
-        assertThat(ImageMirrorService.sniffRasterImage(new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00}))
+        assertThat(ImageMirrorService.sniffRasterImage(new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00}))
                 .isEqualTo("jpg");
-        assertThat(ImageMirrorService.sniffRasterImage(new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}))
+        assertThat(ImageMirrorService.sniffRasterImage(new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}))
                 .isEqualTo("png");
-        assertThat(ImageMirrorService.sniffRasterImage(new byte[] {'G', 'I', 'F', '8', '9', 'a'})).isEqualTo("gif");
-        assertThat(ImageMirrorService.sniffRasterImage(
-                new byte[] {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P'})).isEqualTo("webp");
+        assertThat(ImageMirrorService.sniffRasterImage(new byte[]{'G', 'I', 'F', '8', '9', 'a'})).isEqualTo("gif");
+        assertThat(ImageMirrorService.sniffRasterImage(new byte[]{'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P'}))
+                .isEqualTo("webp");
     }
 
     @Test
     void rejects_svg_and_html_disguised_as_image() {
-        byte[] svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>"
-                .getBytes();
+        byte[] svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>".getBytes();
         assertThatThrownBy(() -> ImageMirrorService.sniffRasterImage(svg)).isInstanceOf(IllegalStateException.class);
         byte[] html = "<!DOCTYPE html><html><script>steal()</script></html>".getBytes();
         assertThatThrownBy(() -> ImageMirrorService.sniffRasterImage(html)).isInstanceOf(IllegalStateException.class);

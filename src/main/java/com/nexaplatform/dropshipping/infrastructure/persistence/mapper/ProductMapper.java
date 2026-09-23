@@ -85,8 +85,8 @@ public class ProductMapper {
         // ficha sí lo filtraba desde el principio. El escaparate ya pinta `displayFormatted`, que es la
         // única cifra que le corresponde ver.
         boolean admin = SecurityUtils.isAdmin();
-        return new ProductSummaryView(p.getId(), p.getSlug(), title, image,
-                admin ? p.getBasePrice() : null, admin ? p.getCurrency() : null,
+        return new ProductSummaryView(p.getId(), p.getSlug(), title, image, admin ? p.getBasePrice() : null,
+                admin ? p.getCurrency() : null,
                 // El recuento viaja junto a la nota: sin él, la tarjeta pinta las cinco estrellas del
                 // 5,0 de origen que trae el catálogo para lo que nadie ha valorado.
                 p.getRating(), p.getReviewCount(), p.getMonthlySales(), p.getTrendScore(),
@@ -95,9 +95,8 @@ public class ProductMapper {
                 // publicaba a todo el mundo. Es el precio canónico en USD antes de convertir; al cliente le
                 // corresponde `displayFormatted`, en su divisa.
                 p.getStatus() != null ? p.getStatus().name() : null, admin ? priced.retailUsd() : null,
-                priced.displayAmount(),
-                priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
-                availableUnits, Boolean.TRUE.equals(p.getVerified()),
+                priced.displayAmount(), priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(),
+                p.getInventoryCount(), availableUnits, Boolean.TRUE.equals(p.getVerified()),
                 // La rebaja viaja YA resuelta desde el motor de precios: el escaparate solo la pinta.
                 priced.originalFormatted(), priced.discountPercent(), priced.promotionName())
                 // La tienda pone parte del porte de este producto. Se resuelve AQUÍ, dentro del listado,
@@ -142,6 +141,9 @@ public class ProductMapper {
         String shippingFormatted = admin ? priced.shippingFormatted() : null;
         // Recargo fijo por producto (30-ago-2026): el valor crudo en CNY (lo que edita el admin) y el
         // formateado. SOLO admin; el cliente solo ve displayFormatted (que ya lo incluye en el total).
+        // El IVA crudo en CNY, para poder editarlo desde la ficha (23-sep-2026). Mismo par que el
+        // recargo: valor tecleado + valor ya convertido a la moneda de la peticion.
+        BigDecimal ivaCny = admin ? p.getIvaCny() : null;
         BigDecimal surchargeCny = admin ? p.getSurchargeCny() : null;
         // Las bolsas de subvención son SOLO admin: el cliente ve su efecto en el desglose del checkout,
         // nunca el importe que se les ha asignado.
@@ -155,27 +157,24 @@ public class ProductMapper {
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
                 tr != null ? tr.getShortDescription() : p.getShortDescriptionZh(),
                 tr != null ? tr.getDescription() : p.getDescriptionZh(), p.getTitleZh(), p.getShortDescriptionZh(),
-                p.getDescriptionZh(), p.getBrand(), p.getMoq(), basePrice, currency, p.getRating(),
-                p.getReviewCount(), p.getMonthlySales(), p.getRepurchaseRate(), p.getTrendScore(),
+                p.getDescriptionZh(), p.getBrand(), p.getMoq(), basePrice, currency, p.getRating(), p.getReviewCount(),
+                p.getMonthlySales(), p.getRepurchaseRate(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, p.getSourceUrl(), p.getIngestedAt(),
                 p.getLastSyncedAt(), p.getImages().stream().map(this::toImageView).toList(),
                 p.getVariantOptions().stream().map(o -> toOptionView(o, language)).toList(),
                 p.getVariants().stream().map(v -> toVariantView(p, v, language)).toList(),
-                tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
-                costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
-                priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
-                baseFormatted, ivaFormatted, shippingFormatted, surchargeCny, surchargeFormatted,
-                shippingUserCny, dutyUserCny, shippingUserFormatted, dutyUserFormatted,
-                tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
-                Boolean.TRUE.equals(p.getVerified()),
-                videoUrlOf(p), Boolean.TRUE.equals(p.getHasVideo()),
+                tiers == null ? Collections.emptyList() : tiers.stream().map(x -> toPriceTierView(x, tiers)).toList(),
+                costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(), priced.displaySymbol(),
+                priced.displayFormatted(), appliedMarginPercent, baseFormatted, ivaFormatted, shippingFormatted, ivaCny,
+                surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny, shippingUserFormatted,
+                dutyUserFormatted, tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
+                Boolean.TRUE.equals(p.getVerified()), videoUrlOf(p), Boolean.TRUE.equals(p.getHasVideo()),
                 priced.originalFormatted(), priced.discountPercent(), priced.promotionName(),
                 // Cumplimiento del Reglamento (UE) 2023/988. Va en TODAS las fichas, también las del admin:
                 // el art. 19 obliga a mostrarlo en la oferta, y el panel necesita el mismo bloque para saber
                 // qué le falta a cada referencia.
                 euComplianceService.forProduct(p.getCategory() != null ? p.getCategory().getId() : null,
-                        p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail(),
-                        language),
+                        p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail(), language),
                 // El arancel adicional no se resuelve aquí: depende del CARRITO de quien mira, no del
                 // producto, y este mapeo va cacheado. Lo decora el controlador con la ficha ya construida,
                 // y con él el indicador de quién paga el derecho, que además depende del país.
@@ -195,12 +194,16 @@ public class ProductMapper {
         PricedAmount priced = pricingService.priceFor(product, v);
         // Peso por variante: usa el del paquete (bruto) si existe, si no el neto. Dimensiones tal cual (mm).
         Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
-                ? v.getPackageWeightGrams() : v.getWeightGrams();
+                ? v.getPackageWeightGrams()
+                : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
                 priced.displayFormatted(), v.getStock(), pickVariantImage(v),
-                VariantOptionTranslator.translate(v.getOptions(), product, language), v.isActive(),
-                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
-                priced.originalFormatted(), priced.discountPercent());
+                VariantOptionTranslator.translate(v.getOptions(), product, language), v.isActive(), weight,
+                v.getLengthMm(), v.getWidthMm(), v.getHeightMm(), priced.originalFormatted(), priced.discountPercent(),
+                // El envío de ESTA variante, tal cual: no se sustituye por el del producto cuando
+                // falta. Un null dice "no declara envío propio" y quien pinta decide qué enseñar;
+                // rellenarlo aquí con el del producto borraría esa diferencia.
+                v.getShippingCny());
     }
 
     /**
@@ -219,10 +222,11 @@ public class ProductMapper {
     /** Back-compat overload (without product); used by ProductMapperTest. */
     public VariantView toVariantView(ProductVariantEntity v) {
         Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
-                ? v.getPackageWeightGrams() : v.getWeightGrams();
+                ? v.getPackageWeightGrams()
+                : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), v.getPrice(), null, v.getStock(),
-                pickVariantImage(v), v.getOptions(), v.isActive(),
-                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
+                pickVariantImage(v), v.getOptions(), v.isActive(), weight, v.getLengthMm(), v.getWidthMm(),
+                v.getHeightMm());
     }
 
     /** Back-compat: opción sin idioma (no resuelve traducción) — usado por tests/llamadas heredadas. */
@@ -279,19 +283,46 @@ public class ProductMapper {
     /** Idioma pedido → override neutral (value). Mismo criterio que {@link #toValueView}. */
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {
+        return toPriceTierView(t, List.of(t));
+    }
+
+    /**
+     * La fila de la tabla de cantidades, tarificada por la MISMA via que el cobro.
+     *
+     * <p>Necesita la escalera entera, no solo su propia fila, porque el tramo se aplica como proporcion
+     * sobre el precio de la variante y esa proporcion se mide contra el primer escalon. Es lo que hace
+     * que la primera fila valga exactamente lo mismo que la cifra grande de la ficha —factor 1— y que
+     * las demas bajen lo que el proveedor declara, sin regalar el sobreprecio de una variante cara.
+     */
+    public PriceTierView toPriceTierView(ProductPriceTierEntity t, List<ProductPriceTierEntity> escalera) {
         // El tramo se guarda en la moneda del proveedor (CNY) como COSTE, y se tarifica por la MISMA vía
         // que el precio de la ficha, el de la variante y el del pedido.
         //
         // Antes tenía su propia cuenta —coste → USD → margen— y se quedaba ahí: le faltaban el IVA y el
         // envío, que sí lleva el precio que se cobra. La ficha anunciaba «2+ → 1,99 $» y al pagar salían
         // 3,57 $ la unidad, un 79% más de lo prometido en la tabla de cantidades.
-        PricedAmount priced = pricingService.priceForSupplierAmount(t.getProduct(), null, t.getUnitPrice());
+        //
+        // Y el RECARGO es el del tramo, no el del producto (23-sep-2026). Es un coste que no escala con
+        // la cantidad -gestion de la compra, manipulado, la parte fija del despacho-, asi que cobrarlo
+        // igual por una unidad que por diez mil encarece el pedido grande justo donde esta tabla promete
+        // lo contrario. Nulo = el tramo no tiene uno propio y hereda el del producto, que es lo que deja
+        // intactos los que ya estaban cargados.
+        // Se tarifica la CANTIDAD MINIMA del tramo por la misma puerta que la cesta y el pedido. Antes
+        // esta fila usaba el importe del tramo tal cual: en los 713 productos cuya variante mas barata no
+        // coincide con el primer escalon, la tabla contradecia al precio de portada de su propia ficha.
+        PricedAmount priced = pricingService.priceFor(t.getProduct(), null, t.getMinQty(), escalera);
         BigDecimal displayAmount = priced.displayAmount();
-        String displayCode = priced.displayCurrency() != null ? priced.displayCurrency()
+        String displayCode = priced.displayCurrency() != null
+                ? priced.displayCurrency()
                 : pricingService.displayCurrencyCode();
+        // El recargo crudo es un importe interno: viaja SOLO para quien administra, como el resto del
+        // desglose. Para todos los demas lo borra ademas sinDatosInternos(), que es el segundo cerrojo.
+        BigDecimal surchargeCny = SecurityUtils.isAdmin() ? t.getSurchargeCny() : null;
         return new PriceTierView(t.getMinQty(), t.getMaxQty(), displayAmount, displayCode,
-                priced.displayFormatted() != null ? priced.displayFormatted()
-                        : currencyRateService.formatDisplay(displayAmount, displayCode));
+                priced.displayFormatted() != null
+                        ? priced.displayFormatted()
+                        : currencyRateService.formatDisplay(displayAmount, displayCode),
+                surchargeCny);
     }
 
     /* ------------------ helpers ------------------ */
@@ -326,10 +357,8 @@ public class ProductMapper {
         if (ts == null || ts.isEmpty()) {
             return null;
         }
-        return findTranslation(ts, lang)
-                .or(() -> findTranslation(ts, "en"))
-                .orElseGet(() -> ts.stream().filter(t -> t.getTitle() != null && !t.getTitle().isBlank())
-                        .findFirst().orElse(null));
+        return findTranslation(ts, lang).or(() -> findTranslation(ts, "en")).orElseGet(() -> ts.stream()
+                .filter(t -> t.getTitle() != null && !t.getTitle().isBlank()).findFirst().orElse(null));
     }
 
     private String pickImageUrl(ProductImageEntity img) {

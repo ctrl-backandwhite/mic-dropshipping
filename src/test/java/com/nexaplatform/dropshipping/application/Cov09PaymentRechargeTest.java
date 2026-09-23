@@ -101,9 +101,12 @@ class Cov09PaymentRechargeTest {
     @BeforeEach
     void buildSubject() {
         subject = new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService,
-                customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
+                userRepository, orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
     }
 
     /** Usuario existente, wallet disponible y pasarela que abre el cobro sin incidencias. */
@@ -122,8 +125,8 @@ class Cov09PaymentRechargeTest {
         when(paymentJpaRepositoryAdapter.findById(any())).thenReturn(Optional.of(mock(PaymentEntity.class)));
         when(gateway.supports(any())).thenReturn(true);
         when(gateway.providerName()).thenReturn("stripe");
-        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult(
-                "cs_test_1", null, null, null, null, null, Map.of()));
+        when(gateway.initiate(any()))
+                .thenReturn(new PaymentGateway.InitiateResult("cs_test_1", null, null, null, null, null, Map.of()));
     }
 
     // ------------------------------------------------------------ el importe lo fija el backend
@@ -153,17 +156,15 @@ class Cov09PaymentRechargeTest {
     @Test
     void sinImporteDeNingunTipoNoSeAbreLaRecarga() {
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, null, "USD", null, "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Recharge amount is required");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Recharge amount is required");
     }
 
     @Test
     void unImporteEnDivisaCeroONegativoNoCuentaComoImporte() {
         // signum() <= 0 no es "importe válido": se cae al de dólares y, si tampoco hay, se rechaza.
-        assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 0L, "EUR",
-                BigDecimal.ZERO, "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Recharge amount is required");
+        assertThatThrownBy(
+                () -> subject.initiateRecharge(userId, PaymentMethod.CARD, 0L, "EUR", BigDecimal.ZERO, "k1", null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Recharge amount is required");
     }
 
     // ------------------------------------------------------------ límites
@@ -172,18 +173,16 @@ class Cov09PaymentRechargeTest {
     void porDebajoDeUnDolarNoSeAbreLaRecarga() {
         // Por debajo de 1,00 $ la comisión de la pasarela se come el ingreso.
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 99L, "USD", null, "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Minimum recharge");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Minimum recharge");
 
         verify(gateway, never()).initiate(any());
     }
 
     @Test
     void porEncimaDelMillonDeDolaresNoSeAbreLaRecarga() {
-        assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 100_000_001L, "USD", null,
-                "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Maximum recharge");
+        assertThatThrownBy(
+                () -> subject.initiateRecharge(userId, PaymentMethod.CARD, 100_000_001L, "USD", null, "k1", null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Maximum recharge");
     }
 
     @Test
@@ -330,8 +329,8 @@ class Cov09PaymentRechargeTest {
     void elSecretoYLaUrlDeAprobacionViajanEnLosMetadatosDelPago() {
         // Sin estos dos datos el front no puede terminar el cobro fuera de la app.
         happyPath();
-        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult(
-                "cs_test_1", "secret_1", "https://paypal/approve", null, null, null, Map.of("foo", "bar")));
+        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult("cs_test_1", "secret_1",
+                "https://paypal/approve", null, null, null, Map.of("foo", "bar")));
 
         Payment p = subject.initiateRecharge(userId, PaymentMethod.CARD, 5000L, "USD", null, "k1", null);
 
@@ -343,8 +342,8 @@ class Cov09PaymentRechargeTest {
     void laDireccionCriptoSeGuardaConVencimientoYSePublicaElMismoInstante() {
         // El pago y la metadata deben publicar EXACTAMENTE el mismo vencimiento, no dos "ahora + 30 min".
         happyPath();
-        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult(
-                "usdt_1", null, null, "T-addr", "TRON", "https://qr", null));
+        when(gateway.initiate(any())).thenReturn(
+                new PaymentGateway.InitiateResult("usdt_1", null, null, "T-addr", "TRON", "https://qr", null));
 
         Payment p = subject.initiateRecharge(userId, PaymentMethod.USDT, 5000L, "USD", null, "k1", "TRON");
 
@@ -352,8 +351,8 @@ class Cov09PaymentRechargeTest {
         assertThat(p.getCryptoChain()).isEqualTo("TRON");
         assertThat(p.getQrUrl()).isEqualTo("https://qr");
         assertThat(p.getCryptoExpiresAt()).isAfter(Instant.now());
-        assertThat(p.getProviderResponse()).containsEntry("cryptoAddress", "T-addr")
-                .containsEntry("expiresAt", p.getCryptoExpiresAt().toString());
+        assertThat(p.getProviderResponse()).containsEntry("cryptoAddress", "T-addr").containsEntry("expiresAt",
+                p.getCryptoExpiresAt().toString());
     }
 
     @Test
@@ -386,7 +385,6 @@ class Cov09PaymentRechargeTest {
         when(gateway.supports(any())).thenReturn(false);
 
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.USDT, 5000L, "USD", null, "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No gateway for method");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("No gateway for method");
     }
 }

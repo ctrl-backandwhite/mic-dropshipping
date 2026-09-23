@@ -50,9 +50,11 @@ public class ProductBulkExportMapper {
         // vuelve a ser imposible. De paso arregla el respaldo: el destino resuelve por
         // `category_1688_mapping`, que está tecleada por las hojas REALES de 1688, así que mandarle el
         // `externalId` y el `nameZh` de una categoría nuestra casi nunca encontraba nada.
-        d.setCategory1688Id(p.getCategory1688Id() != null ? p.getCategory1688Id()
+        d.setCategory1688Id(p.getCategory1688Id() != null
+                ? p.getCategory1688Id()
                 : (p.getCategory() != null ? p.getCategory().getExternalId() : null));
-        d.setCategory1688Name(p.getCategory1688Name() != null ? p.getCategory1688Name()
+        d.setCategory1688Name(p.getCategory1688Name() != null
+                ? p.getCategory1688Name()
                 : (p.getCategory() != null ? p.getCategory().getNameZh() : null));
         if (p.getSupplier() != null) {
             d.setSupplierExternalId(p.getSupplier().getExternalId());
@@ -139,8 +141,9 @@ public class ProductBulkExportMapper {
         d.setRepurchaseRate(p.getRepurchaseRate());
         d.setReviewsSummary(p.getReviewsSummary());
 
-        d.setTieredPricing(safe(tiers).stream()
-                .map(t -> new BulkTier(t.getMinQty(), t.getMaxQty(), t.getUnitPrice(), t.getCurrency())).toList());
+        d.setTieredPricing(safe(tiers).stream().map(
+                t -> new BulkTier(t.getMinQty(), t.getMaxQty(), t.getUnitPrice(), t.getCurrency(), t.getSurchargeCny()))
+                .toList());
 
         d.setVariantAxes(safe(p.getVariantOptions()).stream()
                 .sorted(Comparator.comparingInt(VariantOptionEntity::getPosition)).map(this::axis).toList());
@@ -222,6 +225,11 @@ public class ProductBulkExportMapper {
         b.setLengthMm(v.getLengthMm());
         b.setWidthMm(v.getWidthMm());
         b.setHeightMm(v.getHeightMm());
+        // El envío nacional de esta variante. Sin esta línea el volcado que el backend produce
+        // —el mismo formato que importa, y lo que se vuelve a subir— pierde el importe en cada
+        // ida y vuelta, en silencio. El dato sólo se echaría de menos al llegar la factura del
+        // transportista.
+        b.setShippingCny(v.getShippingCny());
         return b;
     }
 
@@ -258,11 +266,11 @@ public class ProductBulkExportMapper {
      *                  para la galería (todo lo demás: MAIN y GALLERY).
      */
     private List<String> direccionesDeImagen(ProductEntity p, boolean deDetalle) {
-        return safe(p.getImages()).stream()
-                .filter(img -> "DETAIL".equalsIgnoreCase(img.getRole()) == deDetalle)
+        return safe(p.getImages()).stream().filter(img -> "DETAIL".equalsIgnoreCase(img.getRole()) == deDetalle)
                 .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
                 .map(img -> img.getSourceUrl() != null && !img.getSourceUrl().isBlank()
-                        ? img.getSourceUrl() : img.getCdnUrl())
+                        ? img.getSourceUrl()
+                        : img.getCdnUrl())
                 .filter(Objects::nonNull).toList();
     }
 }

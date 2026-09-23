@@ -32,8 +32,7 @@ class ChatProviderCondicionesTest {
         }
     }
 
-    private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withUserConfiguration(Escaneo.class);
+    private final ApplicationContextRunner runner = new ApplicationContextRunner().withUserConfiguration(Escaneo.class);
 
     @Test
     @DisplayName("apagado: queda el suplente, que declara no estar disponible")
@@ -58,9 +57,7 @@ class ChatProviderCondicionesTest {
     @Test
     @DisplayName("encendido: queda el real, y solo el real")
     void encendido() {
-        runner.withPropertyValues(
-                "nexadrop.chat.enabled=true",
-                "nexadrop.chat.api-key=clave-de-prueba").run(ctx -> {
+        runner.withPropertyValues("nexadrop.chat.enabled=true", "nexadrop.chat.api-key=clave-de-prueba").run(ctx -> {
             assertThat(ctx).hasSingleBean(ChatProvider.class);
             assertThat(ctx.getBean(ChatProvider.class).name()).isNotEqualTo("noop");
         });

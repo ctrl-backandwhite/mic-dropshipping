@@ -108,8 +108,7 @@ public class CartSuggestionService {
         }
         List<UUID> enCarrito = carrito.stream().map(Linea::productId).filter(java.util.Objects::nonNull).toList();
         List<ProductListFilters.DutyLine> lineas = dutyBadges.lineasDe(enCarrito).stream()
-                .map(l -> new ProductListFilters.DutyLine(l.grupoId(), l.originCountry()))
-                .toList();
+                .map(l -> new ProductListFilters.DutyLine(l.grupoId(), l.originCountry())).toList();
         if (lineas.isEmpty()) {
             // Ningún grupo aprobado en el carrito: cualquier producto abriría línea nueva, así que
             // no hay nada honesto que sugerir.
@@ -124,27 +123,25 @@ public class CartSuggestionService {
         if (candidatos.isEmpty()) {
             return new Sugerencias(List.of(), libres, otroBulto);
         }
-        Map<UUID, DutyBadge> badges = dutyBadges.badgesFor(enCarrito, candidatos.stream()
-                .map(ProductSummaryView::id).toList(), pais);
+        Map<UUID, DutyBadge> badges = dutyBadges.badgesFor(enCarrito,
+                candidatos.stream().map(ProductSummaryView::id).toList(), pais);
 
-        List<ProductSummaryView> sinArancel = candidatos.stream()
-                .filter(p -> sinArancelExtra(badges.get(p.id())))
-                .limit(MAX_SUGERENCIAS)
-                .toList();
+        List<ProductSummaryView> sinArancel = candidatos.stream().filter(p -> sinArancelExtra(badges.get(p.id())))
+                .limit(MAX_SUGERENCIAS).toList();
         if (!sinArancel.isEmpty()) {
             return new Sugerencias(conEnvio(sinArancel, carrito, pais, POR_ARANCEL), libres, otroBulto);
         }
         // Que todo sume arancel no significa que no haya nada que ahorrar: lo que cabe en el bulto
         // que ya se paga viaja casi gratis, y ese ahorro es igual de real. Antes, en cuanto la
         // aduana dejaba de dar cero, el asistente se callaba y perdía la mitad de su utilidad.
-        return new Sugerencias(conEnvio(candidatos.stream().limit(MAX_SUGERENCIAS).toList(), carrito, pais,
-                POR_ENVIO), libres, otroBulto);
+        return new Sugerencias(conEnvio(candidatos.stream().limit(MAX_SUGERENCIAS).toList(), carrito, pais, POR_ENVIO),
+                libres, otroBulto);
     }
 
     private List<ProductSummaryView> candidatos(List<ProductListFilters.DutyLine> lineas, List<UUID> enCarrito,
             String lang) {
-        ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, lineas);
+        ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, lineas);
         PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(0, CANDIDATOS, lang, filtros, null);
         Set<UUID> ya = new HashSet<>(enCarrito);
         return pagina.items().stream().filter(p -> !ya.contains(p.id())).toList();
@@ -178,10 +175,8 @@ public class CartSuggestionService {
             // Ya no cabe nada sin cruzar: mejor callarse que empujar a un cargo inesperado.
             return List.of();
         }
-        return candidatos.stream()
-                .filter(p -> p.displayPrice() != null && p.displayPrice().signum() > 0
-                        && p.displayPrice().compareTo(disponible) <= 0)
-                .toList();
+        return candidatos.stream().filter(p -> p.displayPrice() != null && p.displayPrice().signum() > 0
+                && p.displayPrice().compareTo(disponible) <= 0).toList();
     }
 
     /**
@@ -194,8 +189,8 @@ public class CartSuggestionService {
     private int valorDe(List<Linea> carrito) {
         try {
             return checkoutPreview.compute(PricingCountryHolder.get(), null, carrito.stream()
-                    .map(l -> new CheckoutPreviewService.Line(l.productId(), l.variantId(), l.quantity()))
-                    .toList(), null).subtotalUsdCents();
+                    .map(l -> new CheckoutPreviewService.Line(l.productId(), l.variantId(), l.quantity())).toList(),
+                    null).subtotalUsdCents();
         } catch (RuntimeException e) {
             log.warn("No se pudo valorar el carrito para el umbral: {}", e.getMessage());
             // Sin valor no se puede garantizar que no se cruce la raya: se prefiere no sugerir.
@@ -216,8 +211,8 @@ public class CartSuggestionService {
             return candidatos;
         }
         Map<UUID, Integer> pesos = new HashMap<>();
-        for (ProductEntity p : productRepository.findAllById(candidatos.stream()
-                .map(ProductSummaryView::id).toList())) {
+        for (ProductEntity p : productRepository
+                .findAllById(candidatos.stream().map(ProductSummaryView::id).toList())) {
             pesos.put(p.getId(), ParcelAggregator.unitWeightGrams(p, null));
         }
         List<ProductSummaryView> caben = new ArrayList<>();
@@ -255,10 +250,10 @@ public class CartSuggestionService {
         }
         List<ParcelSplitter.Unit> unidades = new ArrayList<>();
         int indice = 0;
-        for (ProductEntity p : productRepository.findAllById(
-                carrito.stream().map(Linea::productId).filter(java.util.Objects::nonNull).toList())) {
-            int cantidad = carrito.stream().filter(l -> p.getId().equals(l.productId()))
-                    .mapToInt(Linea::quantity).sum();
+        for (ProductEntity p : productRepository
+                .findAllById(carrito.stream().map(Linea::productId).filter(java.util.Objects::nonNull).toList())) {
+            int cantidad = carrito.stream().filter(l -> p.getId().equals(l.productId())).mapToInt(Linea::quantity)
+                    .sum();
             int peso = ParcelAggregator.unitWeightGrams(p, null);
             for (int i = 0; i < Math.max(1, cantidad); i++) {
                 unidades.add(new ParcelSplitter.Unit(indice, peso, 0, 0, 0, 0, false));
@@ -268,18 +263,16 @@ public class CartSuggestionService {
         if (unidades.isEmpty()) {
             return null;
         }
-        List<ParcelSplitter.Bin> bultos = ParcelSplitter.split(unidades,
-                new ParcelSplitter.Limits(tope, 0, 0));
+        List<ParcelSplitter.Bin> bultos = ParcelSplitter.split(unidades, new ParcelSplitter.Limits(tope, 0, 0));
         int masVacio = bultos.stream()
-                .mapToInt(b -> b.units().stream().mapToInt(ParcelSplitter.Unit::weightGrams).sum())
-                .min().orElse(0);
+                .mapToInt(b -> b.units().stream().mapToInt(ParcelSplitter.Unit::weightGrams).sum()).min().orElse(0);
         return Math.max(0, tope - masVacio);
     }
 
     /** Céntimos de dólar llevados a la moneda que ve quien compra. */
     private BigDecimal enDisplay(int usdCents) {
-        return currencyService.usdToDisplay(BigDecimal.valueOf(usdCents).movePointLeft(2))
-                .setScale(2, RoundingMode.HALF_UP);
+        return currencyService.usdToDisplay(BigDecimal.valueOf(usdCents).movePointLeft(2)).setScale(2,
+                RoundingMode.HALF_UP);
     }
 
     private boolean sinArancelExtra(DutyBadge badge) {
@@ -324,8 +317,7 @@ public class CartSuggestionService {
     private Integer envio(List<Linea> lineas, String pais) {
         try {
             ShippingQuote quote = shippingQuotes.quote(pais, lineas.stream()
-                    .map(l -> new ShippingQuoteService.Line(l.productId(), l.variantId(), l.quantity()))
-                    .toList());
+                    .map(l -> new ShippingQuoteService.Line(l.productId(), l.variantId(), l.quantity())).toList());
             return quote != null && quote.supported() ? quote.amountUsdCents() : null;
         } catch (RuntimeException e) {
             log.warn("No se pudo cotizar el envío para la sugerencia: {}", e.getMessage());
@@ -335,8 +327,8 @@ public class CartSuggestionService {
 
     /** El importe ya escrito en la moneda del comprador: el front no calcula ni formatea importes. */
     private String formateado(int usdCents) {
-        BigDecimal display = currencyService.usdToDisplay(BigDecimal.valueOf(usdCents).movePointLeft(2))
-                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal display = currencyService.usdToDisplay(BigDecimal.valueOf(usdCents).movePointLeft(2)).setScale(2,
+                RoundingMode.HALF_UP);
         return currencyService.formatDisplay(display, CurrencyHolder.get());
     }
 }

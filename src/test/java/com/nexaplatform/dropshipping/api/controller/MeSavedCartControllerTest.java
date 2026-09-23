@@ -44,8 +44,8 @@ class MeSavedCartControllerTest {
     }
 
     private SavedCartItemDto dto() {
-        return new SavedCartItemDto(productId, null, "SKU1", "slug", "Título", null, null,
-                new BigDecimal("10.00"), "EUR", 1, null, null, null, null);
+        return new SavedCartItemDto(productId, null, "SKU1", "slug", "Título", null, null, new BigDecimal("10.00"),
+                "EUR", 1, null, null, null, null);
     }
 
     @Test

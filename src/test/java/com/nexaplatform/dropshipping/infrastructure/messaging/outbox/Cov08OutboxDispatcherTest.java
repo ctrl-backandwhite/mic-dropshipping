@@ -60,8 +60,8 @@ class Cov08OutboxDispatcherTest {
 
     private static EventOutboxEntity evento(String topic, int intentosPrevios) {
         EventOutboxEntity e = EventOutboxEntity.builder().aggregateType("Order").aggregateId("NX-1").topic(topic)
-                .partitionKey("NX-1").payload(Map.of("k", "v")).attempts(intentosPrevios)
-                .nextAttemptAt(YA_VENCIDO).build();
+                .partitionKey("NX-1").payload(Map.of("k", "v")).attempts(intentosPrevios).nextAttemptAt(YA_VENCIDO)
+                .build();
         e.setId(UUID.randomUUID());
         return e;
     }

@@ -31,9 +31,8 @@ import java.util.UUID;
 @Service
 public class ExpoPushSender {
 
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
-            new ParameterizedTypeReference<>() {
-            };
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE = new ParameterizedTypeReference<>() {
+    };
 
     /** Expo acepta cien mensajes por llamada; más de eso hay que trocearlo. */
     private static final int TAMANO_DE_LOTE = 100;
@@ -87,9 +86,8 @@ public class ExpoPushSender {
 
         try {
             Map<String, Object> respuesta = webClientBuilder.build().post().uri(expoUrl)
-                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                    .bodyValue(mensajes).retrieve().bodyToMono(MAP_TYPE)
-                    .timeout(Duration.ofSeconds(10)).block();
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE).bodyValue(mensajes).retrieve()
+                    .bodyToMono(MAP_TYPE).timeout(Duration.ofSeconds(10)).block();
             retiraLosQueYaNoSirven(lote, respuesta);
         } catch (RuntimeException e) {
             // Un aviso que no sale no puede tumbar lo que lo provocó: el mensaje ya está en el buzón.

@@ -49,8 +49,8 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         // SÍ: tiene source y aún no apunta a nuestro storage, sin fallo previo.
         ProductVariantEntity needsNullCdn = variants.save(variant("v-null", "https://src/1.jpg", null, null));
         // SÍ: cdn de otro storage (NOT LIKE prefix).
-        ProductVariantEntity needsOtherCdn =
-                variants.save(variant("v-other", "https://src/2.jpg", "https://foreign.com/2.jpg", null));
+        ProductVariantEntity needsOtherCdn = variants
+                .save(variant("v-other", "https://src/2.jpg", "https://foreign.com/2.jpg", null));
         // NO: ya espejada en nuestro storage.
         variants.save(variant("v-mirrored", "https://src/3.jpg", "https://cdn.nexa.local/3.jpg", null));
         // NO: marcada como fallida.
@@ -60,11 +60,10 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         // NO: imagen de origen vacía.
         variants.save(variant("v-empty", "", null, null));
 
-        List<ProductVariantEntity> result =
-                variants.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50));
+        List<ProductVariantEntity> result = variants.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50));
 
-        assertThat(result).extracting(ProductVariantEntity::getId)
-                .containsExactlyInAnyOrder(needsNullCdn.getId(), needsOtherCdn.getId());
+        assertThat(result).extracting(ProductVariantEntity::getId).containsExactlyInAnyOrder(needsNullCdn.getId(),
+                needsOtherCdn.getId());
     }
 
     @Test
@@ -73,8 +72,7 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         variants.save(variant("b", "https://src/b.jpg", null, null));
         variants.save(variant("c", "https://src/c.jpg", null, null));
 
-        List<ProductVariantEntity> result =
-                variants.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 2));
+        List<ProductVariantEntity> result = variants.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 2));
 
         assertThat(result).hasSize(2);
     }
@@ -107,8 +105,7 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         assertThat(reloaded.getImageMirrorFailedAt()).isEqualTo(at);
         // Tras fallar, deja de aparecer entre las pendientes de espejar.
         assertThat(variants.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50)))
-                .extracting(ProductVariantEntity::getId)
-                .doesNotContain(id);
+                .extracting(ProductVariantEntity::getId).doesNotContain(id);
     }
 
     @Test
@@ -175,10 +172,10 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         ProductVariantEntity b = variants.save(variantWithStock("v-b", 8));
         em.flush();
 
-        Order order = Order.builder().orderNumber("ORD-IT-1").items(List.of(
-                OrderItem.builder().variantId(a.getId()).quantity(3).build(),
-                OrderItem.builder().variantId(b.getId()).quantity(2).build(),
-                OrderItem.builder().variantId(null).quantity(5).build()))
+        Order order = Order.builder().orderNumber("ORD-IT-1")
+                .items(List.of(OrderItem.builder().variantId(a.getId()).quantity(3).build(),
+                        OrderItem.builder().variantId(b.getId()).quantity(2).build(),
+                        OrderItem.builder().variantId(null).quantity(5).build()))
                 .build();
 
         // Pago confirmado → NO descuenta (dropshipping: el stock no se agota).
@@ -203,8 +200,8 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         em.flush();
 
         // Pedir 5 con stock 2: en dropshipping el pedido se sirve igual y el stock mostrado no cambia.
-        Order order = Order.builder().orderNumber("ORD-IT-2").items(List.of(
-                OrderItem.builder().variantId(v.getId()).quantity(5).build())).build();
+        Order order = Order.builder().orderNumber("ORD-IT-2")
+                .items(List.of(OrderItem.builder().variantId(v.getId()).quantity(5).build())).build();
 
         stockService.deductForOrder(order);
         em.flush();
@@ -213,36 +210,18 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
     }
 
     private ProductVariantEntity variantWithStock(String tag, int stock) {
-        return ProductVariantEntity.builder()
-                .product(product)
-                .title("variant-" + tag)
-                .stock(stock)
-                .active(true)
+        return ProductVariantEntity.builder().product(product).title("variant-" + tag).stock(stock).active(true)
                 .build();
     }
 
     private ProductVariantEntity variant(String tag, String imageSourceUrl, String imageCdnUrl, Instant failedAt) {
-        return ProductVariantEntity.builder()
-                .product(product)
-                .title("variant-" + tag)
-                .stock(0)
-                .active(true)
-                .imageSourceUrl(imageSourceUrl)
-                .imageCdnUrl(imageCdnUrl)
-                .imageMirrorFailedAt(failedAt)
-                .build();
+        return ProductVariantEntity.builder().product(product).title("variant-" + tag).stock(0).active(true)
+                .imageSourceUrl(imageSourceUrl).imageCdnUrl(imageCdnUrl).imageMirrorFailedAt(failedAt).build();
     }
 
     private ProductEntity newProduct(String tag) {
-        return ProductEntity.builder()
-                .slug("p-" + tag + "-" + UUID.randomUUID())
-                .externalId("ext-" + tag + "-" + UUID.randomUUID())
-                .source("test")
-                .titleZh("测试产品")
-                .moq(1)
-                .reviewCount(0)
-                .monthlySales(0)
-                .status(ProductStatus.ACTIVE)
-                .build();
+        return ProductEntity.builder().slug("p-" + tag + "-" + UUID.randomUUID())
+                .externalId("ext-" + tag + "-" + UUID.randomUUID()).source("test").titleZh("测试产品").moq(1).reviewCount(0)
+                .monthlySales(0).status(ProductStatus.ACTIVE).build();
     }
 }

@@ -103,8 +103,7 @@ public class DefaultSecurityConfig {
     @Bean
     @Order(3)
     public SecurityFilterChain defaultFilterChain(HttpSecurity http,
-            GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
-            GithubOAuth2UserService githubOAuth2UserService,
+            GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler, GithubOAuth2UserService githubOAuth2UserService,
             OAuthLoginFailureHandler oauthLoginFailureHandler) {
         // Instancia local y no un @Bean: Spring Boot registra automáticamente en la cadena de filtros
         // del contenedor cualquier bean de tipo Filter, con lo que este actuaría también sobre
@@ -130,7 +129,8 @@ public class DefaultSecurityConfig {
                         // (loggers, shutdown, env POST), hay que sacar /actuator/** de esta lista: en esta
                         // cadena se autentica por sesión y quedaría expuesto a CSRF.
                         .ignoringRequestMatchers("/oauth2/token", "/login/oauth2/code/**", "/actuator/**", // NOSONAR java:S4502 — rutas sin sesión: OAuth2, callbacks y webhooks con firma propia
-                                "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**", "/api/webhooks/**"))
+                                "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**",
+                                "/api/webhooks/**"))
                 .headers(h -> h
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
                         .frameOptions(fo -> fo.deny())
@@ -140,8 +140,8 @@ public class DefaultSecurityConfig {
                                 "/password-reset", "/password-reset/**", "/error", "/.well-known/**", "/oauth2/**",
                                 "/userinfo", "/actuator/health", "/actuator/info",
                                 // Public storefront catalog + signed inbound webhooks + payment callbacks.
-                                "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**", "/api/webhooks/**", "/css/**",
-                                "/js/**", "/img/**", "/assets/**", "/favicon.ico")
+                                "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**",
+                                "/api/webhooks/**", "/css/**", "/js/**", "/img/**", "/assets/**", "/favicon.ico")
                         .permitAll()
                         // Swagger UI + OpenAPI JSON quedan tras login y solo accesibles a staff.
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml", "/v3/api-docs.yaml/**",
@@ -150,8 +150,7 @@ public class DefaultSecurityConfig {
                         // El resto de actuator (metrics/prometheus) NO debe quedar visible a cualquier usuario
                         // autenticado: solo ADMIN. health/info siguen públicos (arriba).
                         .requestMatchers("/actuator/**").hasAuthority("ROLE_ADMIN").anyRequest().authenticated())
-                .formLogin(form -> form.loginPage(LOGIN).permitAll())
-                .oauth2Login(oauth -> oauth.loginPage(LOGIN)
+                .formLogin(form -> form.loginPage(LOGIN).permitAll()).oauth2Login(oauth -> oauth.loginPage(LOGIN)
                         // GitHub no habla OIDC, así que su email verificado lo resuelve nuestro propio
                         // servicio de usuario. Google sí lo habla y se queda con el que trae Spring.
                         .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))
@@ -159,8 +158,7 @@ public class DefaultSecurityConfig {
                         // El fallo vuelve al cliente que arrancó (si no, la aplicación móvil se quedaría
                         // esperando en el navegador del sistema sin recuperar el foco) y, sobre todo, queda
                         // anotado en el registro con el motivo que da el proveedor.
-                        .failureHandler(oauthLoginFailureHandler)
-                        .permitAll())
+                        .failureHandler(oauthLoginFailureHandler).permitAll())
                 // Anota el cliente de origen ANTES de que Spring redirija al proveedor; después ya no
                 // habría ocasión, porque la vuelta llega en otra petición.
                 .addFilterBefore(oauthClientTargetFilter, OAuth2AuthorizationRequestRedirectFilter.class);

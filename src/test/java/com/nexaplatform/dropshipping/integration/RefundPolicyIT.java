@@ -88,16 +88,14 @@ class RefundPolicyIT extends OrderLifecycleSupport {
         long saldoTrasCobro = saldoDe(compradorId);
 
         // El pedido tiene que llevar arancel de verdad: sin él esta prueba no probaría nada.
-        assertThat(arancelDe(pedidoId)).as("el pedido lleva cobrado el derecho de la Unión")
-                .isEqualTo(ARANCEL_CENTS);
+        assertThat(arancelDe(pedidoId)).as("el pedido lleva cobrado el derecho de la Unión").isEqualTo(ARANCEL_CENTS);
         assertThat(totalDe(pedidoId)).isEqualTo(totalConArancelCents());
 
         assertThat(cancelarComoCliente(compradorId, pedidoId, true)).isEqualTo(200);
 
         assertThat(estadoDe(pedidoId)).isEqualTo("CANCELLED");
         assertThat(saldoDe(compradorId) - saldoTrasCobro)
-                .as("el paquete no salió: se devuelve el total, arancel incluido")
-                .isEqualTo(totalConArancelCents());
+                .as("el paquete no salió: se devuelve el total, arancel incluido").isEqualTo(totalConArancelCents());
         assertThat(saldoDe(compradorId)).as("el monedero vuelve exactamente al saldo de partida")
                 .isEqualTo(SALDO_INICIAL_CENTS);
         assertThat(sumaMovimientos(compradorId)).as("cobro y abono se anulan en el libro").isZero();
@@ -160,8 +158,7 @@ class RefundPolicyIT extends OrderLifecycleSupport {
         Order pagado = pedidoPersistido(pedidoId);
         assertThat(RefundPolicy.refundableCents(pagado, RefundPolicy.Reason.WITHDRAWAL)).isEqualTo(total);
         assertThat(RefundPolicy.refundableCents(pagado, RefundPolicy.Reason.CUSTOMER_FAULT))
-                .as("aún no ha entrado en el almacén del transportista: no hay arancel que retener")
-                .isEqualTo(total);
+                .as("aún no ha entrado en el almacén del transportista: no hay arancel que retener").isEqualTo(total);
 
         avanzarHasta(pedidoId, "FORWARDED", jwt.userToken(ADMIN));
 
@@ -250,11 +247,12 @@ class RefundPolicyIT extends OrderLifecycleSupport {
      */
     private UUID escenarioConArancel() {
         UUID productoId = sembrarEscenarioDeCompra();
-        jdbcTemplate.update("INSERT INTO country_customs_rule (id, country_code, tax_mode,"
-                + " de_minimis_amount, de_minimis_currency, over_threshold_policy, handling_fee_cents,"
-                + " handling_percent_bps, per_article_fee_amount, per_article_fee_currency, active,"
-                + " created_at, updated_at)"
-                + " VALUES (?, ?, 'DDP', 150, 'USD', 'SURCHARGE', 0, 0, ?, 'USD', true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_customs_rule (id, country_code, tax_mode,"
+                        + " de_minimis_amount, de_minimis_currency, over_threshold_policy, handling_fee_cents,"
+                        + " handling_percent_bps, per_article_fee_amount, per_article_fee_currency, active,"
+                        + " created_at, updated_at)"
+                        + " VALUES (?, ?, 'DDP', 150, 'USD', 'SURCHARGE', 0, 0, ?, 'USD', true, now(), now())",
                 UUID.randomUUID(), PAIS, BigDecimal.valueOf(ARANCEL_CENTS, 2));
         return productoId;
     }
@@ -274,15 +272,15 @@ class RefundPolicyIT extends OrderLifecycleSupport {
 
     /** Derecho de aduana cobrado en el pedido (céntimos USD). */
     private int arancelDe(UUID pedidoId) {
-        Integer valor = jdbcTemplate.queryForObject(
-                "SELECT customs_duty_cents FROM customer_order WHERE id = ?", Integer.class, pedidoId);
+        Integer valor = jdbcTemplate.queryForObject("SELECT customs_duty_cents FROM customer_order WHERE id = ?",
+                Integer.class, pedidoId);
         return valor == null ? 0 : valor;
     }
 
     /** Envío cobrado en el pedido, que ya incluye el arancel (céntimos USD). */
     private int envioDe(UUID pedidoId) {
-        Integer valor = jdbcTemplate.queryForObject(
-                "SELECT shipping_cents FROM customer_order WHERE id = ?", Integer.class, pedidoId);
+        Integer valor = jdbcTemplate.queryForObject("SELECT shipping_cents FROM customer_order WHERE id = ?",
+                Integer.class, pedidoId);
         return valor == null ? 0 : valor;
     }
 }

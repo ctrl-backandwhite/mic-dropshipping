@@ -15,8 +15,8 @@ import lombok.Setter;
 
 /** Traducción por idioma de un valor de variación (p.ej. el color en es/en/pt/zh). */
 @Entity
-@Table(name = "variant_value_translation",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"variant_value_id", "language"}))
+@Table(name = "variant_value_translation", uniqueConstraints = @UniqueConstraint(columnNames = {"variant_value_id",
+        "language"}))
 @Getter
 @Setter
 @NoArgsConstructor

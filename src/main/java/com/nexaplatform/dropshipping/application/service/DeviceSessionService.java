@@ -154,16 +154,13 @@ public class DeviceSessionService {
      * Navegadores, EN ORDEN DE COMPROBACIÓN. El orden no es cosmético: Edge y Opera se anuncian también
      * como Chrome, y Chrome se anuncia además como Safari, así que el más específico va primero.
      */
-    private static final List<Map.Entry<String[], String>> BROWSERS = List.of(
-            Map.entry(new String[] {"Edg"}, "Edge"),
+    private static final List<Map.Entry<String[], String>> BROWSERS = List.of(Map.entry(new String[]{"Edg"}, "Edge"),
             // La aplicación se anuncia con su propio nombre y va la PRIMERA: si algún día su texto
             // llevara el nombre de un motor web, se etiquetaría como navegador y volveríamos a no
             // distinguir el teléfono de un ordenador cualquiera.
-            Map.entry(new String[] {"NX036"}, "App NX036"),
-            Map.entry(new String[] {"OPR", "Opera"}, "Opera"),
-            Map.entry(new String[] {"Chrome"}, "Chrome"),
-            Map.entry(new String[] {"Firefox"}, "Firefox"),
-            Map.entry(new String[] {"Safari"}, "Safari"));
+            Map.entry(new String[]{"NX036"}, "App NX036"), Map.entry(new String[]{"OPR", "Opera"}, "Opera"),
+            Map.entry(new String[]{"Chrome"}, "Chrome"), Map.entry(new String[]{"Firefox"}, "Firefox"),
+            Map.entry(new String[]{"Safari"}, "Safari"));
 
     /**
      * Sistemas operativos, EN ORDEN DE COMPROBACIÓN. El identificador de iPhone y iPad contiene
@@ -171,11 +168,9 @@ public class DeviceSessionService {
      * etiquetarían como ordenadores.
      */
     private static final List<Map.Entry<String[], String>> OPERATING_SYSTEMS = List.of(
-            Map.entry(new String[] {"Windows"}, "Windows"),
-            Map.entry(new String[] {"Android"}, "Android"),
-            Map.entry(new String[] {"iPhone", "iPad", "iPod"}, "iOS"),
-            Map.entry(new String[] {"Macintosh", "Mac OS"}, "macOS"),
-            Map.entry(new String[] {"Linux"}, "Linux"));
+            Map.entry(new String[]{"Windows"}, "Windows"), Map.entry(new String[]{"Android"}, "Android"),
+            Map.entry(new String[]{"iPhone", "iPad", "iPod"}, "iOS"),
+            Map.entry(new String[]{"Macintosh", "Mac OS"}, "macOS"), Map.entry(new String[]{"Linux"}, "Linux"));
 
     /**
      * Nombre legible del dispositivo a partir del identificador que manda el navegador, para que el

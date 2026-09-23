@@ -65,7 +65,7 @@ class BrandTaglineTest {
     @Test
     @DisplayName("en ningún idioma se le llama dropshipping al comprador")
     void nuncaDiceDropshipping() {
-        for (String lang : new String[] {"es", "en", "pt", "zh", "fr", "de", "it", "nl"}) {
+        for (String lang : new String[]{"es", "en", "pt", "zh", "fr", "de", "it", "nl"}) {
             assertThat(BrandTagline.of(lang).toLowerCase()).doesNotContain("dropshipping");
         }
     }

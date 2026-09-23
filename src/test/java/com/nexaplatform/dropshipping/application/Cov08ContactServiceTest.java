@@ -80,8 +80,7 @@ class Cov08ContactServiceTest {
 
     @Test
     void unEmailAusenteSeRechaza() {
-        assertThatThrownBy(() -> service.submit("Ana", null, "Hola", "Mensaje"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.submit("Ana", null, "Hola", "Mensaje")).isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -126,14 +125,13 @@ class Cov08ContactServiceTest {
 
         service.submit("Ana", "ana@example.com", "Duda", "Tengo una duda");
 
-        verify(emailQueue).enqueue(eq("admin@nx.local"), eq("ana@example.com"), anyString(),
-                eq("emails/notification"), anyMap());
+        verify(emailQueue).enqueue(eq("admin@nx.local"), eq("ana@example.com"), anyString(), eq("emails/notification"),
+                anyMap());
     }
 
     @Test
     void unAdminSinEmailNoBloqueaElRestoDelReparto() {
-        when(userRepository.findAll())
-                .thenReturn(List.of(user(UserRole.ADMIN, null), user(UserRole.ADMIN, "   ")));
+        when(userRepository.findAll()).thenReturn(List.of(user(UserRole.ADMIN, null), user(UserRole.ADMIN, "   ")));
 
         service.submit("Ana", "ana@example.com", "Duda", "Tengo una duda");
 
@@ -174,8 +172,8 @@ class Cov08ContactServiceTest {
 
         ArgumentCaptor<Map<String, Object>> vars = varsCaptor();
         verify(emailQueue).enqueue(anyString(), anyString(), anyString(), anyString(), vars.capture());
-        assertThat((String) vars.getValue().get("bodyHtml")).doesNotContain("<script>")
-                .contains("&lt;script&gt;").contains("<br/>");
+        assertThat((String) vars.getValue().get("bodyHtml")).doesNotContain("<script>").contains("&lt;script&gt;")
+                .contains("<br/>");
         @SuppressWarnings("unchecked")
         List<List<String>> detalles = (List<List<String>>) vars.getValue().get("details");
         assertThat(detalles.get(0).get(1)).isEqualTo("&lt;b&gt;Ana&lt;/b&gt;");
@@ -206,8 +204,8 @@ class Cov08ContactServiceTest {
         ArgumentCaptor<Map<String, Object>> vars = varsCaptor();
         verify(emailQueue).enqueue(eq("ana@example.com"), eq("Sobre tu pedido"), eq("emails/notification"),
                 vars.capture());
-        assertThat(vars.getValue()).containsEntry("title", "Sobre tu pedido")
-                .containsEntry("bodyHtml", "Ya esta resuelto");
+        assertThat(vars.getValue()).containsEntry("title", "Sobre tu pedido").containsEntry("bodyHtml",
+                "Ya esta resuelto");
     }
 
     @Test

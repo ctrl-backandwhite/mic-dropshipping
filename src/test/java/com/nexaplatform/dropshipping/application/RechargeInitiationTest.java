@@ -100,9 +100,12 @@ class RechargeInitiationTest {
     @BeforeEach
     void buildSubject() {
         subject = new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService,
-                customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
+                userRepository, orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(mock(UserEntity.class)));
         Wallet w = new Wallet();
@@ -118,8 +121,8 @@ class RechargeInitiationTest {
         when(paymentJpaRepositoryAdapter.findById(any())).thenReturn(Optional.of(mock(PaymentEntity.class)));
         when(gateway.supports(any())).thenReturn(true);
         when(gateway.providerName()).thenReturn("stripe");
-        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult(
-                "cs_test_1", null, "https://pay/1", null, null, null, Map.of()));
+        when(gateway.initiate(any())).thenReturn(
+                new PaymentGateway.InitiateResult("cs_test_1", null, "https://pay/1", null, null, null, Map.of()));
         // 1 EUR = 1,10 USD para que las cuentas del test se lean solas.
         when(currencyRateService.toUsd(any(BigDecimal.class), anyString())).thenAnswer(i -> {
             BigDecimal amount = i.getArgument(0);
@@ -133,8 +136,8 @@ class RechargeInitiationTest {
     void elImporteEnDolaresLoCalculaElBackendDesdeLoQueTecleoElUsuario() {
         // 25,00 € × 1,10 = 27,50 $. Aceptar el importe en dólares que manda el cliente permitiría
         // recargar mil pagando uno.
-        Payment p = subject.initiateRecharge(userId, PaymentMethod.CARD, 999_999L, "EUR",
-                new BigDecimal("25.00"), "k1", null);
+        Payment p = subject.initiateRecharge(userId, PaymentMethod.CARD, 999_999L, "EUR", new BigDecimal("25.00"), "k1",
+                null);
 
         assertThat(p.getAmountUsdCents()).isEqualTo(2750L);
     }
@@ -149,8 +152,7 @@ class RechargeInitiationTest {
     @Test
     void sinNingunImporteLaRecargaSeRechaza() {
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, null, "EUR", null, "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("amount is required");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("amount is required");
 
         verify(gateway, never()).initiate(any());
     }
@@ -161,10 +163,12 @@ class RechargeInitiationTest {
         // lanzar y un formato mal escrito daría el test por bueno sin ejercitar la validación.
         BigDecimal negativo = new BigDecimal("-5");
 
-        assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 0L, "EUR",
-                BigDecimal.ZERO, "k1", null)).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, -100L, "EUR",
-                negativo, "k1", null)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(
+                () -> subject.initiateRecharge(userId, PaymentMethod.CARD, 0L, "EUR", BigDecimal.ZERO, "k1", null))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(
+                () -> subject.initiateRecharge(userId, PaymentMethod.CARD, -100L, "EUR", negativo, "k1", null))
+                .isInstanceOf(BusinessException.class);
     }
 
     // ---------------------------------------------------------------- límites
@@ -173,33 +177,32 @@ class RechargeInitiationTest {
     void noSeRecargaPorDebajoDelMinimoDeLaPasarela() {
         // Por debajo de 1,00 $ la comisión se come el importe; el intento sólo genera ruido.
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 99L, null, null, "k1", null))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Minimum recharge");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Minimum recharge");
     }
 
     @Test
     void noSeRecargaPorEncimaDelTope() {
         // Un tope alto pero finito: sin él, un error de tecleo o una petición manipulada abriría un cobro
         // desmesurado en la pasarela.
-        assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 100_000_001L, null, null,
-                "k1", null)).isInstanceOf(BusinessException.class).hasMessageContaining("Maximum recharge");
+        assertThatThrownBy(
+                () -> subject.initiateRecharge(userId, PaymentMethod.CARD, 100_000_001L, null, null, "k1", null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Maximum recharge");
     }
 
     @Test
     void justoEnElMinimoSiSeAdmite() {
-        assertThat(subject.initiateRecharge(userId, PaymentMethod.CARD, 100L, null, null, "k1", null)
-                .getAmountUsdCents()).isEqualTo(100L);
+        assertThat(
+                subject.initiateRecharge(userId, PaymentMethod.CARD, 100L, null, null, "k1", null).getAmountUsdCents())
+                .isEqualTo(100L);
     }
 
     // ---------------------------------------------------------------- divisa de liquidación
 
     @ParameterizedTest
-    @CsvSource({
-            "CARD,   EUR, EUR",   // Stripe cobra en euros si el usuario navega en euros
-            "CARD,   USD, USD",
-            "CARD,   GBP, USD",   // cualquier otra divisa se liquida en dólares
-            "PAYPAL, EUR, USD",   // PayPal liquida siempre en dólares
-            "USDT,   EUR, USDT"   // cripto liquida en USDT sea cual sea la divisa mostrada
+    @CsvSource({"CARD,   EUR, EUR", // Stripe cobra en euros si el usuario navega en euros
+            "CARD,   USD, USD", "CARD,   GBP, USD", // cualquier otra divisa se liquida en dólares
+            "PAYPAL, EUR, USD", // PayPal liquida siempre en dólares
+            "USDT,   EUR, USDT" // cripto liquida en USDT sea cual sea la divisa mostrada
     })
     void laDivisaDeCobroDependeDelMetodoYDeLaQueUseElComprador(String method, String display, String expected) {
         Payment p = subject.initiateRecharge(userId, PaymentMethod.valueOf(method), null, display,
@@ -211,8 +214,8 @@ class RechargeInitiationTest {
     @Test
     void elSaldoSeAcreditaSiempreEnDolaresAunqueSeCobreEnEuros() {
         // El monedero es canónico en dólares; mezclar divisas en el saldo haría imposible cuadrarlo.
-        Payment p = subject.initiateRecharge(userId, PaymentMethod.CARD, null, "EUR",
-                new BigDecimal("25.00"), "k1", null);
+        Payment p = subject.initiateRecharge(userId, PaymentMethod.CARD, null, "EUR", new BigDecimal("25.00"), "k1",
+                null);
 
         assertThat(p.getSettlementCurrency()).isEqualTo("EUR");
         assertThat(p.getAmountUsdCents()).isEqualTo(2750L);
@@ -230,8 +233,7 @@ class RechargeInitiationTest {
         ya.setStatus(PaymentStatus.REQUIRES_ACTION);
         when(paymentRepository.findByIdempotencyKey("k1")).thenReturn(Optional.of(ya));
 
-        assertThat(subject.initiateRecharge(userId, PaymentMethod.CARD, 5000L, null, null, "k1", null))
-                .isSameAs(ya);
+        assertThat(subject.initiateRecharge(userId, PaymentMethod.CARD, 5000L, null, null, "k1", null)).isSameAs(ya);
 
         verify(gateway, never()).initiate(any());
         verify(paymentRepository, never()).save(any());
@@ -271,8 +273,8 @@ class RechargeInitiationTest {
     @Test
     void unaRecargaEnCriptoLlevaDireccionCadenaYCaducidad() {
         // Sin caducidad, un pago que llega días después a la misma dirección se acreditaría a destiempo.
-        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult(
-                "charge_1", null, null, "TX1abc...", "TRC20", "https://qr/1", Map.of()));
+        when(gateway.initiate(any())).thenReturn(new PaymentGateway.InitiateResult("charge_1", null, null, "TX1abc...",
+                "TRC20", "https://qr/1", Map.of()));
 
         Payment p = subject.initiateRecharge(userId, PaymentMethod.USDT, 5000L, null, null, "k1", "TRC20");
 

@@ -16,8 +16,7 @@ public interface SavedCartItemJpaRepository extends JpaRepository<SavedCartItemE
      * Busca la línea guardada de una variante concreta. Spring Data traduce un {@code variantId} nulo a
      * {@code variant_id IS NULL}, así que sirve tanto para producto con variante como sin ella.
      */
-    Optional<SavedCartItemEntity> findByUserIdAndProductIdAndVariantId(UUID userId, UUID productId,
-            UUID variantId);
+    Optional<SavedCartItemEntity> findByUserIdAndProductIdAndVariantId(UUID userId, UUID productId, UUID variantId);
 
     @Modifying
     void deleteByUserIdAndProductIdAndVariantId(UUID userId, UUID productId, UUID variantId);

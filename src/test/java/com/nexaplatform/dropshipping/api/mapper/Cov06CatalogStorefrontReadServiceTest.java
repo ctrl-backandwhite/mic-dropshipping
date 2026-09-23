@@ -181,10 +181,9 @@ class Cov06CatalogStorefrontReadServiceTest {
         hijoA2.setParent(raizA);
         CategoryEntity hijoA1 = categoria("a1", "A1", 1);
         hijoA1.setParent(raizA);
-        when(categoryRepository.findAllWithTranslations())
-                .thenReturn(List.of(raizB, hijoA2, raizA, hijoA1));
+        when(categoryRepository.findAllWithTranslations()).thenReturn(List.of(raizB, hijoA2, raizA, hijoA1));
         when(categoryRepository.productCountByCategory())
-                .thenReturn(List.<Object[]>of(new Object[] {raizA.getId(), 9L}));
+                .thenReturn(List.<Object[]>of(new Object[]{raizA.getId(), 9L}));
 
         List<CategoryView> arbol = service.categoriesTree("es");
 
@@ -415,7 +414,7 @@ class Cov06CatalogStorefrontReadServiceTest {
     void elTamanoDePaginaDelListadoSeAcotaACien() {
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 5000, "es", ProductListFilters.none(),
                 null);
@@ -435,7 +434,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         ProductEntity sinPrecio = producto("sin-precio");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(barato, caro, sinPrecio)));
+                .thenReturn(new PageImpl<>(List.of(barato, caro, sinPrecio)));
         when(productMapper.toSummary(barato, "es")).thenReturn(resumen("barato", new BigDecimal("10.00")));
         when(productMapper.toSummary(caro, "es")).thenReturn(resumen("caro", new BigDecimal("90.00")));
         when(productMapper.toSummary(sinPrecio, "es")).thenReturn(resumen("sin-precio", null));
@@ -454,7 +453,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         ProductEntity justo = producto("justo");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(justo)));
+                .thenReturn(new PageImpl<>(List.of(justo)));
         when(productMapper.toSummary(justo, "es")).thenReturn(resumen("justo", new BigDecimal("90.00")));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es",
@@ -471,11 +470,11 @@ class Cov06CatalogStorefrontReadServiceTest {
         ProductEntity sinCert = producto("sin-cert");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(conCe, sinCert)));
+                .thenReturn(new PageImpl<>(List.of(conCe, sinCert)));
         when(productMapper.toSummary(conCe, "es")).thenReturn(resumen("con-ce", new BigDecimal("10")));
 
-        ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null,
-                null, null, "ce", null, null, null);
+        ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null, null,
+                null, "ce", null, null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("con-ce");
@@ -496,19 +495,19 @@ class Cov06CatalogStorefrontReadServiceTest {
         pendiente.setVerified(null);
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(pendiente)));
+                .thenReturn(new PageImpl<>(List.of(pendiente)));
         when(productMapper.toSummary(pendiente, "es")).thenReturn(resumen("pendiente", new BigDecimal("10")));
 
-        ProductListFilters soloPendientes = new ProductListFilters(null, null, null, null, null, null, null, null,
-                null, null, null, null, Boolean.FALSE, null, null);
+        ProductListFilters soloPendientes = new ProductListFilters(null, null, null, null, null, null, null, null, null,
+                null, null, null, Boolean.FALSE, null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", soloPendientes, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("pendiente");
         // El 13.º argumento es `verified`: tiene que llegar FALSE, no null.
         ArgumentCaptor<Boolean> captor = ArgumentCaptor.forClass(Boolean.class);
-        verify(productRepository).searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), captor.capture(), anyString(), anyBoolean(),
-                anyBoolean(), any(Pageable.class));
+        verify(productRepository).searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), captor.capture(), anyString(), anyBoolean(), anyBoolean(),
+                any(Pageable.class));
         assertThat(captor.getValue()).isFalse();
     }
 
@@ -629,8 +628,8 @@ class Cov06CatalogStorefrontReadServiceTest {
     }
 
     private static ProductSummaryView resumen(String slug, BigDecimal displayPrice) {
-        return new ProductSummaryView(UUID.randomUUID(), slug, slug, null, null, "CNY", null, 0, 0, null, "ACTIVE", null,
-                displayPrice, "EUR", "€", null, null, null, false);
+        return new ProductSummaryView(UUID.randomUUID(), slug, slug, null, null, "CNY", null, 0, 0, null, "ACTIVE",
+                null, displayPrice, "EUR", "€", null, null, null, false);
     }
 
     /**
@@ -680,9 +679,9 @@ class Cov06CatalogStorefrontReadServiceTest {
         // Precio a null = se vuelve a calcular en la moneda de hoy, en vez de pintar los euros de ayer.
         org.mockito.Mockito.verify(productMapper).toSummary(org.mockito.ArgumentMatchers.eq(p),
                 org.mockito.ArgumentMatchers.eq("es"), org.mockito.ArgumentMatchers.isNull());
-        org.mockito.Mockito.verify(pricingService, org.mockito.Mockito.never())
-                .precioYaVisto(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(pricingService, org.mockito.Mockito.never()).precioYaVisto(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -729,8 +728,7 @@ class Cov06CatalogStorefrontReadServiceTest {
             assertThat(anotacion.key())
                     .as("%s escribe su clave en SpEL; debe delegar en el generador canónico", metodo.getName())
                     .isEmpty();
-            assertThat(anotacion.keyGenerator())
-                    .as("%s no usa el generador canónico de clave", metodo.getName())
+            assertThat(anotacion.keyGenerator()).as("%s no usa el generador canónico de clave", metodo.getName())
                     .isEqualTo("currencyAwareKeyGenerator");
         }
     }

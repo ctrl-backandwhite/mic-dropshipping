@@ -126,7 +126,6 @@ class YunExpressWebhookHandshakeTest {
     /** {@code hex(SHA-256(timestamp + encryptKey + cuerpo))}, la firma que ellos envían. */
     private static String firma(String timestamp, String body) throws Exception {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
-        return HexFormat.of().formatHex(
-                md.digest((timestamp + KEY + body).getBytes(StandardCharsets.UTF_8)));
+        return HexFormat.of().formatHex(md.digest((timestamp + KEY + body).getBytes(StandardCharsets.UTF_8)));
     }
 }

@@ -27,6 +27,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderInde
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -77,34 +78,62 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class PedidoGuardaElTransportistaTest {
 
-    @Mock com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
-    @Mock com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
-    @Mock ProductRepository productRepository;
-    @Mock ProductVariantRepository variantRepository;
-    @Mock UserRepository userRepository;
-    @Mock ShopConnectionRepository shopConnectionRepository;
-    @Mock UserAddressRepository userAddressRepository;
-    @Mock WebhookDispatcherService webhooks;
-    @Mock WalletUseCase walletUseCase;
-    @Mock NotificationsPublisher notificationsPublisher;
-    @Mock PricingService pricingService;
-    @Mock AffiliateProgramService affiliateProgramService;
-    @Mock StockService stockService;
-    @Mock PaymentUseCase paymentUseCase;
-    @Mock OrderEmailService orderEmailService;
-    @Mock FulfillmentProvider fulfillment;
-    @Mock FulfillmentRouter router;
-    @Mock CheckoutTotalsService checkoutTotalsService;
-    @Mock ProductSubsidyService productSubsidyService;
-    @Mock OperatorCommissionService operatorCommissionService;
-    @Mock OrderIndexer orderIndexer;
-    @Mock OrderSearchService orderSearchService;
-    @Mock SupplierPurchaseService supplierPurchaseService;
+    @Mock
+    com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
+    @Mock
+    ProductRepository productRepository;
+    @Mock
+    ProductVariantRepository variantRepository;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    ShopConnectionRepository shopConnectionRepository;
+    @Mock
+    UserAddressRepository userAddressRepository;
+    @Mock
+    WebhookDispatcherService webhooks;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
+    @Mock
+    PricingService pricingService;
+    @Mock
+    AffiliateProgramService affiliateProgramService;
+    @Mock
+    StockService stockService;
+    @Mock
+    PaymentUseCase paymentUseCase;
+    @Mock
+    OrderEmailService orderEmailService;
+    @Mock
+    FulfillmentProvider fulfillment;
+    @Mock
+    FulfillmentRouter router;
+    @Mock
+    CheckoutTotalsService checkoutTotalsService;
+    @Mock
+    ProductSubsidyService productSubsidyService;
+    @Mock
+    OperatorCommissionService operatorCommissionService;
+    @Mock
+    OrderIndexer orderIndexer;
+    @Mock
+    OrderSearchService orderSearchService;
+    @Mock
+    SupplierPurchaseService supplierPurchaseService;
 
     @org.mockito.Mock
     com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
-    @Mock UnserviceableZoneService unserviceableZoneService;
-    @Spy CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
+    @Mock
+    UnserviceableZoneService unserviceableZoneService;
+    @Spy
+    CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
+    /** Sin escalera de cantidades: estas pruebas miden otra cosa y un tramo la falsearía. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
 
     @InjectMocks
     private OrderUseCaseImpl subject;
@@ -113,10 +142,10 @@ class PedidoGuardaElTransportistaTest {
     private static final UUID PRODUCTO = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     /** Las dos opciones que ve el cliente: la de SEGUNDO es más barata que la de YunExpress. */
-    private static final ShippingOption DE_SEGUNDO =
-            new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15, "SEGUNDO");
-    private static final ShippingOption DE_YUNEXPRESS =
-            new ShippingOption("FZZXR", "Apparel line", 785, 5, 8, "YUNEXPRESS");
+    private static final ShippingOption DE_SEGUNDO = new ShippingOption("1868922929754472449", "YunExpress Ordinary",
+            767, 8, 15, "SEGUNDO");
+    private static final ShippingOption DE_YUNEXPRESS = new ShippingOption("FZZXR", "Apparel line", 785, 5, 8,
+            "YUNEXPRESS");
 
     private Order guardado;
 
@@ -134,13 +163,13 @@ class PedidoGuardaElTransportistaTest {
         p.setImages(new ArrayList<>());
         p.setStatus(ProductStatus.ACTIVE);
         when(productRepository.findById(PRODUCTO)).thenReturn(Optional.of(p));
-        when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
-                new BigDecimal("1.34"), new BigDecimal("10.00"), new BigDecimal("10.00"),
-                "USD", "$", null, null, null, null, null, null, null, null, null));
+        when(pricingService.priceFor(any(), any(), anyInt(), any()))
+                .thenReturn(new PricingService.PricedAmount(new BigDecimal("1.34"), new BigDecimal("10.00"),
+                        new BigDecimal("10.00"), "USD", "$", null, null, null, null, null, null, null, null, null));
 
         when(fulfillment.isSupported(anyString())).thenReturn(true);
-        when(router.cotizar(anyString(), any(), anyList())).thenReturn(new ShippingQuote(true, "ES",
-                767, "Transportista", "Standard", 8, 15, "EU", List.of(DE_SEGUNDO, DE_YUNEXPRESS)));
+        when(router.cotizar(anyString(), any(), anyList())).thenReturn(new ShippingQuote(true, "ES", 767,
+                "Transportista", "Standard", 8, 15, "EU", List.of(DE_SEGUNDO, DE_YUNEXPRESS)));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
 
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);
@@ -170,8 +199,8 @@ class PedidoGuardaElTransportistaTest {
         MeCheckoutDtoIn req = new MeCheckoutDtoIn();
         req.setPaymentMethod("WALLET");
         req.setShippingOptionCode(codigoDeEnvio);
-        req.setShippingAddressInline(new AddressInput("Nombre Apellido", "+34600000000",
-                "comprador@example.com", "Calle 1", null, "Madrid", "Madrid", "28001", "ES"));
+        req.setShippingAddressInline(new AddressInput("Nombre Apellido", "+34600000000", "comprador@example.com",
+                "Calle 1", null, "Madrid", "Madrid", "28001", "ES"));
         MeCheckoutDtoIn.Item item = new MeCheckoutDtoIn.Item();
         item.setProductId(PRODUCTO);
         item.setQuantity(1);
@@ -184,8 +213,7 @@ class PedidoGuardaElTransportistaTest {
     void guardaElTransportistaDeLaOpcionElegida() {
         comprarEligiendo(DE_SEGUNDO.code());
 
-        assertThat(guardado.getShippingCarrier())
-                .as("sin esto, al despachar no se sabe a quién pedirle la guía")
+        assertThat(guardado.getShippingCarrier()).as("sin esto, al despachar no se sabe a quién pedirle la guía")
                 .isEqualTo("SEGUNDO");
         assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_SEGUNDO.code());
     }

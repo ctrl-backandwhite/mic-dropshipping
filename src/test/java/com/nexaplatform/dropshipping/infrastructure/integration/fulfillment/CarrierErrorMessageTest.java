@@ -14,8 +14,8 @@ class CarrierErrorMessageTest {
 
     @Test
     void traduceLosCodigosConocidosAlEspanol() {
-        assertThat(CarrierErrorMessage.humanize(
-                "02039171 Order rule verification failed: Weight : should not exceed 2KG"))
+        assertThat(
+                CarrierErrorMessage.humanize("02039171 Order rule verification failed: Weight : should not exceed 2KG"))
                 .contains("no cumple las reglas del canal");
         assertThat(CarrierErrorMessage.humanize("02041002 The order does not exist"))
                 .contains("todavía no reconoce esa guía");
@@ -25,8 +25,7 @@ class CarrierErrorMessageTest {
 
     @Test
     void unCodigoDesconocidoNoSeQuedaSinExplicacion() {
-        assertThat(CarrierErrorMessage.humanize("99999999 algo nuevo"))
-                .contains("detalle técnico");
+        assertThat(CarrierErrorMessage.humanize("99999999 algo nuevo")).contains("detalle técnico");
     }
 
     @Test

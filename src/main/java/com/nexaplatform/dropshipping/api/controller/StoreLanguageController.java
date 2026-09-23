@@ -79,7 +79,7 @@ public class StoreLanguageController {
     }
 
     private StoreLanguageDtoOut toDto(StoreLanguageEntity e) {
-        return new StoreLanguageDtoOut(e.getId(), e.getCode(), e.getLabel(), e.getFlag(), e.getPosition(),
-                e.isActive(), e.isDefault());
+        return new StoreLanguageDtoOut(e.getId(), e.getCode(), e.getLabel(), e.getFlag(), e.getPosition(), e.isActive(),
+                e.isDefault());
     }
 }

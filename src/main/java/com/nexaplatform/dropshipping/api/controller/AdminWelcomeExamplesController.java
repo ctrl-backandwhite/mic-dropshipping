@@ -42,10 +42,8 @@ public class AdminWelcomeExamplesController {
     @Operation(summary = "Productos que ilustran hoy la guía de bienvenida")
     @GetMapping
     public ResponseEntity<List<WelcomeExampleAdminView>> current() {
-        return ResponseEntity.ok(service.examples().stream()
-                .map(p -> new WelcomeExampleAdminView(p.getId(), p.getSlug(), p.getTitleZh(),
-                        p.getHsCode(), service.dutyGroupOf(p)))
-                .toList());
+        return ResponseEntity.ok(service.examples().stream().map(p -> new WelcomeExampleAdminView(p.getId(),
+                p.getSlug(), p.getTitleZh(), p.getHsCode(), service.dutyGroupOf(p))).toList());
     }
 
     /** Fija los ejemplos. Con la lista vacía se devuelve el control a la elección automática. */
@@ -61,7 +59,6 @@ public class AdminWelcomeExamplesController {
      * Lo que el panel necesita para elegir con criterio: además del producto, su partida, para que se vea
      * cuáles la comparten.
      */
-    public record WelcomeExampleAdminView(UUID id, String slug, String titleZh, String hsCode,
-            String dutyGroup) {
+    public record WelcomeExampleAdminView(UUID id, String slug, String titleZh, String hsCode, String dutyGroup) {
     }
 }

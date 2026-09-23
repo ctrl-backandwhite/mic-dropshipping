@@ -71,7 +71,7 @@ public final class ProductSeoMetadata {
             boolean zh = "zh".equalsIgnoreCase(tr.getLanguage());
             String title = has(tr.getTitle()) ? sanitize(tr.getTitle(), zh) : null;
             if (!has(title)) {
-                continue;   // sin título traducido no hay nada de lo que derivar el SEO
+                continue; // sin título traducido no hay nada de lo que derivar el SEO
             }
             if (needsRegenerating(tr.getMetaTitle(), zh)) {
                 tr.setMetaTitle(metaTitleOf(title, p.getBrand()));

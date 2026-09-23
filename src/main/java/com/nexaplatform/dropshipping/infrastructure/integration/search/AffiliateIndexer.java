@@ -50,12 +50,13 @@ public class AffiliateIndexer {
             if (client.indices().exists(b -> b.index(index)).value()) {
                 return;
             }
-            client.indices().create(CreateIndexRequest.of(b -> b.index(index)
-                    .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
-                            .properties("createdAt", Property.of(p -> p.date(d -> d)))
-                            .properties("name", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
-                            .properties("email", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
-                            .properties("code", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
+            client.indices()
+                    .create(CreateIndexRequest.of(b -> b.index(index)
+                            .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
+                                    .properties("createdAt", Property.of(p -> p.date(d -> d)))
+                                    .properties("name", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                                    .properties("email", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                                    .properties("code", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (RuntimeException | IOException e) {
             // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
@@ -99,7 +100,7 @@ public class AffiliateIndexer {
      * no llegaría a aplicarse (java:S6809). La anotación se queda en el punto de entrada.
      */
     private int doReindexAll() {
-        int[] n = { 0 };
+        int[] n = {0};
         affiliateRepo.findAll().forEach(a -> {
             indexAffiliate(a);
             n[0]++;

@@ -49,47 +49,37 @@ class ProductRepositoryIT extends PersistenceITBase {
 
     /** Builder de producto con todas las columnas NOT NULL ya rellenas. */
     private ProductEntity.ProductEntityBuilder baseProduct(String slug, String externalId) {
-        return ProductEntity.builder()
-                .slug(slug)
-                .externalId(externalId)
-                .source("1688")          // NOT NULL
-                .titleZh("默认标题")        // title_zh NOT NULL
-                .moq(1)                  // NOT NULL (int)
+        return ProductEntity.builder().slug(slug).externalId(externalId).source("1688") // NOT NULL
+                .titleZh("默认标题") // title_zh NOT NULL
+                .moq(1) // NOT NULL (int)
                 .status(ProductStatus.ACTIVE) // NOT NULL enum
-                .reviewCount(0)          // NOT NULL (int)
-                .monthlySales(0)         // NOT NULL (int)
-                .currency("CNY")
-                .basePrice(new BigDecimal("10.0000"));
+                .reviewCount(0) // NOT NULL (int)
+                .monthlySales(0) // NOT NULL (int)
+                .currency("CNY").basePrice(new BigDecimal("10.0000"));
     }
 
     private SupplierEntity persistSupplier(String externalId) {
-        SupplierEntity supplier = SupplierEntity.builder()
-                .externalId(externalId) // NOT NULL
-                .source("1688")         // NOT NULL
-                .name("Supplier " + externalId)
-                .verified(true)         // NOT NULL (boolean)
-                .trustPass(true)        // NOT NULL (boolean)
+        SupplierEntity supplier = SupplierEntity.builder().externalId(externalId) // NOT NULL
+                .source("1688") // NOT NULL
+                .name("Supplier " + externalId).verified(true) // NOT NULL (boolean)
+                .trustPass(true) // NOT NULL (boolean)
                 .build();
         return em.persist(supplier);
     }
 
     private CategoryEntity persistCategory(String slug) {
-        CategoryEntity category = CategoryEntity.builder()
-                .slug(slug)             // NOT NULL unique
-                .position(0)            // NOT NULL (int)
-                .active(true)           // NOT NULL (boolean)
-                .source("1688")
-                .build();
+        CategoryEntity category = CategoryEntity.builder().slug(slug) // NOT NULL unique
+                .position(0) // NOT NULL (int)
+                .active(true) // NOT NULL (boolean)
+                .source("1688").build();
         return em.persist(category);
     }
 
     /** Adjunta una imagen al producto (cascade ALL desde ProductEntity.images). */
     private void addImage(ProductEntity product, String cdnUrl) {
-        ProductImageEntity image = ProductImageEntity.builder()
-                .product(product)
-                .position(0)            // NOT NULL (int)
+        ProductImageEntity image = ProductImageEntity.builder().product(product).position(0) // NOT NULL (int)
                 .sourceUrl("https://src/" + product.getSlug() + ".jpg") // NOT NULL
-                .cdnUrl(cdnUrl)         // nullable: null = sin espejar
+                .cdnUrl(cdnUrl) // nullable: null = sin espejar
                 .build();
         product.getImages().add(image);
     }
@@ -207,8 +197,8 @@ class ProductRepositoryIT extends PersistenceITBase {
         repo.save(baseProduct("trend-noimg", "T-NOIMG").trendScore(new BigDecimal("500.0")).build());
 
         // NO visible: estado DRAFT pese a imagen espejada
-        ProductEntity draft = baseProduct("trend-draft", "T-DRAFT")
-                .status(ProductStatus.DRAFT).trendScore(new BigDecimal("888.0")).build();
+        ProductEntity draft = baseProduct("trend-draft", "T-DRAFT").status(ProductStatus.DRAFT)
+                .trendScore(new BigDecimal("888.0")).build();
         addImage(draft, "https://cdn/draft.jpg");
         repo.save(draft);
 
@@ -217,9 +207,7 @@ class ProductRepositoryIT extends PersistenceITBase {
 
         Page<ProductEntity> page = repo.findTopByTrendScore(ProductStatus.ACTIVE, PageRequest.of(0, 10));
 
-        assertThat(page.getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactly("trend-high", "trend-low"); // orden DESC y solo visibles ACTIVE
+        assertThat(page.getContent()).extracting(ProductEntity::getSlug).containsExactly("trend-high", "trend-low"); // orden DESC y solo visibles ACTIVE
     }
 
     // ── findByCategoryOrderByTrend (categoría + visible + orden trend) ───────
@@ -254,12 +242,10 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.flush();
         em.clear();
 
-        Page<ProductEntity> page = repo.findByCategoryOrderByTrend(
-                catA.getId(), ProductStatus.ACTIVE, PageRequest.of(0, 10));
+        Page<ProductEntity> page = repo.findByCategoryOrderByTrend(catA.getId(), ProductStatus.ACTIVE,
+                PageRequest.of(0, 10));
 
-        assertThat(page.getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactly("a-top", "a-low");
+        assertThat(page.getContent()).extracting(ProductEntity::getSlug).containsExactly("a-top", "a-low");
     }
 
     // ── searchStorefront (needle + filtros + paginación + EXISTS imagen) ─────
@@ -278,13 +264,10 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.flush();
         em.clear();
 
-        Page<ProductEntity> page = repo.searchStorefront(
-                ProductStatus.ACTIVE, null, null, null, null, null,
-                null, null, null, null, null, null, PageRequest.of(0, 20));
+        Page<ProductEntity> page = repo.searchStorefront(ProductStatus.ACTIVE, null, null, null, null, null, null, null,
+                null, null, null, null, PageRequest.of(0, 20));
 
-        assertThat(page.getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactly("sf-visible");
+        assertThat(page.getContent()).extracting(ProductEntity::getSlug).containsExactly("sf-visible");
     }
 
     @Test
@@ -302,11 +285,8 @@ class ProductRepositoryIT extends PersistenceITBase {
         // Match por traducción (title)
         ProductEntity byTranslation = baseProduct("producto-y", "PY").build();
         addImage(byTranslation, "https://cdn/tr.jpg");
-        ProductTranslationEntity tr = ProductTranslationEntity.builder()
-                .product(byTranslation)
-                .language("es")        // NOT NULL
-                .title("Camiseta de algodón")
-                .build();
+        ProductTranslationEntity tr = ProductTranslationEntity.builder().product(byTranslation).language("es") // NOT NULL
+                .title("Camiseta de algodón").build();
         byTranslation.getTranslations().add(tr);
         repo.save(byTranslation);
 
@@ -318,13 +298,11 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.flush();
         em.clear();
 
-        Page<ProductEntity> page = repo.searchStorefront(
-                ProductStatus.ACTIVE, "camiseta", null, null, null, null,
-                null, null, null, null, null, null, PageRequest.of(0, 20));
+        Page<ProductEntity> page = repo.searchStorefront(ProductStatus.ACTIVE, "camiseta", null, null, null, null, null,
+                null, null, null, null, null, PageRequest.of(0, 20));
 
-        assertThat(page.getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactlyInAnyOrder("camiseta-roja", "producto-x", "producto-y");
+        assertThat(page.getContent()).extracting(ProductEntity::getSlug).containsExactlyInAnyOrder("camiseta-roja",
+                "producto-x", "producto-y");
     }
 
     @Test
@@ -334,22 +312,17 @@ class ProductRepositoryIT extends PersistenceITBase {
         repo.save(withAttr);
         em.flush(); // persistimos producto antes del atributo (FK)
 
-        ProductAttributeEntity attr = ProductAttributeEntity.builder()
-                .product(withAttr)
-                .attrKey("brand")     // NOT NULL
-                .attrValue("nike")    // NOT NULL
+        ProductAttributeEntity attr = ProductAttributeEntity.builder().product(withAttr).attrKey("brand") // NOT NULL
+                .attrValue("nike") // NOT NULL
                 .build();
         em.persist(attr);
         em.flush();
         em.clear();
 
-        Page<ProductEntity> page = repo.searchStorefront(
-                ProductStatus.ACTIVE, "nike", null, null, null, null,
-                null, null, null, null, null, null, PageRequest.of(0, 20));
+        Page<ProductEntity> page = repo.searchStorefront(ProductStatus.ACTIVE, "nike", null, null, null, null, null,
+                null, null, null, null, null, PageRequest.of(0, 20));
 
-        assertThat(page.getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactly("prod-attr");
+        assertThat(page.getContent()).extracting(ProductEntity::getSlug).containsExactly("prod-attr");
     }
 
     @Test
@@ -392,15 +365,11 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.flush();
         em.clear();
 
-        Page<ProductEntity> page = repo.searchStorefront(
-                ProductStatus.ACTIVE, null, cat.getId(), null,
-                new BigDecimal("10.0000"), new BigDecimal("100.0000"),
-                "CN", true, null, null, new BigDecimal("4.00"), 10,
-                PageRequest.of(0, 20));
+        Page<ProductEntity> page = repo.searchStorefront(ProductStatus.ACTIVE, null, cat.getId(), null,
+                new BigDecimal("10.0000"), new BigDecimal("100.0000"), "CN", true, null, null, new BigDecimal("4.00"),
+                10, PageRequest.of(0, 20));
 
-        assertThat(page.getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactly("match");
+        assertThat(page.getContent()).extracting(ProductEntity::getSlug).containsExactly("match");
     }
 
     @Test
@@ -415,9 +384,8 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.clear();
 
         Pageable firstTwoByPriceAsc = PageRequest.of(0, 2, Sort.by(Sort.Direction.ASC, "basePrice"));
-        Page<ProductEntity> page = repo.searchStorefront(
-                ProductStatus.ACTIVE, null, null, null, null, null,
-                null, null, null, null, null, null, firstTwoByPriceAsc);
+        Page<ProductEntity> page = repo.searchStorefront(ProductStatus.ACTIVE, null, null, null, null, null, null, null,
+                null, null, null, null, firstTwoByPriceAsc);
 
         assertThat(page.getTotalElements()).isEqualTo(5);
         assertThat(page.getTotalPages()).isEqualTo(3);
@@ -435,22 +403,15 @@ class ProductRepositoryIT extends PersistenceITBase {
     @Test
     void searchAdmin_matchesAllLanguages_ignoringStatusAndImage() {
         // Spanish-only match, PAUSED and WITHOUT image → storefront would hide it, admin must find it.
-        ProductEntity spanish = baseProduct("sandalias-tacon-alto", "SND-ES")
-                .status(ProductStatus.PAUSED)
-                .titleZh("默认标题")
-                .build();
-        ProductTranslationEntity es = ProductTranslationEntity.builder()
-                .product(spanish)
-                .language("es") // NOT NULL
-                .title("Sandalias de tacón alto transparente para mujer, punta cuadrada, tacón grueso")
-                .build();
+        ProductEntity spanish = baseProduct("sandalias-tacon-alto", "SND-ES").status(ProductStatus.PAUSED)
+                .titleZh("默认标题").build();
+        ProductTranslationEntity es = ProductTranslationEntity.builder().product(spanish).language("es") // NOT NULL
+                .title("Sandalias de tacón alto transparente para mujer, punta cuadrada, tacón grueso").build();
         spanish.getTranslations().add(es);
         repo.save(spanish);
 
         // Chinese-title match (multilingual), ARCHIVED and without image.
-        ProductEntity chinese = baseProduct("producto-chino", "SND-ZH")
-                .status(ProductStatus.ARCHIVED)
-                .titleZh("透明高跟凉鞋")
+        ProductEntity chinese = baseProduct("producto-chino", "SND-ZH").status(ProductStatus.ARCHIVED).titleZh("透明高跟凉鞋")
                 .build();
         repo.save(chinese);
 
@@ -463,24 +424,25 @@ class ProductRepositoryIT extends PersistenceITBase {
         Pageable firstPage = PageRequest.of(0, 20);
 
         // Spanish full-ish title finds the PAUSED, image-less product across the whole catalogue.
-        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
-                .extracting(ProductEntity::getSlug)
+        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, null, null, null, null,
+                null, null, firstPage).getContent()).extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
 
         // Chinese needle finds the ARCHIVED product → multilingual.
-        assertThat(adminRepo.searchAdmin(null, null, "透明", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
-                .extracting(ProductEntity::getSlug)
-                .containsExactly("producto-chino");
+        assertThat(adminRepo
+                .searchAdmin(null, null, "透明", null, "es", false, null, null, null, null, null, null, firstPage)
+                .getContent()).extracting(ProductEntity::getSlug).containsExactly("producto-chino");
 
         // Optional status filter still narrows results.
-        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
-                .extracting(ProductEntity::getSlug)
+        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, null, null, null,
+                null, null, null, firstPage).getContent()).extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
-        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
-                .isEmpty();
+        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, null, null, null,
+                null, null, null, firstPage).getContent()).isEmpty();
 
         // A needle that matches nothing returns an empty page.
-        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, null, null, null, null, null, null, firstPage).getContent()).isEmpty();
+        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, null, null, null, null, null,
+                null, firstPage).getContent()).isEmpty();
     }
 
     /**
@@ -513,23 +475,22 @@ class ProductRepositoryIT extends PersistenceITBase {
         Instant antesDel18 = Instant.parse("2026-09-18T00:00:00Z");
 
         // Del 16 al 17 (ambos incluidos): entra el del 17 y ni el del 15 ni el del 18.
-        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null,
-                desdeEl16, antesDel18, firstPage).getContent())
-                .extracting(ProductEntity::getSlug)
+        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null, desdeEl16,
+                antesDel18, firstPage).getContent()).extracting(ProductEntity::getSlug)
                 .containsExactly("cargado-el-17");
 
         // Solo límite inferior: del 16 en adelante.
-        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null,
-                desdeEl16, null, firstPage).getContent())
-                .extracting(ProductEntity::getSlug)
+        assertThat(adminRepo
+                .searchAdmin(null, null, "", null, "es", false, null, null, null, null, desdeEl16, null, firstPage)
+                .getContent()).extracting(ProductEntity::getSlug)
                 .containsExactlyInAnyOrder("cargado-el-17", "cargado-el-18");
 
         // Sin rango se ve todo, incluido lo que no tiene fecha: un filtro no aplicado no esconde nada.
-        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null,
-                null, null, firstPage).getContent())
+        assertThat(
+                adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null, null, null, firstPage)
+                        .getContent())
                 .extracting(ProductEntity::getSlug)
-                .containsExactlyInAnyOrder("cargado-el-15", "cargado-el-17", "cargado-el-18",
-                        "sin-fecha-de-carga");
+                .containsExactlyInAnyOrder("cargado-el-15", "cargado-el-17", "cargado-el-18", "sin-fecha-de-carga");
     }
 
     // ── precisión del texto libre (fallback SQL) ────────────────────────────────────────
@@ -559,10 +520,9 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.clear();
 
         Pageable page = PageRequest.of(0, 20);
-        List<String> encontrados = adminRepo
-                .searchStorefront(ProductStatus.ACTIVE, "botas", null, null, null, null, null, null, null, null, null,
-                        null, null, "es", false, true, page)
-                .getContent().stream().map(ProductEntity::getSlug).toList();
+        List<String> encontrados = adminRepo.searchStorefront(ProductStatus.ACTIVE, "botas", null, null, null, null,
+                null, null, null, null, null, null, null, "es", false, true, page).getContent().stream()
+                .map(ProductEntity::getSlug).toList();
 
         assertThat(encontrados).containsExactly("botas-martin");
     }
@@ -598,11 +558,9 @@ class ProductRepositoryIT extends PersistenceITBase {
         em.flush();
         em.clear();
 
-        List<String> encontrados = adminRepo
-                .searchStorefrontByIds(ProductStatus.ACTIVE,
-                        List.of(visible.getId(), sinImagen.getId(), pausado.getId()), null, null, null, null, null,
-                        null, null, null)
-                .stream().map(ProductEntity::getSlug).toList();
+        List<String> encontrados = adminRepo.searchStorefrontByIds(ProductStatus.ACTIVE,
+                List.of(visible.getId(), sinImagen.getId(), pausado.getId()), null, null, null, null, null, null, null,
+                null).stream().map(ProductEntity::getSlug).toList();
 
         assertThat(encontrados).containsExactly("visible");
     }

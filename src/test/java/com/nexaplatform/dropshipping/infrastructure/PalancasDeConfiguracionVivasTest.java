@@ -54,10 +54,8 @@ class PalancasDeConfiguracionVivasTest {
             }
         }
 
-        assertThat(huerfanas)
-                .as("estas propiedades se leen en el código y no están en application.yml: la variable de "
-                        + "entorno correspondiente no hace nada")
-                .isEmpty();
+        assertThat(huerfanas).as("estas propiedades se leen en el código y no están en application.yml: la variable de "
+                + "entorno correspondiente no hace nada").isEmpty();
     }
 
     private static List<Path> ficherosJava() throws IOException {

@@ -54,8 +54,7 @@ class RateLimitBuildExemptionTest {
     void con_testigo_pasa_del_cupo_del_escaparate() throws Exception {
         for (int i = 0; i < 150; i++) {
             assertThat(pasa("GET", FICHA, TESTIGO).getStatus())
-                    .as("cortada en la petición %d, que es justo lo que se venía a arreglar", i)
-                    .isEqualTo(200);
+                    .as("cortada en la petición %d, que es justo lo que se venía a arreglar", i).isEqualTo(200);
         }
         assertThat(pasa("GET", FICHA, TESTIGO).getHeader("X-RateLimit-Policy")).isEqualTo("build.prerender");
     }

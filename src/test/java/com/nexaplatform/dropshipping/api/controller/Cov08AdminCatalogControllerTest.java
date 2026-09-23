@@ -91,7 +91,8 @@ class Cov08AdminCatalogControllerTest {
     }
 
     private static HttpServletRequest cuerpo(String ndjson) {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/admin/catalog/products/import/ndjson");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST",
+                "/api/admin/catalog/products/import/ndjson");
         request.setContent(ndjson.getBytes(StandardCharsets.UTF_8));
         return request;
     }
@@ -141,9 +142,8 @@ class Cov08AdminCatalogControllerTest {
         when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false));
         UUID categoria = UUID.randomUUID();
 
-        controller.exportProductsNdjson(200, null, null, null, "ACTIVE", categoria, "bailarinas",
-                BigDecimal.ONE, BigDecimal.TEN, 50, BigDecimal.valueOf(0.4)).getBody()
-                .writeTo(new ByteArrayOutputStream());
+        controller.exportProductsNdjson(200, null, null, null, "ACTIVE", categoria, "bailarinas", BigDecimal.ONE,
+                BigDecimal.TEN, 50, BigDecimal.valueOf(0.4)).getBody().writeTo(new ByteArrayOutputStream());
 
         CatalogUseCase.ExportFilter filtro = filtroVolcado();
         assertThat(filtro.status()).isEqualTo("ACTIVE");
@@ -160,8 +160,8 @@ class Cov08AdminCatalogControllerTest {
     void elRangoDeFechasSeTraduceAInstantesConElLimiteSuperiorExclusivo() throws IOException {
         when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false));
 
-        controller.exportProductsNdjson(200, "2026-08-17", "2026-09-17", null, null, null, null, null, null,
-                null, null).getBody().writeTo(new ByteArrayOutputStream());
+        controller.exportProductsNdjson(200, "2026-08-17", "2026-09-17", null, null, null, null, null, null, null, null)
+                .getBody().writeTo(new ByteArrayOutputStream());
 
         CatalogUseCase.ExportFilter filtro = filtroVolcado();
         assertThat(filtro.createdFrom()).isEqualTo(Instant.parse("2026-08-17T00:00:00Z"));
@@ -214,18 +214,17 @@ class Cov08AdminCatalogControllerTest {
 
     @Test
     void laExportacionSeSirveComoDescargaNdjson() {
-        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(200, null, null, null,
-                null, null, null, null, null, null, null);
+        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(200, null, null, null, null,
+                null, null, null, null, null, null);
 
         assertThat(response.getHeaders().getContentType()).hasToString("application/x-ndjson");
-        assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
-                .contains("attachment").contains("products-export.ndjson");
+        assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).contains("attachment")
+                .contains("products-export.ndjson");
     }
 
     /** El filtro con el que el controlador acabó pidiendo el volcado. */
     private CatalogUseCase.ExportFilter filtroVolcado() {
-        ArgumentCaptor<CatalogUseCase.ExportFilter> captor =
-                ArgumentCaptor.forClass(CatalogUseCase.ExportFilter.class);
+        ArgumentCaptor<CatalogUseCase.ExportFilter> captor = ArgumentCaptor.forClass(CatalogUseCase.ExportFilter.class);
         verify(catalogUseCase, atLeastOnce()).exportPage(anyInt(), anyInt(), captor.capture());
         return captor.getValue();
     }
@@ -433,9 +432,8 @@ class Cov08AdminCatalogControllerTest {
     /** Sin filtro (ni productIds ni categoryId) → update masivo para todo el catálogo. */
     @Test
     void elRecargoSinFiltroSeAplicaATodoElCatalogo() {
-        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req =
-                new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(new java.math.BigDecimal("2.00"),
-                        null, null);
+        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req = new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(
+                new java.math.BigDecimal("2.00"), null, null);
         when(catalogUseCase.bulkUpdateSurcharge(null, null, new java.math.BigDecimal("2.00"))).thenReturn(1234);
 
         ResponseEntity<Map<String, Object>> r = controller.bulkUpdateSurcharge(req);
@@ -448,9 +446,8 @@ class Cov08AdminCatalogControllerTest {
     @Test
     void elRecargoPorCategoriaSoloTocaLosProductosDeEsaCategoria() {
         UUID cat = UUID.randomUUID();
-        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req =
-                new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(new java.math.BigDecimal("5.00"),
-                        null, cat);
+        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req = new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(
+                new java.math.BigDecimal("5.00"), null, cat);
         when(catalogUseCase.bulkUpdateSurcharge(null, cat, new java.math.BigDecimal("5.00"))).thenReturn(42);
 
         controller.bulkUpdateSurcharge(req);
@@ -463,15 +460,15 @@ class Cov08AdminCatalogControllerTest {
     void elRecargoPorProductoListaMandaSobreLaCategoria() {
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
-        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req =
-                new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(new java.math.BigDecimal("3.00"),
-                        List.of(a, b), UUID.randomUUID());
+        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req = new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(
+                new java.math.BigDecimal("3.00"), List.of(a, b), UUID.randomUUID());
         when(catalogUseCase.bulkUpdateSurcharge(List.of(a, b), req.getCategoryId(), new java.math.BigDecimal("3.00")))
                 .thenReturn(2);
 
         ResponseEntity<Map<String, Object>> r = controller.bulkUpdateSurcharge(req);
 
         assertThat(r.getBody()).isEqualTo(Map.of("updated", 2));
-        verify(catalogUseCase).bulkUpdateSurcharge(List.of(a, b), req.getCategoryId(), new java.math.BigDecimal("3.00"));
+        verify(catalogUseCase).bulkUpdateSurcharge(List.of(a, b), req.getCategoryId(),
+                new java.math.BigDecimal("3.00"));
     }
 }

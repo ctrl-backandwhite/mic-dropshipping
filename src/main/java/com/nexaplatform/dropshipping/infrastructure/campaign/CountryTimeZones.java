@@ -17,22 +17,21 @@ public final class CountryTimeZones {
     private CountryTimeZones() {
     }
 
-    private static final Map<String, ZoneId> ZONES = Map.ofEntries(
-            Map.entry("ES", ZoneId.of("Europe/Madrid")), Map.entry("PT", ZoneId.of("Europe/Lisbon")),
-            Map.entry("FR", ZoneId.of("Europe/Paris")), Map.entry("DE", ZoneId.of("Europe/Berlin")),
-            Map.entry("IT", ZoneId.of("Europe/Rome")), Map.entry("NL", ZoneId.of("Europe/Amsterdam")),
-            Map.entry("GB", ZoneId.of("Europe/London")), Map.entry("IE", ZoneId.of("Europe/Dublin")),
-            Map.entry("BE", ZoneId.of("Europe/Brussels")), Map.entry("CH", ZoneId.of("Europe/Zurich")),
-            Map.entry("AT", ZoneId.of("Europe/Vienna")), Map.entry("PL", ZoneId.of("Europe/Warsaw")),
-            Map.entry("US", ZoneId.of("America/New_York")), Map.entry("CA", ZoneId.of("America/Toronto")),
-            Map.entry("MX", ZoneId.of("America/Mexico_City")), Map.entry("CO", ZoneId.of("America/Bogota")),
-            Map.entry("AR", ZoneId.of("America/Argentina/Buenos_Aires")), Map.entry("BR", ZoneId.of("America/Sao_Paulo")),
-            Map.entry("CL", ZoneId.of("America/Santiago")), Map.entry("PE", ZoneId.of("America/Lima")),
-            Map.entry("EC", ZoneId.of("America/Guayaquil")), Map.entry("VE", ZoneId.of("America/Caracas")),
-            Map.entry("UY", ZoneId.of("America/Montevideo")), Map.entry("BO", ZoneId.of("America/La_Paz")),
-            Map.entry("PY", ZoneId.of("America/Asuncion")), Map.entry("CR", ZoneId.of("America/Costa_Rica")),
-            Map.entry("PA", ZoneId.of("America/Panama")), Map.entry("DO", ZoneId.of("America/Santo_Domingo")),
-            Map.entry("GT", ZoneId.of("America/Guatemala")));
+    private static final Map<String, ZoneId> ZONES = Map.ofEntries(Map.entry("ES", ZoneId.of("Europe/Madrid")),
+            Map.entry("PT", ZoneId.of("Europe/Lisbon")), Map.entry("FR", ZoneId.of("Europe/Paris")),
+            Map.entry("DE", ZoneId.of("Europe/Berlin")), Map.entry("IT", ZoneId.of("Europe/Rome")),
+            Map.entry("NL", ZoneId.of("Europe/Amsterdam")), Map.entry("GB", ZoneId.of("Europe/London")),
+            Map.entry("IE", ZoneId.of("Europe/Dublin")), Map.entry("BE", ZoneId.of("Europe/Brussels")),
+            Map.entry("CH", ZoneId.of("Europe/Zurich")), Map.entry("AT", ZoneId.of("Europe/Vienna")),
+            Map.entry("PL", ZoneId.of("Europe/Warsaw")), Map.entry("US", ZoneId.of("America/New_York")),
+            Map.entry("CA", ZoneId.of("America/Toronto")), Map.entry("MX", ZoneId.of("America/Mexico_City")),
+            Map.entry("CO", ZoneId.of("America/Bogota")), Map.entry("AR", ZoneId.of("America/Argentina/Buenos_Aires")),
+            Map.entry("BR", ZoneId.of("America/Sao_Paulo")), Map.entry("CL", ZoneId.of("America/Santiago")),
+            Map.entry("PE", ZoneId.of("America/Lima")), Map.entry("EC", ZoneId.of("America/Guayaquil")),
+            Map.entry("VE", ZoneId.of("America/Caracas")), Map.entry("UY", ZoneId.of("America/Montevideo")),
+            Map.entry("BO", ZoneId.of("America/La_Paz")), Map.entry("PY", ZoneId.of("America/Asuncion")),
+            Map.entry("CR", ZoneId.of("America/Costa_Rica")), Map.entry("PA", ZoneId.of("America/Panama")),
+            Map.entry("DO", ZoneId.of("America/Santo_Domingo")), Map.entry("GT", ZoneId.of("America/Guatemala")));
 
     /** Zona por defecto para países sin mapear (evita quedar fuera de toda campaña). */
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Europe/Madrid");
@@ -46,8 +45,7 @@ public final class CountryTimeZones {
 
     /** Devuelve los países cuya hora local (según su zona) coincide ahora mismo con {@code hour} (0-23). */
     public static Set<String> countriesAtLocalHour(int hour) {
-        return ZONES.entrySet().stream()
-                .filter(e -> ZonedDateTime.now(e.getValue()).getHour() == hour)
+        return ZONES.entrySet().stream().filter(e -> ZonedDateTime.now(e.getValue()).getHour() == hour)
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
     }
 

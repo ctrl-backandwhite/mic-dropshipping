@@ -66,8 +66,8 @@ public class CartService {
 
     @Transactional(readOnly = true)
     public List<CartItemDto> list(UUID userId) {
-        return conLaFotoQueFalte(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId).stream()
-                .map(CartItemDto::fromEntity).toList());
+        return conLaFotoQueFalte(
+                repo.findByUserIdOrderByCreatedAtAscIdAsc(userId).stream().map(CartItemDto::fromEntity).toList());
     }
 
     /**
@@ -221,10 +221,9 @@ public class CartService {
                 .orElseThrow(() -> new NotFoundException("Product"));
         // El mínimo manda sobre lo pedido: por debajo del MOQ el proveedor no sirve el pedido.
         int minimo = Math.max(1, producto.getMoq());
-        CartItemEntity linea = repo
-                .findByUserIdAndProductIdAndVariantId(userId, dto.productId(), dto.variantId())
-                .orElseGet(() -> CartItemEntity.builder()
-                        .userId(userId).productId(dto.productId()).variantId(dto.variantId()).quantity(0).build());
+        CartItemEntity linea = repo.findByUserIdAndProductIdAndVariantId(userId, dto.productId(), dto.variantId())
+                .orElseGet(() -> CartItemEntity.builder().userId(userId).productId(dto.productId())
+                        .variantId(dto.variantId()).quantity(0).build());
         int pedida = Math.max(1, dto.quantity());
         // La suma se hace en long a propósito: el merge NO valida el cuerpo campo a campo y una cantidad
         // enorme desbordaría el int, dando una cantidad negativa (el desbordamiento de cantidad ya provocó

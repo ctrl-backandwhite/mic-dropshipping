@@ -23,12 +23,12 @@ class UserUpdateMapperTest {
     void updateFromModel_copiesProfileFieldsAndPreservesSecuritySensitiveOnes() {
         UUID id = UUID.randomUUID();
         User target = User.builder().id(id).email("real@nx036.local").passwordHash("HASH").role(UserRole.ADMIN)
-                .active(true).totpEnabled(true).avatarUrl("/avatar.png").displayName("Old Name")
-                .companyName("Old Co").country("ES").phone("000").language("es").createdBy("creator").build();
+                .active(true).totpEnabled(true).avatarUrl("/avatar.png").displayName("Old Name").companyName("Old Co")
+                .country("ES").phone("000").language("es").createdBy("creator").build();
 
-        User source = User.builder().email("attacker@evil.com").passwordHash("PWNED").role(UserRole.USER)
-                .active(false).totpEnabled(false).avatarUrl("/evil.png").displayName("New Name")
-                .companyName("New Co").country("FR").phone("123").language("en").build();
+        User source = User.builder().email("attacker@evil.com").passwordHash("PWNED").role(UserRole.USER).active(false)
+                .totpEnabled(false).avatarUrl("/evil.png").displayName("New Name").companyName("New Co").country("FR")
+                .phone("123").language("en").build();
 
         mapper.updateFromModel(source, target);
 

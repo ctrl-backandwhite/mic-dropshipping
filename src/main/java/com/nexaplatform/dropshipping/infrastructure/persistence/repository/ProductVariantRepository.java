@@ -38,8 +38,7 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
      * espejarlas ahí las saca de esa cola. Sin tope: son las de un lote de importación, no el catálogo.
      */
     @Query("SELECT v FROM ProductVariantEntity v WHERE v.product.id IN :productIds "
-            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' "
-            + "AND v.imageMirrorFailedAt IS NULL "
+            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' " + "AND v.imageMirrorFailedAt IS NULL "
             + "AND (v.imageCdnUrl IS NULL OR v.imageCdnUrl NOT LIKE :publicPrefix)")
     List<ProductVariantEntity> findNeedingImageMirrorByProducts(@Param("publicPrefix") String publicPrefix,
             @Param("productIds") List<UUID> productIds);
@@ -91,7 +90,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
     @Transactional
     @Query(value = "UPDATE product_variant SET image_mirror_failed_at = NULL WHERE id IN ("
             + "SELECT id FROM product_variant WHERE image_mirror_failed_at IS NOT NULL "
-            + "AND image_mirror_failed_at <= :antesDe ORDER BY image_mirror_failed_at LIMIT :tope)",
-            nativeQuery = true)
+            + "AND image_mirror_failed_at <= :antesDe ORDER BY image_mirror_failed_at LIMIT :tope)", nativeQuery = true)
     int requeueFailed(@Param("antesDe") Instant antesDe, @Param("tope") int tope);
 }

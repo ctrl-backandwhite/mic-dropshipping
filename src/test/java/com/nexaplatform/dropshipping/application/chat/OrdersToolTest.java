@@ -57,8 +57,8 @@ class OrdersToolTest {
     void consultaPorElUsuarioDeLaSesion() throws Exception {
         Mockito.when(orders.listMyOrders(Mockito.any())).thenReturn(List.of());
         // El modelo intenta colar el pedido de otra persona en los argumentos.
-        JsonNode argumentosMaliciosos = mapper.readTree(
-                "{\"userId\":\"00000000-0000-0000-0000-000000000666\",\"numero\":\"NX-DE-OTRO\"}");
+        JsonNode argumentosMaliciosos = mapper
+                .readTree("{\"userId\":\"00000000-0000-0000-0000-000000000666\",\"numero\":\"NX-DE-OTRO\"}");
 
         tool.execute(argumentosMaliciosos, new ChatContext(quienPregunta, "es"));
 
@@ -71,16 +71,16 @@ class OrdersToolTest {
     @DisplayName("Devuelve los cinco últimos, del más reciente al más antiguo")
     void devuelveLosUltimosCinco() throws Exception {
         Instant ahora = Instant.parse("2026-08-26T10:00:00Z");
-        Mockito.when(orders.listMyOrders(quienPregunta)).thenReturn(List.of(
-                pedido("NX-1", ahora.minusSeconds(600), OrderStatus.DELIVERED),
-                pedido("NX-2", ahora.minusSeconds(300), OrderStatus.SHIPPED),
-                pedido("NX-3", ahora.minusSeconds(100), OrderStatus.PAID),
-                pedido("NX-4", ahora.minusSeconds(90), OrderStatus.PAID),
-                pedido("NX-5", ahora.minusSeconds(80), OrderStatus.PAID),
-                pedido("NX-6", ahora.minusSeconds(70), OrderStatus.PAID)));
+        Mockito.when(orders.listMyOrders(quienPregunta))
+                .thenReturn(List.of(pedido("NX-1", ahora.minusSeconds(600), OrderStatus.DELIVERED),
+                        pedido("NX-2", ahora.minusSeconds(300), OrderStatus.SHIPPED),
+                        pedido("NX-3", ahora.minusSeconds(100), OrderStatus.PAID),
+                        pedido("NX-4", ahora.minusSeconds(90), OrderStatus.PAID),
+                        pedido("NX-5", ahora.minusSeconds(80), OrderStatus.PAID),
+                        pedido("NX-6", ahora.minusSeconds(70), OrderStatus.PAID)));
 
-        JsonNode salida = mapper.readTree(tool.execute(mapper.createObjectNode(),
-                new ChatContext(quienPregunta, "es")));
+        JsonNode salida = mapper
+                .readTree(tool.execute(mapper.createObjectNode(), new ChatContext(quienPregunta, "es")));
 
         assertEquals(5, salida.get("pedidos").size());
         assertEquals("NX-6", salida.get("pedidos").get(0).get("numero").asText());
@@ -90,11 +90,11 @@ class OrdersToolTest {
     @Test
     @DisplayName("El resumen lleva seguimiento e importe pagado, que son datos de esa persona")
     void resumenConSeguimiento() throws Exception {
-        Mockito.when(orders.listMyOrders(quienPregunta)).thenReturn(List.of(
-                pedido("NX-9", Instant.parse("2026-08-20T09:00:00Z"), OrderStatus.SHIPPED)));
+        Mockito.when(orders.listMyOrders(quienPregunta))
+                .thenReturn(List.of(pedido("NX-9", Instant.parse("2026-08-20T09:00:00Z"), OrderStatus.SHIPPED)));
 
-        JsonNode salida = mapper.readTree(tool.execute(mapper.createObjectNode(),
-                new ChatContext(quienPregunta, "es")));
+        JsonNode salida = mapper
+                .readTree(tool.execute(mapper.createObjectNode(), new ChatContext(quienPregunta, "es")));
         JsonNode uno = salida.get("pedidos").get(0);
 
         assertEquals("YTNX-9", uno.get("seguimiento").asText());
@@ -109,8 +109,8 @@ class OrdersToolTest {
     void sinPedidos() throws Exception {
         Mockito.when(orders.listMyOrders(quienPregunta)).thenReturn(List.of());
 
-        JsonNode salida = mapper.readTree(tool.execute(mapper.createObjectNode(),
-                new ChatContext(quienPregunta, "es")));
+        JsonNode salida = mapper
+                .readTree(tool.execute(mapper.createObjectNode(), new ChatContext(quienPregunta, "es")));
 
         assertTrue(salida.get("pedidos").isEmpty());
     }

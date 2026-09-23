@@ -81,13 +81,13 @@ class FulfillmentServiceTest {
     }
 
     private static Order order(OrderStatus status, String trackingNumber) {
-        return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").status(status)
-                .trackingNumber(trackingNumber).shippingCountry("ES").build();
+        return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").status(status).trackingNumber(trackingNumber)
+                .shippingCountry("ES").build();
     }
 
     private static OrderTrackingEventEntity event(String status, String description) {
-        return OrderTrackingEventEntity.builder().orderId(UUID.randomUUID()).status(status)
-                .description(description).source("CAINIAO").occurredAt(Instant.now()).build();
+        return OrderTrackingEventEntity.builder().orderId(UUID.randomUUID()).status(status).description(description)
+                .source("CAINIAO").occurredAt(Instant.now()).build();
     }
 
     // ─────────────────────── createShipment ───────────────────────
@@ -131,8 +131,8 @@ class FulfillmentServiceTest {
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
         // Este test va del transportista internacional: la mercancía ya está camino del almacén chino.
         when(supplierPurchaseService.readyForInternationalShipment(o.getId())).thenReturn(true);
-        when(cainiao.createShipments(o)).thenReturn(
-                List.of(new FulfillmentResult("Standard Shipping", "CN-TRACK", "LP-REF", 20)));
+        when(cainiao.createShipments(o))
+                .thenReturn(List.of(new FulfillmentResult("Standard Shipping", "CN-TRACK", "LP-REF", 20)));
 
         service.createShipment(o.getId());
 
@@ -180,13 +180,12 @@ class FulfillmentServiceTest {
         Order o = order(OrderStatus.SHIPPED, "CN-TRACK");
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
         // Existing timeline already contains the first two steps.
-        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of(
-                event("FORWARDED", "Envío registrado"),
-                event("SHIPPED", "Recogido por el transportista")));
-        when(cainiao.track(eq("CN-TRACK"), any(), eq("ES"))).thenReturn(new TrackingSnapshot(
-                OrderStatus.SHIPPED, List.of(
-                        new TrackingStep(OrderStatus.FORWARDED, "Envío registrado", "Shenzhen, CN", Instant.now()),
-                        new TrackingStep(OrderStatus.SHIPPED, "Recogido por el transportista", "Shenzhen, CN", Instant.now()),
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(
+                List.of(event("FORWARDED", "Envío registrado"), event("SHIPPED", "Recogido por el transportista")));
+        when(cainiao.track(eq("CN-TRACK"), any(), eq("ES"))).thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED,
+                List.of(new TrackingStep(OrderStatus.FORWARDED, "Envío registrado", "Shenzhen, CN", Instant.now()),
+                        new TrackingStep(OrderStatus.SHIPPED, "Recogido por el transportista", "Shenzhen, CN",
+                                Instant.now()),
                         new TrackingStep(OrderStatus.SHIPPED, "En tránsito internacional", "Hub", Instant.now()))));
 
         TrackingProgress p = service.pollEvents(o.getId());
@@ -207,9 +206,9 @@ class FulfillmentServiceTest {
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
         // Empty timeline → the first SHIPPED step is "Recogido" (covered by shipped()), not notified here.
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of());
-        when(cainiao.track(eq("CN-TRACK"), any(), eq("ES"))).thenReturn(new TrackingSnapshot(
-                OrderStatus.SHIPPED, List.of(
-                        new TrackingStep(OrderStatus.SHIPPED, "Recogido por el transportista", "Shenzhen, CN", Instant.now()),
+        when(cainiao.track(eq("CN-TRACK"), any(), eq("ES"))).thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED,
+                List.of(new TrackingStep(OrderStatus.SHIPPED, "Recogido por el transportista", "Shenzhen, CN",
+                        Instant.now()),
                         new TrackingStep(OrderStatus.SHIPPED, "En tránsito internacional", "Hub", Instant.now()))));
         when(userRepository.getById(userId))
                 .thenReturn(User.builder().id(userId).email("buyer@nx.local").language("es").build());
@@ -227,11 +226,10 @@ class FulfillmentServiceTest {
         Order o = order(OrderStatus.SHIPPED, "CN-TRACK");
         // userId stays null
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of(
-                event("SHIPPED", "Recogido por el transportista")));
-        when(cainiao.track(eq("CN-TRACK"), any(), eq("ES"))).thenReturn(new TrackingSnapshot(
-                OrderStatus.SHIPPED, List.of(
-                        new TrackingStep(OrderStatus.SHIPPED, "En reparto", "Local", Instant.now()))));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId()))
+                .thenReturn(List.of(event("SHIPPED", "Recogido por el transportista")));
+        when(cainiao.track(eq("CN-TRACK"), any(), eq("ES"))).thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED,
+                List.of(new TrackingStep(OrderStatus.SHIPPED, "En reparto", "Local", Instant.now()))));
 
         service.pollEvents(o.getId());
 
@@ -248,8 +246,7 @@ class FulfillmentServiceTest {
 
         UUID otroUsuario = UUID.randomUUID();
         UUID pedidoId = o.getId();
-        assertThatThrownBy(() -> service.myTrackingView(otroUsuario, pedidoId))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.myTrackingView(otroUsuario, pedidoId)).isInstanceOf(NotFoundException.class);
     }
 
     @Test

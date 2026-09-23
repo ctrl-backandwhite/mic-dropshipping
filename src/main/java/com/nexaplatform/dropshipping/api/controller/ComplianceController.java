@@ -34,10 +34,8 @@ public class ComplianceController {
      */
     @Operation(summary = "EU responsible economic operator (Reg. (EU) 2023/988 art. 16.3)")
     @GetMapping("/responsible-person")
-    public ResponseEntity<ResponsiblePersonView> responsiblePerson(
-            @RequestParam(defaultValue = "es") String lang) {
-        return complianceService.publishedResponsible(lang)
-                .map(ResponseEntity::ok)
+    public ResponseEntity<ResponsiblePersonView> responsiblePerson(@RequestParam(defaultValue = "es") String lang) {
+        return complianceService.publishedResponsible(lang).map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

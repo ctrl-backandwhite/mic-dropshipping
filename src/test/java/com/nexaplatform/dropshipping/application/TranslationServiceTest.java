@@ -99,8 +99,8 @@ class TranslationServiceTest {
         // En cache hit no se invoca al proveedor de traducción ni se reescribe la caché.
         verify(provider, never()).translate(anyString(), anyString(), anyString());
         verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
-        ProductTranslationEntity es = p.getTranslations().stream()
-                .filter(t -> "es".equals(t.getLanguage())).findFirst().orElseThrow();
+        ProductTranslationEntity es = p.getTranslations().stream().filter(t -> "es".equals(t.getLanguage())).findFirst()
+                .orElseThrow();
         assertThat(es.getTitle()).isEqualTo("cached");
         assertThat(es.getProvider()).isEqualTo("dummy");
     }
@@ -121,8 +121,8 @@ class TranslationServiceTest {
         verify(provider).translate("你好", "zh", "es");
         verify(provider).translate("你好", "zh", "en");
         verify(valueOps, times(2)).set(anyString(), eq("hello"), eq(Duration.ofDays(90)));
-        ProductTranslationEntity es = p.getTranslations().stream()
-                .filter(t -> "es".equals(t.getLanguage())).findFirst().orElseThrow();
+        ProductTranslationEntity es = p.getTranslations().stream().filter(t -> "es".equals(t.getLanguage())).findFirst()
+                .orElseThrow();
         assertThat(es.getTitle()).isEqualTo("hello");
     }
 
@@ -134,8 +134,7 @@ class TranslationServiceTest {
         when(redis.opsForValue()).thenReturn(valueOps);
         when(valueOps.get(anyString())).thenReturn(null);
         lenient().when(provider.name()).thenReturn("dummy");
-        when(provider.translate(anyString(), anyString(), anyString()))
-                .thenThrow(new RuntimeException("boom"));
+        when(provider.translate(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("boom"));
 
         service.translateProduct(id);
 

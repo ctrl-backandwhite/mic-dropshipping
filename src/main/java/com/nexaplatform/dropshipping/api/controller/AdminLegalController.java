@@ -49,8 +49,7 @@ public class AdminLegalController {
      * haya que acreditarlo.
      */
     public record PublicarRequest(
-            @NotBlank @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}", message = "version must be YYYY-MM-DD")
-            String version) {
+            @NotBlank @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}", message = "version must be YYYY-MM-DD") String version) {
     }
 
     @Operation(summary = "Todos los documentos legales, borradores incluidos")

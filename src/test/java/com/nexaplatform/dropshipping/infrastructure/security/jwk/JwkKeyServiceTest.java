@@ -88,12 +88,9 @@ class JwkKeyServiceTest {
         try {
             KeyPair pair = PAR_RSA;
             String privB64 = Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded());
-            JwkKeyEntity entity = JwkKeyEntity.builder()
-                    .kid(UUID.randomUUID().toString())
+            JwkKeyEntity entity = JwkKeyEntity.builder().kid(UUID.randomUUID().toString())
                     .publicKey(Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()))
-                    .privateKey(tokenCryptoService.encrypt(privB64))
-                    .active(active)
-                    .build();
+                    .privateKey(tokenCryptoService.encrypt(privB64)).active(active).build();
             // @Builder no cubre id/createdAt heredados de BaseEntity/AuditableEntity → setters tras build.
             entity.setId(UUID.randomUUID());
             entity.setCreatedAt(createdAt);

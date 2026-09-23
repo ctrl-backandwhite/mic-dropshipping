@@ -45,8 +45,7 @@ class StripeGatewayReturnUrlTest {
     @DisplayName("salir sin pagar desde la app vuelve al puente marcado como cancelado")
     void salirSinPagarDesdeLaAppVuelveMarcado() {
         assertThat(gateway.vueltaDeLaApp(pagoDe(PaymentClientTarget.MOBILE), false))
-                .isEqualTo("http://10.0.2.2:18082/api/payments/app-return?paymentId=" + paymentId
-                        + "&status=cancel");
+                .isEqualTo("http://10.0.2.2:18082/api/payments/app-return?paymentId=" + paymentId + "&status=cancel");
     }
 
     /** Lo que viene de la web sigue igual: la página de retorno del escaparate. */

@@ -120,8 +120,8 @@ public class ViewedProductsDigestService {
             }
         }
         if (enviados > 0) {
-            log.info("Recordatorio de visitas: {} correos encolados de {} usuarios con historial reciente",
-                    enviados, userIds.size());
+            log.info("Recordatorio de visitas: {} correos encolados de {} usuarios con historial reciente", enviados,
+                    userIds.size());
         }
         return enviados;
     }
@@ -144,8 +144,7 @@ public class ViewedProductsDigestService {
         if (email == null || email.isBlank() || !user.isActive() || user.isMarketingOptOut()) {
             return false;
         }
-        if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(email, TEMPLATE,
-                desde)) {
+        if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(email, TEMPLATE, desde)) {
             return false;
         }
         List<UUID> visitados = viewRepository.findProductIdsByUserIdSince(userId, desde, Limit.of(MAX_PRODUCTOS));

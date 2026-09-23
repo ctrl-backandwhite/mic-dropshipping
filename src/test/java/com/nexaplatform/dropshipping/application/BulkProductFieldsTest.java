@@ -125,7 +125,7 @@ class BulkProductFieldsTest {
 
         assertThat(p.getPackageWeightGrams()).isEqualTo(320);
         assertThat(p.getLengthMm()).isEqualTo(250);
-        assertThat(p.getWidthMm()).isEqualTo(200);      // no venía: se conserva
+        assertThat(p.getWidthMm()).isEqualTo(200); // no venía: se conserva
     }
 
     @Test
@@ -190,7 +190,7 @@ class BulkProductFieldsTest {
         BulkProductFields.applyRatingBreakdown(p, r);
 
         assertThat(p.getReviewCount()).isEqualTo(20);
-        assertThat(p.getRating()).isNull();     // lo pone el volcado general, no este bloque
+        assertThat(p.getRating()).isNull(); // lo pone el volcado general, no este bloque
     }
 
     @Test
@@ -209,7 +209,7 @@ class BulkProductFieldsTest {
         r.setRatingBreakdown(breakdown);
         BulkProductFields.applyRatingBreakdown(p, r);
 
-        assertThat(p.getReviewCount()).isEqualTo(12);   // sólo las claves numéricas
+        assertThat(p.getReviewCount()).isEqualTo(12); // sólo las claves numéricas
         assertThat(p.getRating()).isEqualByComparingTo("4.83");
     }
 
@@ -270,7 +270,7 @@ class BulkProductFieldsTest {
         assertThat(pair.a().getPackageWeightGrams()).isEqualTo(300);
         assertThat(pair.a().getLengthMm()).isEqualTo(250);
         assertThat(pair.a().getSupplierSkuId()).isEqualTo("SKU-PROV-M");
-        assertThat(pair.b().getPackageWeightGrams()).isNull();      // la otra talla no se toca
+        assertThat(pair.b().getPackageWeightGrams()).isNull(); // la otra talla no se toca
     }
 
     @Test
@@ -298,25 +298,81 @@ class BulkProductFieldsTest {
         assertThat(pair.a().getPackageWeightGrams()).isEqualTo(400);
     }
 
+    // ---------------------------------------------------------------- envío nacional por variante
+
+    @Test
+    void cadaVarianteGuardaSuPropioEnvioNacional() {
+        // El scraper calcula el envío chino por tramos de peso y lo manda POR VARIANTE: 6 CNY por
+        // debajo de 500 g, 10 hasta 1 kg, 16 por encima. Si esto no se copiase, el campo llegaría en
+        // el JSON y se perdería en silencio —Spring ignora lo que no conoce— y el ecommerce
+        // seguiría cobrando el envío del producto para todas las tallas, incluida la que pesa el
+        // doble.
+        ProductEntity p = new ProductEntity();
+        VariantEntityPair pair = variants("SKU-M", "SKU-L");
+        p.setVariants(List.of(pair.a(), pair.b()));
+
+        BulkProductDtoIn r = emptyRow();
+        r.setVariants(List.of(variantConEnvio("SKU-M", new java.math.BigDecimal("10")),
+                variantConEnvio("SKU-L", new java.math.BigDecimal("16"))));
+
+        BulkProductFields.applyVariantLogistics(p, r);
+
+        assertThat(pair.a().getShippingCny()).isEqualByComparingTo("10");
+        assertThat(pair.b().getShippingCny()).isEqualByComparingTo("16");
+    }
+
+    @Test
+    void siLaFilaNoTraeEnvioNoSePisaElQueYaTeniaLaVariante() {
+        // Un null es "no hablo de esto", igual que el resto de la logística. Pisarlo con null
+        // borraría el envío de cada variante en cualquier reimportación parcial —por ejemplo la
+        // pasada de sólo pesos— y el pedido saldría sin flete.
+        ProductEntity p = new ProductEntity();
+        VariantEntityPair pair = variants("SKU-M", "SKU-L");
+        pair.a().setShippingCny(new java.math.BigDecimal("10"));
+        p.setVariants(List.of(pair.a(), pair.b()));
+
+        BulkProductDtoIn r = emptyRow();
+        r.setVariants(List.of(variantRow("SKU-M", 300, 250, "SKU-PROV-M")));
+
+        BulkProductFields.applyVariantLogistics(p, r);
+
+        assertThat(pair.a().getShippingCny()).isEqualByComparingTo("10");
+    }
+
+    @Test
+    void unEnvioDeCeroSiSeGuardaPorqueEsUnImporteYNoUnaAusencia() {
+        // Cero y "no viene" no son lo mismo: un proveedor con envío gratis declara 0, y tratarlo
+        // como ausencia dejaría puesto el importe anterior y cobraría un flete que nadie paga.
+        ProductEntity p = new ProductEntity();
+        VariantEntityPair pair = variants("SKU-M", "SKU-L");
+        pair.a().setShippingCny(new java.math.BigDecimal("16"));
+        p.setVariants(List.of(pair.a(), pair.b()));
+
+        BulkProductDtoIn r = emptyRow();
+        r.setVariants(List.of(variantConEnvio("SKU-M", java.math.BigDecimal.ZERO)));
+
+        BulkProductFields.applyVariantLogistics(p, r);
+
+        assertThat(pair.a().getShippingCny()).isEqualByComparingTo("0");
+    }
+
     // ---------------------------------------------------------------- traducciones extra
 
     @Test
     void unIdiomaNuevoSeAnadeYUnoExistenteSeActualizaEnVezDeDuplicarse() {
         // El catálogo se reimporta a menudo: acumular traducciones dejaría la vieja conviviendo con la nueva.
         ProductEntity p = new ProductEntity();
-        p.setTranslations(new java.util.ArrayList<>(List.of(
-                translationEntity("fr", "Ancien titre"))));
+        p.setTranslations(new java.util.ArrayList<>(List.of(translationEntity("fr", "Ancien titre"))));
 
         BulkProductDtoIn r = emptyRow();
-        r.setTranslations(new LinkedHashMap<>(Map.of(
-                "FR", translationRow("Montre homme", "Description FR"),
-                "de", translationRow("Herrenuhr", "Beschreibung"))));
+        r.setTranslations(new LinkedHashMap<>(Map.of("FR", translationRow("Montre homme", "Description FR"), "de",
+                translationRow("Herrenuhr", "Beschreibung"))));
 
         BulkProductFields.applyExtraTranslations(p, r);
 
         assertThat(p.getTranslations()).hasSize(2);
-        assertThat(p.getTranslations()).anyMatch(t -> "fr".equals(t.getLanguage())
-                && "Montre homme".equals(t.getTitle()));
+        assertThat(p.getTranslations())
+                .anyMatch(t -> "fr".equals(t.getLanguage()) && "Montre homme".equals(t.getTitle()));
         assertThat(p.getTranslations()).anyMatch(t -> "de".equals(t.getLanguage()));
     }
 
@@ -344,8 +400,7 @@ class BulkProductFieldsTest {
 
         BulkProductFields.applyExtraTranslations(p, r);
 
-        assertThat(p.getTranslations().get(0).getShortDescription())
-                .hasSize(BulkProductFields.MAX_SHORT_DESCRIPTION);
+        assertThat(p.getTranslations().get(0).getShortDescription()).hasSize(BulkProductFields.MAX_SHORT_DESCRIPTION);
     }
 
     @Test
@@ -384,6 +439,13 @@ class BulkProductFieldsTest {
         return v;
     }
 
+    private static BulkProductDtoIn.BulkVariant variantConEnvio(String sku, java.math.BigDecimal envio) {
+        BulkProductDtoIn.BulkVariant v = new BulkProductDtoIn.BulkVariant();
+        v.setSku(sku);
+        v.setShippingCny(envio);
+        return v;
+    }
+
     private static ProductTranslationEntity translationEntity(String lang, String title) {
         return ProductTranslationEntity.builder().language(lang).title(title).build();
     }
@@ -402,8 +464,7 @@ class BulkProductFieldsTest {
         // El chino es la clave estable que viene del proveedor; el texto traducido cambia entre cargas.
         ProductEntity p = productWithColour("红色");
         BulkProductDtoIn r = emptyRow();
-        r.setVariantAxes(List.of(axisWithTranslations("红色",
-                new LinkedHashMap<>(Map.of("es", "Rojo", "en", "Red")))));
+        r.setVariantAxes(List.of(axisWithTranslations("红色", new LinkedHashMap<>(Map.of("es", "Rojo", "en", "Red")))));
 
         BulkProductFields.applyVariantValueTranslations(p, r);
 
@@ -418,8 +479,8 @@ class BulkProductFieldsTest {
         // con la nueva y el escaparate mostraría una u otra según el orden.
         ProductEntity p = productWithColour("红色");
         VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
-        value.getTranslations().add(VariantValueTranslationEntity.builder()
-                .variantValue(value).language("es").value("Colorado").build());
+        value.getTranslations().add(
+                VariantValueTranslationEntity.builder().variantValue(value).language("es").value("Colorado").build());
 
         BulkProductDtoIn r = emptyRow();
         r.setVariantAxes(List.of(axisWithTranslations("红色", new LinkedHashMap<>(Map.of("es", "Rojo")))));
@@ -434,8 +495,8 @@ class BulkProductFieldsTest {
     void unValorSinTraduccionesEnLaFilaConservaLasQueYaTenia() {
         ProductEntity p = productWithColour("红色");
         VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
-        value.getTranslations().add(VariantValueTranslationEntity.builder()
-                .variantValue(value).language("es").value("Rojo").build());
+        value.getTranslations()
+                .add(VariantValueTranslationEntity.builder().variantValue(value).language("es").value("Rojo").build());
 
         BulkProductDtoIn r = emptyRow();
         r.setVariantAxes(List.of(axisWithTranslations("蓝色", new LinkedHashMap<>(Map.of("es", "Azul")))));
@@ -465,8 +526,8 @@ class BulkProductFieldsTest {
     void unaFilaSinEjesNoTocaLasTraduccionesExistentes() {
         ProductEntity p = productWithColour("红色");
         VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
-        value.getTranslations().add(VariantValueTranslationEntity.builder()
-                .variantValue(value).language("es").value("Rojo").build());
+        value.getTranslations()
+                .add(VariantValueTranslationEntity.builder().variantValue(value).language("es").value("Rojo").build());
 
         BulkProductFields.applyVariantValueTranslations(p, emptyRow());
 

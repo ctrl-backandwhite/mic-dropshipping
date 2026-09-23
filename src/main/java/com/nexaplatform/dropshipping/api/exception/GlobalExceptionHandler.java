@@ -37,8 +37,8 @@ public class GlobalExceptionHandler {
         // Fuente ÚNICA de i18n de errores: si el código está catalogado en ErrorCode, devolvemos el
         // mensaje en el idioma de la petición (LocaleHolder); si no, el mensaje original de la excepción.
         String localized = ErrorCode.localize(code, LocaleHolder.get());
-        return ApiResponseDtoOut.builder().code(code).message(localized != null ? localized : message)
-                .details(details).timestamp(ZonedDateTime.now(ZoneOffset.UTC)).build();
+        return ApiResponseDtoOut.builder().code(code).message(localized != null ? localized : message).details(details)
+                .timestamp(ZonedDateTime.now(ZoneOffset.UTC)).build();
     }
 
     // ---------------- Domain hierarchy ----------------
@@ -117,8 +117,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.web.bind.MissingRequestHeaderException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleMissingHeader(
             org.springframework.web.bind.MissingRequestHeaderException ex) {
-        return new ResponseEntity<>(body("VE001", "Cabecera requerida ausente: " + ex.getHeaderName(),
-                List.of(ex.getHeaderName())), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(
+                body("VE001", "Cabecera requerida ausente: " + ex.getHeaderName(), List.of(ex.getHeaderName())),
+                HttpStatus.BAD_REQUEST);
     }
 
     // Content-Type no soportado (p. ej. text/plain en un endpoint JSON): 415, no un 500 genérico.
@@ -134,8 +135,9 @@ public class GlobalExceptionHandler {
         // El cliente solo recibe "JSON inválido" (no se le filtra el detalle interno), pero sin dejar
         // rastro en el log un cuerpo que Jackson no sabe leer es indiagnosticable desde fuera.
         log.warn("::> [API] Cuerpo de petición ilegible: {}", ex.getMostSpecificCause().getMessage());
-        return new ResponseEntity<>(body("VE004", "El contenido enviado no es un JSON válido. Revisa el formato.",
-                List.of()), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(
+                body("VE004", "El contenido enviado no es un JSON válido. Revisa el formato.", List.of()),
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -158,15 +160,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(TwoFactorRequiredException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleTwoFactorRequired(TwoFactorRequiredException ex) {
-        return new ResponseEntity<>(body("MFA_REQUIRED", "Two-factor authentication code required",
-                List.of(ex.getMessage())), HttpStatus.UNAUTHORIZED);
+        return new ResponseEntity<>(
+                body("MFA_REQUIRED", "Two-factor authentication code required", List.of(ex.getMessage())),
+                HttpStatus.UNAUTHORIZED);
     }
 
     /** 2FA: contraseña correcta pero el código TOTP / de recuperación es inválido. */
     @ExceptionHandler(TwoFactorInvalidException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleTwoFactorInvalid(TwoFactorInvalidException ex) {
-        return new ResponseEntity<>(body("MFA_INVALID", "Invalid two-factor authentication code",
-                List.of(ex.getMessage())), HttpStatus.UNAUTHORIZED);
+        return new ResponseEntity<>(
+                body("MFA_INVALID", "Invalid two-factor authentication code", List.of(ex.getMessage())),
+                HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(AuthenticationException.class)
@@ -202,11 +206,11 @@ public class GlobalExceptionHandler {
                 List.of(ex.getMessage() == null ? "" : ex.getMessage())), HttpStatus.BAD_REQUEST);
     }
 
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleGlobal(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(body("IS001", "Ocurrió un error inesperado. Inténtalo de nuevo en unos minutos.",
-                List.of()), HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(
+                body("IS001", "Ocurrió un error inesperado. Inténtalo de nuevo en unos minutos.", List.of()),
+                HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

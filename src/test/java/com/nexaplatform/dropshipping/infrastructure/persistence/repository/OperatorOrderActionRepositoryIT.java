@@ -30,18 +30,10 @@ class OperatorOrderActionRepositoryIT extends PersistenceITBase {
 
     private OperatorOrderActionEntity action(String subject, UUID orderId, String act, long commission,
             Instant processedAt) {
-        return OperatorOrderActionEntity.builder()
-                .operatorSubject(subject)
-                .operatorEmail(subject + "@nx.local")
-                .operatorName("Op " + subject)
-                .orderId(orderId)
-                .orderNumber("ORD-" + orderId.toString().substring(0, 8))
-                .action(act)
-                .commissionCnyCents(commission)
-                .itemCount(1)
-                .orderSource("PLATFORM")
-                .processedAt(processedAt)
-                .build();
+        return OperatorOrderActionEntity.builder().operatorSubject(subject).operatorEmail(subject + "@nx.local")
+                .operatorName("Op " + subject).orderId(orderId).orderNumber("ORD-" + orderId.toString().substring(0, 8))
+                .action(act).commissionCnyCents(commission).itemCount(1).orderSource("PLATFORM")
+                .processedAt(processedAt).build();
     }
 
     @Test
@@ -77,8 +69,8 @@ class OperatorOrderActionRepositoryIT extends PersistenceITBase {
         actions.save(action("op-2", UUID.randomUUID(), "DELIVERED", 7000, T1)); // other operator
         actions.flush();
 
-        Page<OperatorOrderActionEntity> page = actions.findByOperatorSubjectAndProcessedAtBetween(
-                "op-1", FROM, TO, PageRequest.of(0, 10));
+        Page<OperatorOrderActionEntity> page = actions.findByOperatorSubjectAndProcessedAtBetween("op-1", FROM, TO,
+                PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent()).allMatch(a -> a.getOperatorSubject().equals("op-1"));

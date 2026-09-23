@@ -27,8 +27,8 @@ public class UserDeviceRepositoryImpl implements UserDeviceRepository {
         // Se busca por TOKEN y no por usuario: si ese dispositivo ya estaba —del mismo dueño o de
         // otro— la fila se reasigna. Insertar sin más chocaría con la clave única, y dejar la fila
         // vieja haría que el teléfono de quien lo vendió siguiera recibiendo los avisos anteriores.
-        UserDeviceEntity fila = jpa.findByPushToken(pushToken).orElseGet(() -> UserDeviceEntity.builder()
-                .id(UUID.randomUUID()).pushToken(pushToken).creadoEl(ahora).build());
+        UserDeviceEntity fila = jpa.findByPushToken(pushToken).orElseGet(
+                () -> UserDeviceEntity.builder().id(UUID.randomUUID()).pushToken(pushToken).creadoEl(ahora).build());
 
         UserEntity propietario = new UserEntity();
         propietario.setId(userId);
@@ -62,9 +62,8 @@ public class UserDeviceRepositoryImpl implements UserDeviceRepository {
     }
 
     private static UserDevice aModelo(UserDeviceEntity e) {
-        return UserDevice.builder().id(e.getId())
-                .userId(e.getUser() != null ? e.getUser().getId() : null)
-                .pushToken(e.getPushToken()).plataforma(e.getPlataforma())
-                .creadoEl(e.getCreadoEl()).ultimaSenal(e.getUltimaSenal()).build();
+        return UserDevice.builder().id(e.getId()).userId(e.getUser() != null ? e.getUser().getId() : null)
+                .pushToken(e.getPushToken()).plataforma(e.getPlataforma()).creadoEl(e.getCreadoEl())
+                .ultimaSenal(e.getUltimaSenal()).build();
     }
 }

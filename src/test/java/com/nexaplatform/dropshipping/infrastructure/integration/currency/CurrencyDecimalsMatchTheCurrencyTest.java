@@ -53,14 +53,9 @@ class CurrencyDecimalsMatchTheCurrencyTest {
 
     @ParameterizedTest(name = "{0}: {2} decimales")
     @CsvSource({
-        // moneda, tasa frente al dólar, decimales que admite
-        "JPY, 163.508502, 0",
-        "CLP, 934.879702, 0",
-        "KRW, 1445.619838, 0",
-        "EUR, 0.87717, 2",
-        "GBP, 0.751900, 2",
-        "MXN, 17.450000, 2",
-    })
+            // moneda, tasa frente al dólar, decimales que admite
+            "JPY, 163.508502, 0", "CLP, 934.879702, 0", "KRW, 1445.619838, 0", "EUR, 0.87717, 2", "GBP, 0.751900, 2",
+            "MXN, 17.450000, 2",})
     void cadaMonedaSeRedondeaASusDecimales(String moneda, String tasa, int decimales) {
         tasa(moneda, tasa);
 

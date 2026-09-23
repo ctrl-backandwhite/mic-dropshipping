@@ -125,8 +125,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
             BigDecimal after = BigDecimal.valueOf(t.getBalanceAfterCents()).divide(BigDecimal.valueOf(100), 4,
                     RoundingMode.HALF_UP);
             String sign = t.getAmountUsdCents() >= 0 ? "+" : "-";
-            t.setAmountFormatted(sign + currencyService.formatIn(currencyService.usdTo(amt.abs(), currency),
-                    currency, vLocale));
+            t.setAmountFormatted(
+                    sign + currencyService.formatIn(currencyService.usdTo(amt.abs(), currency), currency, vLocale));
             t.setBalanceAfterFormatted(
                     currencyService.formatIn(currencyService.usdTo(after, currency), currency, vLocale));
         }
@@ -137,9 +137,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Transactional(readOnly = true)
     public long countMyTransactions(UUID userId) {
         // Igual que el extracto: contar no puede crear el monedero (ver getMyTransactions).
-        return walletRepository.findByUserId(userId)
-                .map(w -> txRepository.countByWalletId(w.getId()))
-                .orElse(0L);
+        return walletRepository.findByUserId(userId).map(w -> txRepository.countByWalletId(w.getId())).orElse(0L);
     }
 
     /* ============ Admin ============ */
@@ -242,8 +240,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
         if (amountUsdCents <= 0)
             throw new BusinessException("Deposit amount must be positive");
         return recordTransaction(
-                new LedgerEntry(userId, "DEPOSIT", amountUsdCents, paymentId, null, idempotencyKey, description),
-                null);
+                new LedgerEntry(userId, "DEPOSIT", amountUsdCents, paymentId, null, idempotencyKey, description), null);
     }
 
     @Override
@@ -257,8 +254,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
             throw new BusinessException("WALLET_INSUFFICIENT_BALANCE", "Insufficient wallet balance");
         }
         return recordTransaction(
-                new LedgerEntry(userId, "PAYMENT", -amountUsdCents, null, orderId, idempotencyKey, description),
-                null);
+                new LedgerEntry(userId, "PAYMENT", -amountUsdCents, null, orderId, idempotencyKey, description), null);
     }
 
     @Override
@@ -327,7 +323,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
         // lectura del saldo, la comprobación y la escritura queden serializadas y NO se pueda doble-gastar
         // por checkouts concurrentes (lost update). El lock también serializa reenvíos de la MISMA clave de
         // idempotencia, por eso su comprobación va AHORA después de tomar el lock.
-        Wallet w = preloadedWallet != null ? preloadedWallet
+        Wallet w = preloadedWallet != null
+                ? preloadedWallet
                 : (affectsBalance ? requireForUpdate(entry.userId()) : require(entry.userId()));
         if (entry.idempotencyKey() != null) {
             Optional<WalletTransaction> existing = txRepository.findByIdempotencyKey(entry.idempotencyKey());

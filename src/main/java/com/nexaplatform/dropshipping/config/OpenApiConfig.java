@@ -62,12 +62,14 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI nexaDropOpenAPI() {
         OpenAPI api = buildOpenAPI();
-        api.addExtension("x-rate-limit", Map.of("policies", List.of(
-                Map.of(SCOPE, "catalog.read", PERMINUTE, 600, PERDAY, 50000, APPLIESTO, PER_CLIENT_ID),
-                Map.of(SCOPE, "orders.write", PERMINUTE, 120, PERDAY, 10000, APPLIESTO, PER_CLIENT_ID),
-                Map.of(SCOPE, "shop.sync", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, PER_CLIENT_ID),
-                Map.of(SCOPE, "storefront", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, "per IP")), "headers",
-                List.of("RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")));
+        api.addExtension("x-rate-limit",
+                Map.of("policies",
+                        List.of(Map.of(SCOPE, "catalog.read", PERMINUTE, 600, PERDAY, 50000, APPLIESTO, PER_CLIENT_ID),
+                                Map.of(SCOPE, "orders.write", PERMINUTE, 120, PERDAY, 10000, APPLIESTO, PER_CLIENT_ID),
+                                Map.of(SCOPE, "shop.sync", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, PER_CLIENT_ID),
+                                Map.of(SCOPE, "storefront", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, "per IP")),
+                        "headers",
+                        List.of("RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")));
         return api;
     }
 
@@ -148,8 +150,9 @@ public class OpenApiConfig {
     /** Public storefront group: no authentication. */
     @Bean
     public GroupedOpenApi storefrontApi() {
-        return GroupedOpenApi.builder().group("storefront").pathsToMatch("/api/v1/rate-limits/**", "/api/v1/invoices/**")
-                .addOpenApiCustomizer(globalResponses()).build();
+        return GroupedOpenApi.builder().group("storefront")
+                .pathsToMatch("/api/v1/rate-limits/**", "/api/v1/invoices/**").addOpenApiCustomizer(globalResponses())
+                .build();
     }
 
     /** Admin / self-service group: cookie session. */
@@ -204,14 +207,14 @@ public class OpenApiConfig {
     /** Respuestas de error del envoltorio canónico que se documentan en TODAS las operaciones. */
     private enum StandardError {
 
-        BAD_REQUEST("400", "Bad request — validation or malformed input"),
-        UNAUTHORIZED("401", "Unauthorized — authentication required or invalid"),
-        FORBIDDEN("403", "Forbidden — insufficient permissions"),
-        NOT_FOUND("404", "Not found — the resource does not exist"),
-        CONFLICT("409", "Conflict — domain/state or uniqueness conflict"),
-        UNPROCESSABLE("422", "Unprocessable entity — business rule violated"),
-        TOO_MANY_REQUESTS("429", "Too many requests — rate limit exceeded"),
-        INTERNAL("500", "Internal server error");
+        BAD_REQUEST("400", "Bad request — validation or malformed input"), UNAUTHORIZED("401",
+                "Unauthorized — authentication required or invalid"), FORBIDDEN("403",
+                        "Forbidden — insufficient permissions"), NOT_FOUND("404",
+                                "Not found — the resource does not exist"), CONFLICT("409",
+                                        "Conflict — domain/state or uniqueness conflict"), UNPROCESSABLE("422",
+                                                "Unprocessable entity — business rule violated"), TOO_MANY_REQUESTS(
+                                                        "429", "Too many requests — rate limit exceeded"), INTERNAL(
+                                                                "500", "Internal server error");
 
         private final String code;
         private final String description;

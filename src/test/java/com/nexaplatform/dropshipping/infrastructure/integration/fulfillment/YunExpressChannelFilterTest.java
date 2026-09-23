@@ -37,12 +37,11 @@ class YunExpressChannelFilterTest {
 
     /** Lo que cotiza España a 0,5 kg, con sus precios reales. */
     private static List<RateOption> espana() {
-        return List.of(
-                canal("FZZXR", "55.00"),        // línea de ropa
-                canal("FZZXR-AMZ", "55.00"),    // ✗ exige IOSS de Amazon
-                canal("CNDWA", "57.00"),        // ✗ postal, DAP
-                canal("THPHR", "57.50"),        // línea global
-                canal("EUB-SZ", "56.00"),       // ✗ postal, DAP
+        return List.of(canal("FZZXR", "55.00"), // línea de ropa
+                canal("FZZXR-AMZ", "55.00"), // ✗ exige IOSS de Amazon
+                canal("CNDWA", "57.00"), // ✗ postal, DAP
+                canal("THPHR", "57.50"), // línea global
+                canal("EUB-SZ", "56.00"), // ✗ postal, DAP
                 canal("BKPHR", "66.00"));
     }
 
@@ -51,8 +50,7 @@ class YunExpressChannelFilterTest {
     void descartaLosIncompatiblesConElPrepago() {
         List<RateOption> ofrecibles = YunExpressFulfillmentService.deliverableRates(espana(), true);
 
-        assertThat(ofrecibles).extracting(RateOption::productCode)
-                .containsExactly("FZZXR", "THPHR", "BKPHR")
+        assertThat(ofrecibles).extracting(RateOption::productCode).containsExactly("FZZXR", "THPHR", "BKPHR")
                 .doesNotContain("CNDWA", "EUB-SZ", "FZZXR-AMZ");
     }
 
@@ -62,9 +60,8 @@ class YunExpressChannelFilterTest {
         List<RateOption> ofrecibles = YunExpressFulfillmentService.deliverableRates(espana(), true);
 
         // 55,00 de FZZXR y no los 55,00 del -AMZ ni los 56,00 del postal.
-        assertThat(ofrecibles).first()
-                .extracting(RateOption::productCode, RateOption::amount)
-                .containsExactly("FZZXR", new BigDecimal("55.00"));
+        assertThat(ofrecibles).first().extracting(RateOption::productCode, RateOption::amount).containsExactly("FZZXR",
+                new BigDecimal("55.00"));
     }
 
     @Test

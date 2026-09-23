@@ -51,7 +51,8 @@ public interface MeWalletApi {
     @Operation(summary = "Rounded recharge presets in the active currency (backend-computed)")
     @ApiResponse(responseCode = "200", description = "Recharge options returned")
     @GetMapping("/recharge/options")
-    ResponseEntity<RechargeOptions> rechargeOptions(@RequestParam(value = "currency", required = false) String currency);
+    ResponseEntity<RechargeOptions> rechargeOptions(
+            @RequestParam(value = "currency", required = false) String currency);
 
     @Operation(summary = "Confirm a wallet recharge on return from the provider (Stripe/PayPal) and credit it")
     @ApiResponse(responseCode = "200", description = "Recharge confirmed and credited")

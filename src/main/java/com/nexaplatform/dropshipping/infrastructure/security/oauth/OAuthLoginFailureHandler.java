@@ -57,7 +57,8 @@ public class OAuthLoginFailureHandler implements AuthenticationFailureHandler {
         }
         OAuth2Error error = oauthException.getError();
         String description = error.getDescription();
-        return description == null || description.isBlank() ? error.getErrorCode()
+        return description == null || description.isBlank()
+                ? error.getErrorCode()
                 : error.getErrorCode() + " — " + description;
     }
 }

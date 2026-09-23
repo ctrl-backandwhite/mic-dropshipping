@@ -53,13 +53,12 @@ public class CheckoutTotalsService {
      * @param customsSubsidyCents   lo mismo para la bolsa DEL ARANCEL. Son dos bolsas independientes:
      *                              ninguna cubre el concepto de la otra
      */
-    public record CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
-            int taxCents, int taxRateBps, CustomsValuation customs, int shippingSubsidyCents,
-            int customsSubsidyCents) {
+    public record CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents, int taxCents,
+            int taxRateBps, CustomsValuation customs, int shippingSubsidyCents, int customsSubsidyCents) {
 
         /** Sin subvención: el atajo de los llamantes y las pruebas que no la usan. */
-        public CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
-                int taxCents, int taxRateBps, CustomsValuation customs) {
+        public CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents, int taxCents,
+                int taxRateBps, CustomsValuation customs) {
             this(shippingBaseCents, customsHandlingCents, shippingCents, taxCents, taxRateBps, customs, 0, 0);
         }
 
@@ -87,14 +86,12 @@ public class CheckoutTotalsService {
 
         /** Qué parte del PORTE estamos cubriendo (0-100). */
         public int shippingSubsidyPercent() {
-            return shippingBaseCents <= 0 ? 0
-                    : (int) Math.round(shippingSubsidyCents * 100.0 / shippingBaseCents);
+            return shippingBaseCents <= 0 ? 0 : (int) Math.round(shippingSubsidyCents * 100.0 / shippingBaseCents);
         }
 
         /** Qué parte del ARANCEL estamos cubriendo (0-100). */
         public int customsSubsidyPercent() {
-            return customsHandlingCents <= 0 ? 0
-                    : (int) Math.round(customsSubsidyCents * 100.0 / customsHandlingCents);
+            return customsHandlingCents <= 0 ? 0 : (int) Math.round(customsSubsidyCents * 100.0 / customsHandlingCents);
         }
 
         /** ¿La bolsa cubrió el PORTE entero? Es lo que decide si al cliente se le dice «envío gratis». */
@@ -151,8 +148,8 @@ public class CheckoutTotalsService {
 
     /** Sin subvención. */
     @Transactional(readOnly = true)
-    public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
-            int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels) {
+    public CheckoutTotals compute(String country, String region, int discountedSubtotalCents, int shippingBaseCents,
+            List<CustomsDutyLinesService.DutyParcel> parcels) {
         return compute(country, region, discountedSubtotalCents, shippingBaseCents, parcels, Subsidy.NONE);
     }
 
@@ -175,9 +172,8 @@ public class CheckoutTotalsService {
      *                concepto se queda como ganancia, no se devuelve ni se traspasa a la otra
      */
     @Transactional(readOnly = true)
-    public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
-            int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels,
-            Subsidy subsidy) {
+    public CheckoutTotals compute(String country, String region, int discountedSubtotalCents, int shippingBaseCents,
+            List<CustomsDutyLinesService.DutyParcel> parcels, Subsidy subsidy) {
         int base = Math.max(0, shippingBaseCents);
         int intrinsic = Math.max(0, discountedSubtotalCents);
         int taxableBase = Math.addExact(intrinsic, base);
@@ -188,8 +184,8 @@ public class CheckoutTotalsService {
         CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents, parcels);
         int handling = customs.handlingFeeCents();
         if (log.isDebugEnabled() && (handling > 0 || customs.deMinimisExceeded())) {
-            log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country,
-                    customs.taxMode(), customs.declaredValueCents(), customs.deMinimisExceeded(), handling);
+            log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country, customs.taxMode(),
+                    customs.declaredValueCents(), customs.deMinimisExceeded(), handling);
         }
         // Bolsas estancas: cada una cubre SU concepto y como mucho lo que ese concepto cuesta. Sin
         // trasvase; el sobrante se queda como ganancia. Se llevan por separado además porque el resumen
@@ -204,10 +200,11 @@ public class CheckoutTotalsService {
         // momento de la operación no forma parte de la base imponible: si el envío sale gratis no hay
         // envío que gravar, y seguir cobrando su IVA sería repercutirle al cliente el impuesto de un
         // importe que no ha pagado. El arancel nunca estuvo en esta base y sigue sin estarlo.
-        int taxCentsFinal = porteCobrado == base ? taxCents
+        int taxCentsFinal = porteCobrado == base
+                ? taxCents
                 : taxService.taxCentsFor(country, region, Math.addExact(intrinsic, porteCobrado));
 
-        return new CheckoutTotals(base, handling, porteCobrado + (handling - subvencionArancel),
-                taxCentsFinal, taxRateBps, customs, subvencionPorte, subvencionArancel);
+        return new CheckoutTotals(base, handling, porteCobrado + (handling - subvencionArancel), taxCentsFinal,
+                taxRateBps, customs, subvencionPorte, subvencionArancel);
     }
 }

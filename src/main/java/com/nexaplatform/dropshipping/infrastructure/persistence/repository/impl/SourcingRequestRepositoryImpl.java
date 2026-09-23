@@ -80,8 +80,7 @@ public class SourcingRequestRepositoryImpl implements SourcingRequestRepository 
     private void applyModel(SourcingRequestEntity entity, SourcingRequest model) {
         // Relación gestionada resuelta vía lookup de repositorio.
         if (model.getUserId() != null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         // Campos escalares vía MapStruct.
         sourcingRequestEntityMapper.updateEntity(entity, model);

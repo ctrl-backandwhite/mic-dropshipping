@@ -70,8 +70,7 @@ public class FulfillmentFailure extends RuntimeException {
 
     /** Fallo clasificado a partir del mensaje del transportista. */
     public static FulfillmentFailure from(String message) {
-        return new FulfillmentFailure(
-                PermanentCode.matches(message) ? Kind.PERMANENT : Kind.TRANSIENT, message);
+        return new FulfillmentFailure(PermanentCode.matches(message) ? Kind.PERMANENT : Kind.TRANSIENT, message);
     }
 
     /**

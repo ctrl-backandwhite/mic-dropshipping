@@ -7,10 +7,7 @@ package com.nexaplatform.dropshipping.infrastructure.integration.chat;
  */
 public enum ChatRole {
 
-    SYSTEM("system"),
-    USER("user"),
-    ASSISTANT("assistant"),
-    TOOL("tool");
+    SYSTEM("system"), USER("user"), ASSISTANT("assistant"), TOOL("tool");
 
     private final String apiValue;
 

@@ -45,8 +45,7 @@ public class CatalogoBusConsumer {
     private final CategoryRepository categoriasJpa;
     private final ProductRepository productos;
 
-    public CatalogoBusConsumer(CatalogUseCase catalogo, CategoryRepository categoriasJpa,
-            ProductRepository productos) {
+    public CatalogoBusConsumer(CatalogUseCase catalogo, CategoryRepository categoriasJpa, ProductRepository productos) {
         this.catalogo = catalogo;
         this.categoriasJpa = categoriasJpa;
         this.productos = productos;
@@ -66,7 +65,8 @@ public class CatalogoBusConsumer {
         // transacción abierta, así que reventaba con «Cannot lazily initialize collection of role
         // CategoryEntity.translations» y ninguna categoría hija llegaba a crearse. De todo el
         // objeto solo hace falta el identificador.
-        UUID padre = evento.padre() == null ? null
+        UUID padre = evento.padre() == null
+                ? null
                 : categoriasJpa.findBySlug(evento.padre()).map(CategoryEntity::getId).orElse(null);
         if (evento.padre() != null && padre == null) {
             // Se lanza para que el mensaje se reintente: la categoría padre puede estar aún en
@@ -75,8 +75,7 @@ public class CatalogoBusConsumer {
             throw new IllegalStateException(
                     "Todavía no ha llegado la categoría padre " + evento.padre() + " de " + evento.codigo());
         }
-        catalogo.upsertCategory(new IngestCategoryRequest(
-                evento.codigo(), padre, "bus", evento.codigo(),
+        catalogo.upsertCategory(new IngestCategoryRequest(evento.codigo(), padre, "bus", evento.codigo(),
                 evento.nombre().get("zh"), 0, null, sinChino(evento.nombre())));
         log.info("Bus -> categoría {} aplicada", evento.codigo());
     }
@@ -94,8 +93,8 @@ public class CatalogoBusConsumer {
         if (resultado.getFailed() > 0) {
             // Se lanza para que NO se confirme y se reintente: dar por bueno un producto que no ha
             // entrado lo perdería para siempre, sin más rastro que una línea de registro.
-            throw new IllegalStateException("No se pudo aplicar el producto "
-                    + evento.ficha().getExternalId() + ": " + resultado.getErrors());
+            throw new IllegalStateException(
+                    "No se pudo aplicar el producto " + evento.ficha().getExternalId() + ": " + resultado.getErrors());
         }
         log.info("Bus -> producto {} aplicado", evento.ficha().getExternalId());
     }
@@ -121,8 +120,7 @@ public class CatalogoBusConsumer {
 
     /** Los nombres traducidos, sin el chino: ese va en su propio campo. */
     private Map<String, String> sinChino(Map<String, String> nombres) {
-        return nombres.entrySet().stream()
-                .filter(e -> !"zh".equals(e.getKey()))
+        return nombres.entrySet().stream().filter(e -> !"zh".equals(e.getKey()))
                 .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
@@ -150,8 +148,8 @@ public class CatalogoBusConsumer {
         try {
             accion.run();
         } catch (RuntimeException e) {
-            log.error("Bus -> NO se pudo aplicar {}: {}: {} · mensaje: {}",
-                    que, e.getClass().getSimpleName(), e.getMessage(), abreviar(mensaje), e);
+            log.error("Bus -> NO se pudo aplicar {}: {}: {} · mensaje: {}", que, e.getClass().getSimpleName(),
+                    e.getMessage(), abreviar(mensaje), e);
             throw e;
         }
     }

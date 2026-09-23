@@ -132,9 +132,9 @@ class Cov06SupplierUseCaseImplTest {
     void elNumeroDeProductosSeRellenaPorProveedorYCeroSiNoTiene() {
         UUID conProductos = UUID.randomUUID();
         UUID sinProductos = UUID.randomUUID();
-        when(conteoQuery.getResultList()).thenReturn(List.<Object[]>of(new Object[] {conProductos, 12L}));
-        when(supplierRepository.findAll()).thenReturn(List.of(Supplier.builder().id(conProductos).build(),
-                Supplier.builder().id(sinProductos).build()));
+        when(conteoQuery.getResultList()).thenReturn(List.<Object[]>of(new Object[]{conProductos, 12L}));
+        when(supplierRepository.findAll()).thenReturn(
+                List.of(Supplier.builder().id(conProductos).build(), Supplier.builder().id(sinProductos).build()));
 
         List<Supplier> resultado = useCase.findAll();
 
@@ -166,8 +166,7 @@ class Cov06SupplierUseCaseImplTest {
      */
     @Test
     void sinIndiceSeCaeASqlPaginadoYLaPaginaNegativaSeNormaliza() {
-        when(supplierSearchService.pageFromIndex(any(), any(), any(), anyInt(),
-                anyInt())).thenReturn(Optional.empty());
+        when(supplierSearchService.pageFromIndex(any(), any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         SupplierEntity entidad = new SupplierEntity();
         UUID id = UUID.randomUUID();
         entidad.setId(id);
@@ -175,7 +174,7 @@ class Cov06SupplierUseCaseImplTest {
                 PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")), 1);
         when(jpaSupplierRepository.findAll(any(Pageable.class))).thenReturn(pagina);
         when(supplierEntityMapper.toDomain(entidad)).thenReturn(Supplier.builder().id(id).build());
-        when(conteoQuery.getResultList()).thenReturn(List.<Object[]>of(new Object[] {id, 4L}));
+        when(conteoQuery.getResultList()).thenReturn(List.<Object[]>of(new Object[]{id, 4L}));
 
         SupplierUseCase.SupplierPage resultado = useCase.pageAdmin(null, null, null, -3, 20);
 
@@ -184,8 +183,7 @@ class Cov06SupplierUseCaseImplTest {
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         verify(jpaSupplierRepository).findAll(captor.capture());
         assertThat(captor.getValue().getPageNumber()).isZero();
-        assertThat(captor.getValue().getSort().getOrderFor("createdAt").getDirection())
-                .isEqualTo(Sort.Direction.DESC);
+        assertThat(captor.getValue().getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 
     /* ------------------------------ alta ------------------------------ */
@@ -252,8 +250,8 @@ class Cov06SupplierUseCaseImplTest {
         when(supplierRepository.getById(id)).thenReturn(existente);
         when(supplierRepository.update(any(Supplier.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Supplier actualizado = useCase.update(id, Supplier.builder().name("   ").country("").city("Yiwu")
-                .verified(false).trustPass(false).build());
+        Supplier actualizado = useCase.update(id,
+                Supplier.builder().name("   ").country("").city("Yiwu").verified(false).trustPass(false).build());
 
         assertThat(actualizado.getName()).isEqualTo("Fábrica");
         assertThat(actualizado.getCountry()).isEqualTo("CN");

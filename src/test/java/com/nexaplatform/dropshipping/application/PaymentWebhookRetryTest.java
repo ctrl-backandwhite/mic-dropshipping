@@ -90,14 +90,16 @@ class PaymentWebhookRetryTest {
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService,
-                customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
+                userRepository, orderRepository, walletUseCase,
+                org.mockito.Mockito
+                        .mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class),
+                auditLogger, partnerPlanSyncService, customerSubscriptionUseCase, subscriptionNotificationService,
+                new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
+                stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
     }
 
     private static final String STRIPE_PAID = """
             {"data":{"object":{"id":"pi_3Abc","metadata":{"paymentId":"%s"}}}}""";
-
 
     /**
      * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
@@ -124,8 +126,7 @@ class PaymentWebhookRetryTest {
         String event = STRIPE_PAID.formatted(paymentId);
 
         assertThatThrownBy(() -> subject.handleStripeEvent("payment_intent.succeeded", event))
-                .isInstanceOf(WebhookProcessingException.class)
-                .hasMessageContaining("reintente");
+                .isInstanceOf(WebhookProcessingException.class).hasMessageContaining("reintente");
     }
 
     @Test
@@ -146,14 +147,12 @@ class PaymentWebhookRetryTest {
         when(paymentRepository.findByProviderAndProviderRef(anyString(), anyString()))
                 .thenThrow(new IllegalStateException("connection reset"));
 
-        assertThatThrownBy(() -> subject.handlePayPalEvent(
-                """
-                        {"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"5X0"}}"""))
+        assertThatThrownBy(() -> subject.handlePayPalEvent("""
+                {"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"5X0"}}"""))
                 .isInstanceOf(WebhookProcessingException.class);
 
-        assertThatThrownBy(() -> subject.handleCoinbaseEvent(
-                """
-                        {"event":{"type":"charge:confirmed","data":{"code":"ABC"}}}"""))
+        assertThatThrownBy(() -> subject.handleCoinbaseEvent("""
+                {"event":{"type":"charge:confirmed","data":{"code":"ABC"}}}"""))
                 .isInstanceOf(WebhookProcessingException.class);
     }
 
@@ -164,24 +163,18 @@ class PaymentWebhookRetryTest {
         // Reintentarlo no lo arreglaría nunca, y la pasarela acabaría desactivando el endpoint.
         when(paymentRepository.findByProviderAndProviderRef(anyString(), anyString())).thenReturn(Optional.empty());
 
-        assertThat(subject.handlePayPalEvent(
-                """
-                        {"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"desconocido"}}"""))
-                .isEqualTo("no-match");
-        assertThat(subject.handleCoinbaseEvent(
-                """
-                        {"event":{"type":"charge:confirmed","data":{"code":"desconocido"}}}"""))
-                .isEqualTo("no-match");
+        assertThat(subject.handlePayPalEvent("""
+                {"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"desconocido"}}""")).isEqualTo("no-match");
+        assertThat(subject.handleCoinbaseEvent("""
+                {"event":{"type":"charge:confirmed","data":{"code":"desconocido"}}}""")).isEqualTo("no-match");
     }
 
     @Test
     void unEventoDeStripeSinPagoIdentificableSeDaPorAtendido() {
         when(paymentRepository.findByProviderAndProviderRef(anyString(), anyString())).thenReturn(Optional.empty());
 
-        assertThat(subject.handleStripeEvent("payment_intent.succeeded",
-                """
-                        {"data":{"object":{"id":"pi_desconocido"}}}"""))
-                .isEqualTo("no-match");
+        assertThat(subject.handleStripeEvent("payment_intent.succeeded", """
+                {"data":{"object":{"id":"pi_desconocido"}}}""")).isEqualTo("no-match");
     }
 
     @Test

@@ -270,9 +270,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return path.startsWith("/api/catalog/") || path.startsWith("/api/search") || path.startsWith("/api/shipping/")
                 || path.startsWith("/api/currency/") || path.startsWith("/api/languages")
                 || path.startsWith("/api/warehouses") || path.startsWith("/api/academy/")
-                || path.startsWith("/api/mentors") || path.startsWith("/api/pod/")
-                || path.startsWith("/api/billing/") || path.startsWith("/api/contact")
-                || path.startsWith("/api/newsletter/") || path.startsWith("/api/affiliate/");
+                || path.startsWith("/api/mentors") || path.startsWith("/api/pod/") || path.startsWith("/api/billing/")
+                || path.startsWith("/api/contact") || path.startsWith("/api/newsletter/")
+                || path.startsWith("/api/affiliate/");
     }
 
     /**
@@ -300,8 +300,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return false;
         }
         return MessageDigest.isEqual(presentado.getBytes(StandardCharsets.UTF_8),
-                buildToken.getBytes(StandardCharsets.UTF_8))
-                && esCaminoDeEscaparate(path);
+                buildToken.getBytes(StandardCharsets.UTF_8)) && esCaminoDeEscaparate(path);
     }
 
     /** Extracts the bucket key part (without the rule name) based on the rule scope. */

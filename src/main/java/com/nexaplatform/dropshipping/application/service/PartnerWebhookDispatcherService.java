@@ -61,8 +61,8 @@ public class PartnerWebhookDispatcherService {
         for (Map<String, Object> app : apps) {
             jdbc.update("INSERT INTO partner_webhook_delivery"
                     + " (id, partner_app_id, event_type, payload, status, attempt_count, next_attempt_at, created_at)"
-                    + " VALUES (?, ?, ?, ?, 'PENDING', 0, now(), now())",
-                    UUID.randomUUID(), app.get("id"), eventType, payload);
+                    + " VALUES (?, ?, ?, ?, 'PENDING', 0, now(), now())", UUID.randomUUID(), app.get("id"), eventType,
+                    payload);
         }
         if (!apps.isEmpty()) {
             log.info("::> [PARTNER-WH] queued {} deliveries for {}", apps.size(), eventType);
@@ -87,8 +87,8 @@ public class PartnerWebhookDispatcherService {
     /** Drains due PENDING / RETRY deliveries every 5s and posts them to the partner endpoints. */
     @Scheduled(fixedDelay = 5_000)
     public void drainDue() {
-        List<Map<String, Object>> due = jdbc.queryForList(
-                "SELECT d.id, d.partner_app_id, d.event_type, d.payload, d.attempt_count,"
+        List<Map<String, Object>> due = jdbc
+                .queryForList("SELECT d.id, d.partner_app_id, d.event_type, d.payload, d.attempt_count,"
                         + " a.webhook_url, a.webhook_secret"
                         + " FROM partner_webhook_delivery d JOIN partner_app a ON a.id = d.partner_app_id"
                         + " WHERE d.status IN ('PENDING','RETRY') AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= now())"
@@ -118,8 +118,8 @@ public class PartnerWebhookDispatcherService {
                     .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             boolean ok = res.statusCode() >= 200 && res.statusCode() < 300;
-            finish(id, attempt, ok ? "SUCCESS" : retryStatus(attempt), res.statusCode(),
-                    truncate(res.body(), 1000), ok ? null : nextRetry(attempt));
+            finish(id, attempt, ok ? "SUCCESS" : retryStatus(attempt), res.statusCode(), truncate(res.body(), 1000),
+                    ok ? null : nextRetry(attempt));
         } catch (Exception e) {
             // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
             // interrupción deja al pool sin enterarse de que le han pedido parar.
@@ -132,8 +132,9 @@ public class PartnerWebhookDispatcherService {
     }
 
     private void finish(UUID id, int attempt, String status, Integer code, String body, Timestamp nextRetry) {
-        jdbc.update("UPDATE partner_webhook_delivery SET status = ?, attempt_count = ?, response_code = ?,"
-                + " response_body = ?, last_attempt_at = now(), next_attempt_at = ? WHERE id = ?",
+        jdbc.update(
+                "UPDATE partner_webhook_delivery SET status = ?, attempt_count = ?, response_code = ?,"
+                        + " response_body = ?, last_attempt_at = now(), next_attempt_at = ? WHERE id = ?",
                 status, attempt, code, body, nextRetry, id);
     }
 

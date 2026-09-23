@@ -68,8 +68,7 @@ public class AdminSupplierController implements AdminSupplierApi {
 
     @Override
     public ResponseEntity<AdminSupplierDtoOut> create(AdminSupplierUpsertDtoIn req) {
-        return new ResponseEntity<>(mapper.toDtoOut(useCase.create(mapper.toDomain(req))),
-                HttpStatus.CREATED);
+        return new ResponseEntity<>(mapper.toDtoOut(useCase.create(mapper.toDomain(req))), HttpStatus.CREATED);
     }
 
     @Override

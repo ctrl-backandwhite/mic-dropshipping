@@ -42,14 +42,9 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
     // serums, electronics, kitchen scenes). We additionally gate blanks by a category-slug
     // allowlist of POD-compatible categories. Slugs not present today (mugs/totes/posters/...)
     // are kept so future printable categories work without another code change.
-    private static final Set<String> POD_BLANK_CATEGORY_SLUGS = Set.of(
-            "fashion-apparel", // T-shirts, hoodies, caps, socks, scarves, tote bags
-            "apparel", "ropa",
-            "mugs", "tazas",
-            "totes", "bags", "bolsas",
-            "phone-cases", "cases", "fundas",
-            "posters", "posters-prints",
-            "hoodies", "t-shirts", "tshirts");
+    private static final Set<String> POD_BLANK_CATEGORY_SLUGS = Set.of("fashion-apparel", // T-shirts, hoodies, caps, socks, scarves, tote bags
+            "apparel", "ropa", "mugs", "tazas", "totes", "bags", "bolsas", "phone-cases", "cases", "fundas", "posters",
+            "posters-prints", "hoodies", "t-shirts", "tshirts");
 
     private static boolean isPodBlankCategory(ProductEntity p) {
         return p.getCategory() != null && p.getCategory().getSlug() != null
@@ -58,13 +53,12 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
 
     // Real, reachable apparel/product mockup photos (DROP-599: the old cdn.nx036.local URLs were
     // fictional and rendered broken). One is picked deterministically so a design keeps its mockup.
-    private static final String[] MOCKUPS = {
-            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600",
+    private static final String[] MOCKUPS = {"https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600",
             "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600",
             "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=600",
             "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600",
             "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=600",
-            "https://images.unsplash.com/photo-1503341960582-b45751874cf0?w=600" };
+            "https://images.unsplash.com/photo-1503341960582-b45751874cf0?w=600"};
 
     private static String mockupFor(Object key) {
         return MOCKUPS[Math.floorMod(Objects.hashCode(key), MOCKUPS.length)];
@@ -73,10 +67,8 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<PodBlankProduct> blanks(String lang) {
-        return productRepository.findAll().stream()
-                .filter(p -> Boolean.TRUE.equals(p.getPodEnabled()))
-                .filter(PodDesignUseCaseImpl::isPodBlankCategory)
-                .map(p -> tinyProduct(p, lang)).toList();
+        return productRepository.findAll().stream().filter(p -> Boolean.TRUE.equals(p.getPodEnabled()))
+                .filter(PodDesignUseCaseImpl::isPodBlankCategory).map(p -> tinyProduct(p, lang)).toList();
     }
 
     @Override
@@ -128,9 +120,7 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
     public PodAiResult aiGenerate(String prompt) {
         // Mock: real implementation would call an image-gen API (e.g. SDXL / DALL·E).
         String safePrompt = prompt == null ? "" : prompt;
-        return PodAiResult.builder()
-                .mockupUrl(mockupFor(safePrompt))
-                .prompt(safePrompt).provider("mock").build();
+        return PodAiResult.builder().mockupUrl(mockupFor(safePrompt)).prompt(safePrompt).provider("mock").build();
     }
 
     /**

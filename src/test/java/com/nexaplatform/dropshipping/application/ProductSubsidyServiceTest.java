@@ -87,8 +87,8 @@ class ProductSubsidyServiceTest {
     void un_importe_negativo_cuenta_como_cero() {
         // Un negativo no es una subvención al revés —que cobraría MÁS envío del cotizado—, es un dato
         // mal metido; se ignora en vez de encarecerle el pedido al cliente.
-        ProductSubsidyService.Bags bags = service.bagsFor(
-                List.of(producto(new BigDecimal("-5.00"), new BigDecimal("2.00"))));
+        ProductSubsidyService.Bags bags = service
+                .bagsFor(List.of(producto(new BigDecimal("-5.00"), new BigDecimal("2.00"))));
 
         assertThat(bags.shippingCents()).isZero();
         assertThat(bags.dutyCents()).isEqualTo(100);

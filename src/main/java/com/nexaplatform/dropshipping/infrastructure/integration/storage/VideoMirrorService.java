@@ -219,8 +219,8 @@ public class VideoMirrorService {
             return;
         }
         List<ProductEntity> candidatos = productRepository.findVideosFailedForRetry(retryMaxAttempts, retryBatch);
-        List<UUID> listos = candidatos.stream().filter(p -> esperaCumplida(p, ahora))
-                .map(ProductEntity::getId).toList();
+        List<UUID> listos = candidatos.stream().filter(p -> esperaCumplida(p, ahora)).map(ProductEntity::getId)
+                .toList();
         if (listos.isEmpty()) {
             return;
         }
@@ -314,8 +314,7 @@ public class VideoMirrorService {
         }
         try {
             Guardado g = fetchAndStore(origen.trim());
-            productRepository.markVideoMirrored(id, g.url(), g.bytes(), g.hash(), MirrorStatus.MIRRORED,
-                    Instant.now());
+            productRepository.markVideoMirrored(id, g.url(), g.bytes(), g.hash(), MirrorStatus.MIRRORED, Instant.now());
             return true;
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
@@ -371,8 +370,7 @@ public class VideoMirrorService {
         for (int salto = 0; salto <= maxSaltos; salto++) {
             URI uri = URI.create(actual);
             PublicHttpUrl.assertPublic(uri);
-            HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(uri)
-                    .header("User-Agent", NAVEGADOR)
+            HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(uri).header("User-Agent", NAVEGADOR)
                     .timeout(Duration.ofSeconds(120)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
             if (res.statusCode() / 100 == 3) {
                 String destino = res.headers().firstValue("location").orElse(null);

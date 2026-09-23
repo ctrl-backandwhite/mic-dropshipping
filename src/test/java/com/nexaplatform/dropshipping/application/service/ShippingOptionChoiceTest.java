@@ -25,8 +25,7 @@ class ShippingOptionChoiceTest {
             new ShippingOption("THPHR", "Global line", 821, 6, 10));
 
     private static ShippingQuote quote() {
-        return new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping", 5, 8, "EU",
-                COTIZADAS);
+        return new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping", 5, 8, "EU", COTIZADAS);
     }
 
     @Test
@@ -59,8 +58,8 @@ class ShippingOptionChoiceTest {
     @DisplayName("sin opciones cotizadas no hay elección posible")
     void sinOpcionesDevuelveNulo() {
         // Tarifa de la tabla de zonas: no hay canales entre los que elegir.
-        ShippingQuote sinOpciones = new ShippingQuote(true, "ES", 750, "Standard Shipping",
-                "Standard Shipping", 5, 12, "EU");
+        ShippingQuote sinOpciones = new ShippingQuote(true, "ES", 750, "Standard Shipping", "Standard Shipping", 5, 12,
+                "EU");
 
         assertThat(ShippingOptionResolver.resolve(sinOpciones, "THPHR")).isNull();
         assertThat(ShippingOptionResolver.resolve(sinOpciones, null)).isNull();

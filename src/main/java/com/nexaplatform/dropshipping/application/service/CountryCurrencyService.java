@@ -46,8 +46,7 @@ public class CountryCurrencyService {
         }
         try {
             String code = Currency.getInstance(Locale.of("", iso)).getCurrencyCode();
-            return currencyRateService.find(code).filter(CurrencyRateEntity::isActive).isPresent()
-                    ? code : DEFAULT;
+            return currencyRateService.find(code).filter(CurrencyRateEntity::isActive).isPresent() ? code : DEFAULT;
         } catch (IllegalArgumentException ex) {
             return DEFAULT;
         }

@@ -97,7 +97,7 @@ class CompresorDeImagenTest {
     @Test
     @DisplayName("lo que no se puede decodificar se guarda igual, sin lanzar")
     void loQueNoSePuedeDecodificarSeGuardaIgual() {
-        byte[] basura = new byte[] {1, 2, 3, 4, 5, 6, 7, 8};
+        byte[] basura = new byte[]{1, 2, 3, 4, 5, 6, 7, 8};
 
         CompresorDeImagen.Comprimida salida = compresor.comprimir(basura, "jpg");
 
@@ -109,7 +109,7 @@ class CompresorDeImagenTest {
     @Test
     @DisplayName("el content-type de un jpg es image/jpeg")
     void elContentTypeDeUnJpg() {
-        CompresorDeImagen.Comprimida salida = compresor.comprimir(new byte[] {0}, "jpg");
+        CompresorDeImagen.Comprimida salida = compresor.comprimir(new byte[]{0}, "jpg");
 
         assertThat(salida.contentType()).isEqualTo("image/jpeg");
     }

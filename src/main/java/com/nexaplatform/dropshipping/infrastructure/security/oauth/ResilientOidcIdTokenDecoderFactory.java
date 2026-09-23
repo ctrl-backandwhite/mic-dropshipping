@@ -90,11 +90,10 @@ public class ResilientOidcIdTokenDecoderFactory implements JwtDecoderFactory<Cli
                     null);
             throw new OAuth2AuthenticationException(error, error.toString());
         }
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
-                .jwsAlgorithm(SignatureAlgorithm.RS256)
-                .restOperations(restOperations())
-                .build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(new OidcIdTokenValidator(clientRegistration)));
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).jwsAlgorithm(SignatureAlgorithm.RS256)
+                .restOperations(restOperations()).build();
+        decoder.setJwtValidator(
+                JwtValidators.createDefaultWithValidators(new OidcIdTokenValidator(clientRegistration)));
         decoder.setClaimSetConverter(OidcIdTokenDecoderFactory.createDefaultClaimTypeConverter());
         return decoder;
     }

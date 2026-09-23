@@ -57,8 +57,8 @@ public class UsdtGateway implements PaymentGateway {
         // FAIL-CLOSED: sin dirección de depósito configurada (ni Coinbase), NO se puede iniciar un pago USDT.
         // Evita dirigir los fondos del cliente a una dirección por defecto/incrustada.
         if (coinbaseKey.isBlank() && (manualAddress == null || manualAddress.isBlank())) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
-                    "USDT_NOT_CONFIGURED", "El pago con USDT no está disponible en este momento.");
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("USDT_NOT_CONFIGURED",
+                    "El pago con USDT no está disponible en este momento.");
         }
         String address = manualAddress;
         String chain = defaultChain;

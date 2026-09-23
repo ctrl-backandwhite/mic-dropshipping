@@ -46,8 +46,7 @@ class Cov04RedisCacheConfigTest {
     private RedisCacheConfiguration config(String cacheName) {
         Cache cache = manager.getCache(cacheName);
         assertThat(cache).as("caché %s", cacheName).isNotNull();
-        Cache target = cache instanceof TransactionAwareCacheDecorator decorator
-                ? decorator.getTargetCache() : cache;
+        Cache target = cache instanceof TransactionAwareCacheDecorator decorator ? decorator.getTargetCache() : cache;
         return ((RedisCache) target).getCacheConfiguration();
     }
 
@@ -99,14 +98,12 @@ class Cov04RedisCacheConfigTest {
     @Test
     void loQueSeCacheaDentroDeUnaTransaccionSoloSeEscribeSiLaTransaccionConfirma() {
         // Sin esto, una escritura que luego se deshace dejaría el dato revertido cacheado para todos.
-        assertThat(manager.getCache(CACHE_PRODUCT_DETAIL))
-                .isInstanceOf(TransactionAwareCacheDecorator.class);
+        assertThat(manager.getCache(CACHE_PRODUCT_DETAIL)).isInstanceOf(TransactionAwareCacheDecorator.class);
     }
 
     @Test
     void estanDeclaradasTodasLasCachesQueUsaLaAplicacion() {
-        assertThat(manager.getCacheNames()).contains(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
-                CACHE_PRODUCT_LIST, CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT,
-                CACHE_CURRENCY_RATES, CACHE_SEARCH);
+        assertThat(manager.getCacheNames()).contains(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY, CACHE_PRODUCT_LIST,
+                CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT, CACHE_CURRENCY_RATES, CACHE_SEARCH);
     }
 }

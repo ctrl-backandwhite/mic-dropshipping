@@ -78,12 +78,11 @@ class Cov04ShopConnectionSyncTest {
     void setUp() {
         userId = UUID.randomUUID();
         shopId = UUID.randomUUID();
-        shop = ShopConnection.builder().id(shopId).userId(userId).platform("shopify")
-                .accessTokenEnc("gcm:cifrado").build();
+        shop = ShopConnection.builder().id(shopId).userId(userId).platform("shopify").accessTokenEnc("gcm:cifrado")
+                .build();
         when(shopRepository.getById(shopId)).thenReturn(shop);
         // update() devuelve la tienda persistida: el use case le pone encima el contador de publicaciones.
-        when(shopRepository.update(any(ShopConnection.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(shopRepository.update(any(ShopConnection.class))).thenAnswer(inv -> inv.getArgument(0));
         when(listingRepository.save(any(ShopProductListing.class))).thenAnswer(inv -> inv.getArgument(0));
         when(tokenCrypto.isModern("gcm:cifrado")).thenReturn(true);
         when(tokenCrypto.decrypt("gcm:cifrado")).thenReturn("token-en-claro");
@@ -133,8 +132,7 @@ class Cov04ShopConnectionSyncTest {
         ShopProductListing malo = listing(ko);
         when(listingRepository.findByShopConnectionId(shopId)).thenReturn(List.of(bueno, malo));
         when(productRepository.findById(any(UUID.class))).thenReturn(Optional.of(new ProductEntity()));
-        when(connector.push(any(), anyString(), any()))
-                .thenReturn(new ShopConnector.PushResult(true, "remote-1", null))
+        when(connector.push(any(), anyString(), any())).thenReturn(new ShopConnector.PushResult(true, "remote-1", null))
                 .thenReturn(new ShopConnector.PushResult(false, null, "429 rate limited"));
 
         ShopConnection result = useCase.sync(userId, shopId);
@@ -232,8 +230,7 @@ class Cov04ShopConnectionSyncTest {
         conConector();
         when(listingRepository.findByShopConnectionId(shopId)).thenReturn(List.of(listing(UUID.randomUUID())));
         when(productRepository.findById(any(UUID.class))).thenReturn(Optional.of(new ProductEntity()));
-        when(connector.push(any(), any(), any()))
-                .thenReturn(new ShopConnector.PushResult(false, null, "sin token"));
+        when(connector.push(any(), any(), any())).thenReturn(new ShopConnector.PushResult(false, null, "sin token"));
 
         ShopConnection result = useCase.sync(userId, shopId);
 
@@ -257,8 +254,7 @@ class Cov04ShopConnectionSyncTest {
         // DROP-701: antes se guardaba un "remote-xxxx" falso y el usuario creía que estaba publicado.
         when(connectorRegistry.connectorFor("shopify")).thenReturn(Optional.empty());
         UUID productId = UUID.randomUUID();
-        when(listingRepository.findByShopConnectionIdAndProductId(shopId, productId))
-                .thenReturn(Optional.empty());
+        when(listingRepository.findByShopConnectionIdAndProductId(shopId, productId)).thenReturn(Optional.empty());
 
         ShopProductListing result = useCase.listProduct(userId, shopId, productId);
 
@@ -271,8 +267,7 @@ class Cov04ShopConnectionSyncTest {
     void publicarUnProductoQueYaNoExisteDejaElMotivoEnElListing() {
         conConector();
         UUID productId = UUID.randomUUID();
-        when(listingRepository.findByShopConnectionIdAndProductId(shopId, productId))
-                .thenReturn(Optional.empty());
+        when(listingRepository.findByShopConnectionIdAndProductId(shopId, productId)).thenReturn(Optional.empty());
         when(productRepository.findById(productId)).thenReturn(Optional.empty());
 
         ShopProductListing result = useCase.listProduct(userId, shopId, productId);
@@ -360,8 +355,8 @@ class Cov04ShopConnectionSyncTest {
 
     @Test
     void elCatalogoDePlataformasEsElQueDeclaraElRegistroDeConectores() {
-        List<ShopPlatform> catalogo = List.of(ShopPlatform.builder().code("shopify").label("Shopify")
-                .available(true).build());
+        List<ShopPlatform> catalogo = List
+                .of(ShopPlatform.builder().code("shopify").label("Shopify").available(true).build());
         when(connectorRegistry.catalog()).thenReturn(catalogo);
 
         assertThat(useCase.platforms()).isEqualTo(catalogo);
@@ -380,8 +375,7 @@ class Cov04ShopConnectionSyncTest {
         UUID desconocida = UUID.randomUUID();
         when(shopRepository.getById(desconocida)).thenReturn(null);
 
-        assertThatThrownBy(() -> useCase.disconnect(userId, desconocida))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.disconnect(userId, desconocida)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -402,12 +396,11 @@ class Cov04ShopConnectionSyncTest {
     @Test
     void elLimiteDelPlanSeCompruebaAntesDeCifrarNada() {
         when(shopRepository.findByUserId(userId)).thenReturn(List.of());
-        doThrow(new IllegalStateException("límite de tiendas alcanzado"))
-                .when(planLimitService).assertWithinLimit(any(UUID.class), anyString(), anyLong());
+        doThrow(new IllegalStateException("límite de tiendas alcanzado")).when(planLimitService)
+                .assertWithinLimit(any(UUID.class), anyString(), anyLong());
         ShopConnection nueva = ShopConnection.builder().platform("shopify").accessTokenEnc("tok").build();
 
-        assertThatThrownBy(() -> useCase.connect(userId, nueva))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> useCase.connect(userId, nueva)).isInstanceOf(IllegalStateException.class);
         verify(shopRepository, never()).save(any(ShopConnection.class));
     }
 }

@@ -138,9 +138,9 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             return;
         }
         productRepo.findById(productId)
-                .ifPresent(p -> listingRepo.save(ShopProductListingEntity.builder().shopConnection(shop)
-                        .product(p).remoteProductId(item.hasNonNull("sku") ? item.get("sku").asText() : null)
-                        .status("PUBLISHED").build()));
+                .ifPresent(p -> listingRepo.save(ShopProductListingEntity.builder().shopConnection(shop).product(p)
+                        .remoteProductId(item.hasNonNull("sku") ? item.get("sku").asText() : null).status("PUBLISHED")
+                        .build()));
     }
 
     /** Dirección de envío: se acepta bajo la clave {@code shippingAddress} o {@code shipping_address}. */

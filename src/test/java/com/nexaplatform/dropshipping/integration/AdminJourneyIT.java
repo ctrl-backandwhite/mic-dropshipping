@@ -79,7 +79,7 @@ class AdminJourneyIT extends BaseIntegration {
      * que el coste (2,5) desde el 25-ago-2026: el margen grava el desembolso completo al proveedor.
      */
     private static final int UNIDAD_CENTIMOS = 3250;
-    private static final int ENVIO_ES_CENTIMOS = 849;   // 4,99 fijos + 3,50 × 1 kg
+    private static final int ENVIO_ES_CENTIMOS = 849; // 4,99 fijos + 3,50 × 1 kg
     private static final int DESPACHO_ES_CENTIMOS = 250;
     private static final int IVA_ES_BPS = 2100;
     private static final long SALDO_INICIAL = 20000L;
@@ -153,59 +153,57 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 1. Acceso ──────────────────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueAcceso() {
-        return List.of(
-                paso("Entra con sus credenciales y recibe un token con el rol ADMIN", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/auth/login", null,
-                            Map.of("email", emailAdmin, "password", CLAVE_ADMIN));
-                    assertThat(r.status()).isEqualTo(200);
-                    tokenAdmin = r.cuerpo().get("token").asText();
-                    assertThat(r.cuerpo().get("user").get("role").asText()).isEqualTo("ADMIN");
-                }),
+        return List.of(paso("Entra con sus credenciales y recibe un token con el rol ADMIN", () -> {
+            Respuesta r = llamar(HttpMethod.POST, "/api/auth/login", null,
+                    Map.of("email", emailAdmin, "password", CLAVE_ADMIN));
+            assertThat(r.status()).isEqualTo(200);
+            tokenAdmin = r.cuerpo().get("token").asText();
+            assertThat(r.cuerpo().get("user").get("role").asText()).isEqualTo("ADMIN");
+        }),
 
-                paso("Con la contraseña equivocada no entra", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/auth/login", null,
+                paso("Con la contraseña equivocada no entra",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/auth/login", null,
                                 Map.of("email", emailAdmin, "password", "NoEsLaMia1!")).status()).isEqualTo(401)),
 
-                paso("El panel de administración exige token: sin él responde 401", () ->
-                        assertThat(llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", null, null).status())
+                paso("El panel de administración exige token: sin él responde 401",
+                        () -> assertThat(llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", null, null).status())
                                 .isEqualTo(401)),
 
-                paso("Un usuario NORMAL no entra al panel: 403", () ->
-                        assertThat(llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", tokenUsuarioNormal, null)
-                                .status()).isEqualTo(403)));
+                paso("Un usuario NORMAL no entra al panel: 403", () -> assertThat(
+                        llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", tokenUsuarioNormal, null).status())
+                        .isEqualTo(403)));
     }
 
     /* ── 2. Alta y edición de producto ──────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueProducto() {
-        return List.of(
-                paso("Da de alta el producto y queda tarificado a 32,50 $", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin,
-                            producto("Camiseta de certificación", 80.0, 1));
-                    assertThat(r.status()).isEqualTo(200);
-                    idProducto = UUID.fromString(r.cuerpo().asText());
+        return List.of(paso("Da de alta el producto y queda tarificado a 32,50 $", () -> {
+            Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin,
+                    producto("Camiseta de certificación", 80.0, 1));
+            assertThat(r.status()).isEqualTo(200);
+            idProducto = UUID.fromString(r.cuerpo().asText());
 
-                    // El espejado de imágenes necesita S3/MinIO, que no existe en la certificación; el
-                    // escaparate solo lista lo que tiene imagen espejada. Se marca a mano: preparación,
-                    // no comprobación.
-                    jdbcTemplate.update("UPDATE product_image SET cdn_url = source_url WHERE cdn_url IS NULL");
-                    vaciarCaches();
+            // El espejado de imágenes necesita S3/MinIO, que no existe en la certificación; el
+            // escaparate solo lista lo que tiene imagen espejada. Se marca a mano: preparación,
+            // no comprobación.
+            jdbcTemplate.update("UPDATE product_image SET cdn_url = source_url WHERE cdn_url IS NULL");
+            vaciarCaches();
 
-                    Respuesta detalle = llamar(HttpMethod.GET,
-                            "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
-                    assertThat(detalle.status()).isEqualTo(200);
-                    slugProducto = detalle.cuerpo().get("slug").asText();
-                    assertThat(detalle.cuerpo().get("title").asText()).isEqualTo("Camiseta de certificación");
-                    importeExacto("precio de venta del alta", detalle.cuerpo().get("retailUsd"), "32.50");
-                    assertThat(detalle.cuerpo().get("variants")).hasSize(1);
-                    idVariante = UUID.fromString(detalle.cuerpo().get("variants").get(0).get("id").asText());
-                    // El administrador SÍ ve el desglose: 25,00 de base, 2,50 de IVA y 5,00 de envío. El IVA
-                    // y el porte del proveedor —1,00 y 2,00 sin margen— llevan el mismo factor 2,5 que el
-                    // coste desde el 25-ago-2026, y las tres cifras suman los 32,50 que se cobran.
-                    assertThat(detalle.cuerpo().get("baseFormatted").asText()).isEqualTo("$25.00");
-                    assertThat(detalle.cuerpo().get("ivaFormatted").asText()).isEqualTo("$2.50");
-                    assertThat(detalle.cuerpo().get("shippingFormatted").asText()).isEqualTo("$5.00");
-                }),
+            Respuesta detalle = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                    tokenAdmin, null);
+            assertThat(detalle.status()).isEqualTo(200);
+            slugProducto = detalle.cuerpo().get("slug").asText();
+            assertThat(detalle.cuerpo().get("title").asText()).isEqualTo("Camiseta de certificación");
+            importeExacto("precio de venta del alta", detalle.cuerpo().get("retailUsd"), "32.50");
+            assertThat(detalle.cuerpo().get("variants")).hasSize(1);
+            idVariante = UUID.fromString(detalle.cuerpo().get("variants").get(0).get("id").asText());
+            // El administrador SÍ ve el desglose: 25,00 de base, 2,50 de IVA y 5,00 de envío. El IVA
+            // y el porte del proveedor —1,00 y 2,00 sin margen— llevan el mismo factor 2,5 que el
+            // coste desde el 25-ago-2026, y las tres cifras suman los 32,50 que se cobran.
+            assertThat(detalle.cuerpo().get("baseFormatted").asText()).isEqualTo("$25.00");
+            assertThat(detalle.cuerpo().get("ivaFormatted").asText()).isEqualTo("$2.50");
+            assertThat(detalle.cuerpo().get("shippingFormatted").asText()).isEqualTo("$5.00");
+        }),
 
                 paso("Un producto SIN título se rechaza y no deja nada a medias", () -> {
                     // El mensaje que sale al cliente es el genérico del catálogo de errores (BR001); el
@@ -214,8 +212,7 @@ class AdminJourneyIT extends BaseIntegration {
                     int antes = enteroEnBd("SELECT count(*) FROM product");
                     Map<String, Object> sinTitulo = producto(null, 80.0, 1);
                     sinTitulo.remove("titleEs");
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin,
-                            sinTitulo);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin, sinTitulo);
                     assertThat(r.status()).isEqualTo(422);
                     assertThat(r.cuerpo().get("code").asText()).isEqualTo("BR001");
                     assertThat(enteroEnBd("SELECT count(*) FROM product")).isEqualTo(antes);
@@ -225,8 +222,7 @@ class AdminJourneyIT extends BaseIntegration {
                     int antes = enteroEnBd("SELECT count(*) FROM product");
                     Map<String, Object> sinPrecio = producto("Sin precio", 80.0, 1);
                     sinPrecio.remove("price");
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin,
-                            sinPrecio);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin, sinPrecio);
                     assertThat(r.status()).isEqualTo(422);
                     assertThat(enteroEnBd("SELECT count(*) FROM product")).isEqualTo(antes);
                 }),
@@ -238,24 +234,23 @@ class AdminJourneyIT extends BaseIntegration {
                             .status()).isEqualTo(422);
                     Map<String, Object> sinIva = producto("Sin IVA", 80.0, 1);
                     sinIva.remove("ivaCny");
-                    assertThat(llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin, sinIva)
-                            .status()).isEqualTo(422);
+                    assertThat(
+                            llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin, sinIva).status())
+                            .isEqualTo(422);
                 }),
 
                 paso("Un producto SIN imágenes se rechaza: el escaparate no podría enseñarlo", () -> {
                     int antes = enteroEnBd("SELECT count(*) FROM product");
                     Map<String, Object> sinImagen = producto("Sin imagen", 80.0, 1);
                     sinImagen.remove("imageUrls");
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin,
-                            sinImagen);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin, sinImagen);
                     assertThat(r.status()).isEqualTo(422);
                     assertThat(enteroEnBd("SELECT count(*) FROM product")).isEqualTo(antes);
                 }),
 
                 paso("Edita el producto: título y marca, sin tocar el precio", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                            tokenAdmin, Map.of("title", "Camiseta de certificación (editada)",
-                                    "brand", "NX036"));
+                            tokenAdmin, Map.of("title", "Camiseta de certificación (editada)", "brand", "NX036"));
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("title").asText()).isEqualTo("Camiseta de certificación (editada)");
                     assertThat(r.cuerpo().get("brand").asText()).isEqualTo("NX036");
@@ -263,8 +258,8 @@ class AdminJourneyIT extends BaseIntegration {
                     importeExacto("el precio no cambia al editar textos", r.cuerpo().get("retailUsd"), "32.50");
                 }),
 
-                paso("Editar un producto inexistente responde 404", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + UUID.randomUUID(),
+                paso("Editar un producto inexistente responde 404",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + UUID.randomUUID(),
                                 tokenAdmin, Map.of("title", "Fantasma")).status()).isEqualTo(404)),
 
                 paso("Cambia el precio del proveedor a 160 CNY y la venta pasa a 53,00 $", () -> {
@@ -273,8 +268,8 @@ class AdminJourneyIT extends BaseIntegration {
                             tokenAdmin, Map.of("basePrice", 160.0));
                     assertThat(r.status()).isEqualTo(200);
                     vaciarCaches();
-                    Respuesta detalle = llamar(HttpMethod.GET,
-                            "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
+                    Respuesta detalle = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                            tokenAdmin, null);
                     // La variante sigue a 80 CNY y es la que manda en el precio de cabecera: 32,50.
                     importeExacto("manda la variante comprable, no el precio base", detalle.cuerpo().get("retailUsd"),
                             "32.50");
@@ -290,17 +285,15 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 3. Importación masiva ──────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueImportacionMasiva() {
-        return List.of(
-                paso("Importa DOS productos en lote y los dos entran", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/bulk", tokenAdmin,
-                            List.of(producto("Gorra de certificación", 40.0, 1),
-                                    producto("Bufanda de certificación", 24.0, 1)));
-                    assertThat(r.status()).isEqualTo(200);
-                    assertThat(r.cuerpo().get("created").asInt()).isEqualTo(2);
-                    assertThat(r.cuerpo().get("failed").asInt()).isZero();
-                    assertThat(r.cuerpo().get("errors")).isEmpty();
-                    assertThat(enteroEnBd("SELECT count(*) FROM product")).isEqualTo(3);
-                }),
+        return List.of(paso("Importa DOS productos en lote y los dos entran", () -> {
+            Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/bulk", tokenAdmin, List
+                    .of(producto("Gorra de certificación", 40.0, 1), producto("Bufanda de certificación", 24.0, 1)));
+            assertThat(r.status()).isEqualTo(200);
+            assertThat(r.cuerpo().get("created").asInt()).isEqualTo(2);
+            assertThat(r.cuerpo().get("failed").asInt()).isZero();
+            assertThat(r.cuerpo().get("errors")).isEmpty();
+            assertThat(enteroEnBd("SELECT count(*) FROM product")).isEqualTo(3);
+        }),
 
                 paso("Reimportar el MISMO lote actualiza en el sitio y no duplica nada", () -> {
                     // La importación es un UPSERT por identificador externo: repetirla es idempotente.
@@ -309,8 +302,8 @@ class AdminJourneyIT extends BaseIntegration {
                                     producto("Bufanda de certificación", 24.0, 1)));
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("failed").asInt()).isZero();
-                    assertThat(enteroEnBd("SELECT count(*) FROM product"))
-                            .as("siguen siendo tres productos").isEqualTo(3);
+                    assertThat(enteroEnBd("SELECT count(*) FROM product")).as("siguen siendo tres productos")
+                            .isEqualTo(3);
                 }),
 
                 paso("Un lote con una fila rota importa las buenas y detalla la que falla", () -> {
@@ -322,8 +315,8 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("created").asInt()).isEqualTo(1);
                     assertThat(r.cuerpo().get("failed").asInt()).isEqualTo(1);
                     assertThat(r.cuerpo().get("errors")).hasSize(1);
-                    assertThat(r.cuerpo().get("errors").get(0).asText())
-                            .as("el error dice QUÉ fila y por qué").startsWith("Fila 2:");
+                    assertThat(r.cuerpo().get("errors").get(0).asText()).as("el error dice QUÉ fila y por qué")
+                            .startsWith("Fila 2:");
                 }),
 
                 paso("Un lote VACÍO no importa nada y tampoco falla", () -> {
@@ -336,16 +329,16 @@ class AdminJourneyIT extends BaseIntegration {
                 paso("Importa por líneas (NDJSON), el formato de los volcados grandes", () -> {
                     String ndjson = escribirJson(producto("Cinturón de certificación", 32.0, 1)) + "\n"
                             + escribirJson(producto("Guantes de certificación", 20.0, 1)) + "\n";
-                    Respuesta r = llamarTexto(HttpMethod.POST, "/api/admin/catalog/products/import/ndjson",
-                            tokenAdmin, ndjson, "application/x-ndjson");
+                    Respuesta r = llamarTexto(HttpMethod.POST, "/api/admin/catalog/products/import/ndjson", tokenAdmin,
+                            ndjson, "application/x-ndjson");
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("created").asInt()).isEqualTo(2);
                     assertThat(r.cuerpo().get("failed").asInt()).isZero();
                 }),
 
                 paso("Una línea NDJSON que no es JSON se anota como error de lectura", () -> {
-                    Respuesta r = llamarTexto(HttpMethod.POST, "/api/admin/catalog/products/import/ndjson",
-                            tokenAdmin, "esto-no-es-json\n", "application/x-ndjson");
+                    Respuesta r = llamarTexto(HttpMethod.POST, "/api/admin/catalog/products/import/ndjson", tokenAdmin,
+                            "esto-no-es-json\n", "application/x-ndjson");
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("created").asInt()).isZero();
                     assertThat(r.cuerpo().get("failed").asInt()).isEqualTo(1);
@@ -365,39 +358,34 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 4. Activar y desactivar ────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueActivarDesactivar() {
-        return List.of(
-                paso("Pausa el producto y desaparece del listado del escaparate al instante", () -> {
-                    assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status",
-                            tokenAdmin, Map.of("status", "PAUSED")).status()).isEqualTo(204);
-                    assertThat(textoEnBd("SELECT status FROM product WHERE id = ?", idProducto))
-                            .isEqualTo("PAUSED");
-                    Respuesta listado = llamar(HttpMethod.GET, "/api/catalog/products?lang=es&size=100",
-                            tokenCliente, null);
-                    List<String> visibles = new ArrayList<>();
-                    listado.cuerpo().get("items").forEach(n -> visibles.add(n.get("id").asText()));
-                    assertThat(visibles).as("el pausado ya no se ofrece en el catálogo")
-                            .doesNotContain(idProducto.toString());
-                }),
+        return List.of(paso("Pausa el producto y desaparece del listado del escaparate al instante", () -> {
+            assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status", tokenAdmin,
+                    Map.of("status", "PAUSED")).status()).isEqualTo(204);
+            assertThat(textoEnBd("SELECT status FROM product WHERE id = ?", idProducto)).isEqualTo("PAUSED");
+            Respuesta listado = llamar(HttpMethod.GET, "/api/catalog/products?lang=es&size=100", tokenCliente, null);
+            List<String> visibles = new ArrayList<>();
+            listado.cuerpo().get("items").forEach(n -> visibles.add(n.get("id").asText()));
+            assertThat(visibles).as("el pausado ya no se ofrece en el catálogo").doesNotContain(idProducto.toString());
+        }),
 
                 paso("La ficha del producto pausado deja de servirse por enlace directo", () -> {
                     // El listado ya lo ocultaba y el cobro ya lo rechazaba, pero getProductBySlug no filtraba
                     // por estado: un enlace directo (o un resultado indexado) seguía enseñando la ficha
                     // completa —con precio— de un producto retirado. Ahora es 404 para quien no es admin.
-                    Respuesta ficha = llamar(HttpMethod.GET,
-                            "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
-                    assertThat(ficha.status()).as("un producto retirado no existe para el escaparate")
-                            .isEqualTo(404);
+                    Respuesta ficha = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es", null,
+                            null);
+                    assertThat(ficha.status()).as("un producto retirado no existe para el escaparate").isEqualTo(404);
                     // El admin sí la abre: desde el panel se revisa y se reactiva justo lo que está pausado.
-                    Respuesta paraAdmin = llamar(HttpMethod.GET,
-                            "/api/catalog/products/" + slugProducto + "?lang=es", tokenAdmin, null);
+                    Respuesta paraAdmin = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es",
+                            tokenAdmin, null);
                     assertThat(paraAdmin.status()).isEqualTo(200);
                     assertThat(paraAdmin.cuerpo().get("status").asText()).isEqualTo("PAUSED");
                 }),
 
                 paso("Y comprar un producto pausado sí se rechaza, con el motivo identificable", () -> {
                     Map<String, Object> compra = new LinkedHashMap<>();
-                    compra.put("shippingAddressInline", Map.of("fullName", "Cliente Cert", "line1", "Calle 1",
-                            "city", "Madrid", "postalCode", "28001", "country", "ES"));
+                    compra.put("shippingAddressInline", Map.of("fullName", "Cliente Cert", "line1", "Calle 1", "city",
+                            "Madrid", "postalCode", "28001", "country", "ES"));
                     compra.put("items", List.of(linea(idProducto, idVariante, 1)));
                     compra.put("paymentMethod", "WALLET");
                     Respuesta r = llamar(HttpMethod.POST, "/api/me/orders/checkout", tokenCliente, compra);
@@ -410,19 +398,18 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status",
                             tokenAdmin, Map.of("status", "LO-QUE-SEA"));
                     assertThat(r.status()).isEqualTo(400);
-                    assertThat(textoEnBd("SELECT status FROM product WHERE id = ?", idProducto))
-                            .isEqualTo("PAUSED");
+                    assertThat(textoEnBd("SELECT status FROM product WHERE id = ?", idProducto)).isEqualTo("PAUSED");
                 }),
 
-                paso("Un estado VACÍO se rechaza por validación", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status",
+                paso("Un estado VACÍO se rechaza por validación",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status",
                                 tokenAdmin, Map.of("status", "")).status()).isEqualTo(400)),
 
                 paso("Lo reactiva y vuelve a estar en el catálogo", () -> {
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status",
                             tokenAdmin, Map.of("status", "ACTIVE")).status()).isEqualTo(204);
-                    Respuesta listado = llamar(HttpMethod.GET, "/api/catalog/products?lang=es&size=100",
-                            tokenCliente, null);
+                    Respuesta listado = llamar(HttpMethod.GET, "/api/catalog/products?lang=es&size=100", tokenCliente,
+                            null);
                     List<String> visibles = new ArrayList<>();
                     listado.cuerpo().get("items").forEach(n -> visibles.add(n.get("id").asText()));
                     assertThat(visibles).contains(idProducto.toString());
@@ -431,8 +418,7 @@ class AdminJourneyIT extends BaseIntegration {
                 paso("Repetir el mismo estado es idempotente", () -> {
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "/status",
                             tokenAdmin, Map.of("status", "ACTIVE")).status()).isEqualTo(204);
-                    assertThat(textoEnBd("SELECT status FROM product WHERE id = ?", idProducto))
-                            .isEqualTo("ACTIVE");
+                    assertThat(textoEnBd("SELECT status FROM product WHERE id = ?", idProducto)).isEqualTo("ACTIVE");
                 }),
 
                 paso("Pausa y reactiva EN LOTE, contando exactamente cuántos cambiaron", () -> {
@@ -451,9 +437,8 @@ class AdminJourneyIT extends BaseIntegration {
                 }),
 
                 paso("Un lote con un identificador inexistente lo cuenta como fallo sin tumbar el resto", () -> {
-                    Respuesta r = llamar(HttpMethod.PUT, "/api/admin/catalog/products/bulk-status", tokenAdmin,
-                            Map.of("ids", List.of(idProducto.toString(), UUID.randomUUID().toString()),
-                                    "status", "ACTIVE"));
+                    Respuesta r = llamar(HttpMethod.PUT, "/api/admin/catalog/products/bulk-status", tokenAdmin, Map.of(
+                            "ids", List.of(idProducto.toString(), UUID.randomUUID().toString()), "status", "ACTIVE"));
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("succeeded").asInt()).isEqualTo(1);
                     assertThat(r.cuerpo().get("failed").asInt()).isEqualTo(1);
@@ -463,14 +448,12 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 5. Categorías ──────────────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueCategorias() {
-        return List.of(
-                paso("Crea una categoría nueva y vacía", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/categories", tokenAdmin,
-                            Map.of("slug", SLUG_CATEGORIA_VACIA, "nameZh", "空", "position", 1,
-                                    "nameTranslations", Map.of("es", "Vacía")));
-                    assertThat(r.status()).isEqualTo(200);
-                    idCategoriaVacia = UUID.fromString(r.cuerpo().asText());
-                }),
+        return List.of(paso("Crea una categoría nueva y vacía", () -> {
+            Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/categories", tokenAdmin, Map.of("slug",
+                    SLUG_CATEGORIA_VACIA, "nameZh", "空", "position", 1, "nameTranslations", Map.of("es", "Vacía")));
+            assertThat(r.status()).isEqualTo(200);
+            idCategoriaVacia = UUID.fromString(r.cuerpo().asText());
+        }),
 
                 paso("Repetir el mismo identificador de categoría se rechaza y no la duplica", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/categories", tokenAdmin,
@@ -480,8 +463,8 @@ class AdminJourneyIT extends BaseIntegration {
                             .isEqualTo(1);
                 }),
 
-                paso("Una categoría sin identificador se rechaza por validación", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/catalog/categories", tokenAdmin,
+                paso("Una categoría sin identificador se rechaza por validación",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/catalog/categories", tokenAdmin,
                                 Map.of("slug", "", "nameZh", "空")).status()).isEqualTo(400)),
 
                 paso("El listado cuenta los productos que cuelgan de cada categoría", () -> {
@@ -495,16 +478,15 @@ class AdminJourneyIT extends BaseIntegration {
 
                 paso("Renombra la categoría manteniendo su identificador", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia,
-                            tokenAdmin, Map.of("slug", SLUG_CATEGORIA_VACIA, "nameZh", "空空", "active", true,
-                                    "names", Map.of("es", "Vacía renombrada")));
+                            tokenAdmin, Map.of("slug", SLUG_CATEGORIA_VACIA, "nameZh", "空空", "active", true, "names",
+                                    Map.of("es", "Vacía renombrada")));
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("names").get("es").asText()).isEqualTo("Vacía renombrada");
                 }),
 
-                paso("Un identificador con mayúsculas o espacios se rechaza por el patrón", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia,
-                                tokenAdmin, Map.of("slug", "Slug Invalido", "nameZh", "空")).status())
-                                .isEqualTo(400)),
+                paso("Un identificador con mayúsculas o espacios se rechaza por el patrón",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia,
+                                tokenAdmin, Map.of("slug", "Slug Invalido", "nameZh", "空")).status()).isEqualTo(400)),
 
                 paso("Renombrarla al identificador de otra categoría se rechaza", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia,
@@ -513,21 +495,21 @@ class AdminJourneyIT extends BaseIntegration {
                 }),
 
                 paso("La apaga y la enciende con el interruptor", () -> {
-                    assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia
-                            + "/toggle", tokenAdmin, null).cuerpo().get("active").asBoolean()).isFalse();
-                    assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia
-                            + "/toggle", tokenAdmin, null).cuerpo().get("active").asBoolean()).isTrue();
+                    assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia + "/toggle",
+                            tokenAdmin, null).cuerpo().get("active").asBoolean()).isFalse();
+                    assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/categories/" + idCategoriaVacia + "/toggle",
+                            tokenAdmin, null).cuerpo().get("active").asBoolean()).isTrue();
                 }),
 
                 paso("Activa y desactiva categorías EN LOTE", () -> {
-                    Respuesta apagar = llamar(HttpMethod.PUT, "/api/admin/catalog/categories/bulk-active",
-                            tokenAdmin, Map.of("ids", List.of(idCategoria.toString(),
-                                    idCategoriaVacia.toString()), "active", false));
+                    Respuesta apagar = llamar(HttpMethod.PUT, "/api/admin/catalog/categories/bulk-active", tokenAdmin,
+                            Map.of("ids", List.of(idCategoria.toString(), idCategoriaVacia.toString()), "active",
+                                    false));
                     assertThat(apagar.status()).isEqualTo(200);
                     assertThat(apagar.cuerpo().get("updated").asInt()).isEqualTo(2);
-                    Respuesta encender = llamar(HttpMethod.PUT, "/api/admin/catalog/categories/bulk-active",
-                            tokenAdmin, Map.of("ids", List.of(idCategoria.toString(),
-                                    idCategoriaVacia.toString()), "active", true));
+                    Respuesta encender = llamar(HttpMethod.PUT, "/api/admin/catalog/categories/bulk-active", tokenAdmin,
+                            Map.of("ids", List.of(idCategoria.toString(), idCategoriaVacia.toString()), "active",
+                                    true));
                     assertThat(encender.cuerpo().get("updated").asInt()).isEqualTo(2);
                 }),
 
@@ -539,8 +521,8 @@ class AdminJourneyIT extends BaseIntegration {
                 }),
 
                 paso("Borrar una categoría CON productos se rechaza y no deja productos huérfanos", () -> {
-                    Respuesta r = llamar(HttpMethod.DELETE, "/api/admin/catalog/categories/" + idCategoria,
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.DELETE, "/api/admin/catalog/categories/" + idCategoria, tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(422);
                     assertThat(enteroEnBd("SELECT count(*) FROM category WHERE id = ?", idCategoria)).isEqualTo(1);
                     assertThat(enteroEnBd("SELECT count(*) FROM product WHERE category_id = ?", idCategoria))
@@ -553,44 +535,45 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(enteroEnBd("SELECT count(*) FROM category WHERE id = ?", idCategoriaVacia)).isZero();
                 }),
 
-                paso("Borrarla otra vez responde 404 (estado imposible)", () ->
-                        assertThat(llamar(HttpMethod.DELETE, "/api/admin/catalog/categories/" + idCategoriaVacia,
-                                tokenAdmin, null).status()).isEqualTo(404)));
+                paso("Borrarla otra vez responde 404 (estado imposible)", () -> assertThat(
+                        llamar(HttpMethod.DELETE, "/api/admin/catalog/categories/" + idCategoriaVacia, tokenAdmin, null)
+                                .status())
+                        .isEqualTo(404)));
     }
 
     /* ── 6. Precios, márgenes y MOQ ─────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloquePreciosYMargenes() {
-        return List.of(
-                paso("Ve la regla global del 150 % que rige el escaparate", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/pricing/rules", tokenAdmin, null);
-                    assertThat(r.status()).isEqualTo(200);
-                    assertThat(r.cuerpo()).hasSize(1);
-                    assertThat(r.cuerpo().get(0).get("scope").asText()).isEqualTo("GLOBAL");
-                    importeExacto("margen global", r.cuerpo().get(0).get("marginValue"), "150");
-                    assertThat(r.cuerpo().get(0).get("channel").asText()).isEqualTo("STOREFRONT");
-                }),
+        return List.of(paso("Ve la regla global del 150 % que rige el escaparate", () -> {
+            Respuesta r = llamar(HttpMethod.GET, "/api/admin/pricing/rules", tokenAdmin, null);
+            assertThat(r.status()).isEqualTo(200);
+            assertThat(r.cuerpo()).hasSize(1);
+            assertThat(r.cuerpo().get(0).get("scope").asText()).isEqualTo("GLOBAL");
+            importeExacto("margen global", r.cuerpo().get(0).get("marginValue"), "150");
+            assertThat(r.cuerpo().get(0).get("channel").asText()).isEqualTo("STOREFRONT");
+        }),
 
                 paso("Una regla SIN descripción se rechaza: nadie debe tocar precios sin explicar por qué",
                         () -> assertThat(llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                                Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 10))
+                                Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 10)).status())
+                                .isEqualTo(400)),
+
+                paso("Una regla con un ámbito inventado se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
+                                Map.of("scope", "GALAXIA", "marginType", "PERCENTAGE", "marginValue", 10, "description",
+                                        "ámbito inventado"))
                                 .status()).isEqualTo(400)),
 
-                paso("Una regla con un ámbito inventado se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                                Map.of("scope", "GALAXIA", "marginType", "PERCENTAGE", "marginValue", 10,
-                                        "description", "ámbito inventado")).status()).isEqualTo(400)),
-
-                paso("Una regla sin valor de margen se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                                Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE",
-                                        "description", "sin valor")).status()).isEqualTo(400)),
+                paso("Una regla sin valor de margen se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
+                                Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "description", "sin valor"))
+                                .status()).isEqualTo(400)),
 
                 paso("Crea un margen del 300 % SOLO para este producto y el precio pasa a 52,00 $", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                            Map.of("scope", "PRODUCT", "scopeId", idProducto.toString(),
-                                    "marginType", "PERCENTAGE", "marginValue", 300, "active", true,
-                                    "position", 0, "description", "Certificación: margen del producto"));
+                            Map.of("scope", "PRODUCT", "scopeId", idProducto.toString(), "marginType", "PERCENTAGE",
+                                    "marginValue", 300, "active", true, "position", 0, "description",
+                                    "Certificación: margen del producto"));
                     assertThat(r.status()).isEqualTo(201);
                     idReglaProducto = UUID.fromString(r.cuerpo().get("id").asText());
                     vaciarCaches();
@@ -598,19 +581,19 @@ class AdminJourneyIT extends BaseIntegration {
                     // 4 → 4,00 + 8,00; total 52,00.
                     // El precio de venta en dólares (retailUsd) solo se sirve al ADMIN: el escaparate
                     // enseña displayPrice y nada más. Por eso el desglose se comprueba por su ficha.
-                    Respuesta detalle = llamar(HttpMethod.GET,
-                            "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
+                    Respuesta detalle = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                            tokenAdmin, null);
                     importeExacto("precio con el margen del producto", detalle.cuerpo().get("retailUsd"), "52.00");
                     assertThat(detalle.cuerpo().get("baseFormatted").asText()).isEqualTo("$40.00");
-                    Respuesta escaparate = llamar(HttpMethod.GET,
-                            "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
+                    Respuesta escaparate = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es",
+                            null, null);
                     assertThat(escaparate.cuerpo().get("displayFormatted").asText())
                             .as("y el cliente ve exactamente ese precio").isEqualTo("$52.00");
                 }),
 
                 paso("El margen del producto MANDA sobre el global (el ámbito más específico gana)", () -> {
-                    Respuesta otro = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es",
-                            tokenAdmin, null);
+                    Respuesta otro = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es", tokenAdmin,
+                            null);
                     // La gorra no tiene regla propia: sigue con el global. 40 CNY / 8 = 5,00 → ×2,5 = 12,50.
                     // Su envío y su IVA en yuanes son los mismos del alta, y llevan el mismo factor 2,5
                     // que el coste: +2,50 y +5,00 → 20,00.
@@ -622,47 +605,46 @@ class AdminJourneyIT extends BaseIntegration {
                     // El coste de la gorra son 40 CNY / 8 = 5,0000 $ exactos. Una regla que arranca en 5,01
                     // se queda a un céntimo: no debe tocar su precio.
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                            Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 900,
-                                    "minCostUsd", 5.01, "active", true, "position", 0,
-                                    "description", "Certificación: fuera de rango por un céntimo"));
+                            Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 900, "minCostUsd",
+                                    5.01, "active", true, "position", 0, "description",
+                                    "Certificación: fuera de rango por un céntimo"));
                     assertThat(r.status()).isEqualTo(201);
                     UUID fueraDeRango = UUID.fromString(r.cuerpo().get("id").asText());
                     vaciarCaches();
-                    Respuesta gorra = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es",
-                            tokenAdmin, null);
+                    Respuesta gorra = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es", tokenAdmin,
+                            null);
                     importeExacto("un céntimo fuera del rango deja el precio intacto",
                             gorra.cuerpo().get("items").get(0).get("displayPrice"), "20.00");
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + fueraDeRango, tokenAdmin,
-                            null).status()).isEqualTo(204);
+                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + fueraDeRango, tokenAdmin, null)
+                            .status()).isEqualTo(204);
                     vaciarCaches();
                 }),
 
-                paso("Un rango que empieza EXACTAMENTE en el coste sí se aplica y baja el precio a 8,00 $",
-                        () -> {
-                            // El otro lado del mismo borde: [5,00 , 5,00] contiene el coste exacto de la gorra
-                            // y es el rango más ESTRECHO, así que gana a la regla global sin acotar.
-                            // Margen 0 → base 5,00 + 1,00 de IVA + 2,00 de envío = 8,00.
-                            Respuesta r = llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                                    Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 0,
-                                            "minCostUsd", 5.00, "maxCostUsd", 5.00, "active", true,
-                                            "position", 0, "description", "Certificación: justo en el borde"));
-                            assertThat(r.status()).isEqualTo(201);
-                            UUID enElBorde = UUID.fromString(r.cuerpo().get("id").asText());
-                            vaciarCaches();
-                            Respuesta gorra = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es",
-                                    tokenAdmin, null);
-                            importeExacto("el borde del rango sí entra",
-                                    gorra.cuerpo().get("items").get(0).get("displayPrice"), "8.00");
-                            // Y el producto principal, cuyo coste es 10,00, queda fuera de ese rango: sigue
-                            // mandando su propia regla de producto.
-                            Respuesta detalle = llamar(HttpMethod.GET,
-                                    "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
-                            importeExacto("el producto principal queda fuera del rango",
-                                    detalle.cuerpo().get("retailUsd"), "52.00");
-                            assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + enElBorde,
-                                    tokenAdmin, null).status()).isEqualTo(204);
-                            vaciarCaches();
-                        }),
+                paso("Un rango que empieza EXACTAMENTE en el coste sí se aplica y baja el precio a 8,00 $", () -> {
+                    // El otro lado del mismo borde: [5,00 , 5,00] contiene el coste exacto de la gorra
+                    // y es el rango más ESTRECHO, así que gana a la regla global sin acotar.
+                    // Margen 0 → base 5,00 + 1,00 de IVA + 2,00 de envío = 8,00.
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
+                            Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 0, "minCostUsd", 5.00,
+                                    "maxCostUsd", 5.00, "active", true, "position", 0, "description",
+                                    "Certificación: justo en el borde"));
+                    assertThat(r.status()).isEqualTo(201);
+                    UUID enElBorde = UUID.fromString(r.cuerpo().get("id").asText());
+                    vaciarCaches();
+                    Respuesta gorra = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es", tokenAdmin,
+                            null);
+                    importeExacto("el borde del rango sí entra", gorra.cuerpo().get("items").get(0).get("displayPrice"),
+                            "8.00");
+                    // Y el producto principal, cuyo coste es 10,00, queda fuera de ese rango: sigue
+                    // mandando su propia regla de producto.
+                    Respuesta detalle = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                            tokenAdmin, null);
+                    importeExacto("el producto principal queda fuera del rango", detalle.cuerpo().get("retailUsd"),
+                            "52.00");
+                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + enElBorde, tokenAdmin, null)
+                            .status()).isEqualTo(204);
+                    vaciarCaches();
+                }),
 
                 paso("Apaga el margen del producto y el precio vuelve a 32,50 $", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/pricing/rules/" + idReglaProducto + "/toggle",
@@ -670,21 +652,25 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("active").asBoolean()).isFalse();
                     vaciarCaches();
-                    Respuesta detalle = llamar(HttpMethod.GET,
-                            "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
+                    Respuesta detalle = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                            tokenAdmin, null);
                     importeExacto("sin la regla del producto manda la global", detalle.cuerpo().get("retailUsd"),
                             "32.50");
                 }),
 
-                paso("Un lote de reglas SIN identificadores se rechaza", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/rules/bulk-toggle", tokenAdmin,
+                paso("Un lote de reglas SIN identificadores se rechaza",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/rules/bulk-toggle", tokenAdmin,
                                 Map.of("ids", List.of(), "active", true)).status()).isEqualTo(400)),
 
                 paso("Borra la regla del producto y borrarla otra vez responde 404", () -> {
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + idReglaProducto, tokenAdmin,
-                            null).status()).isEqualTo(204);
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + idReglaProducto, tokenAdmin,
-                            null).status()).isEqualTo(404);
+                    assertThat(
+                            llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + idReglaProducto, tokenAdmin, null)
+                                    .status())
+                            .isEqualTo(204);
+                    assertThat(
+                            llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + idReglaProducto, tokenAdmin, null)
+                                    .status())
+                            .isEqualTo(404);
                     vaciarCaches();
                 }),
 
@@ -700,17 +686,17 @@ class AdminJourneyIT extends BaseIntegration {
                     // margen que le corresponda se reduce a la mitad. 150 % → 75 %:
                     //   10,00 de coste × (1 + 0,75) = 17,50 de base; el IVA y el envío llevan el mismo
                     //   factor 1,75 → 1,75 + 3,50; total 22,75.
-                    Respuesta antes = llamar(HttpMethod.GET,
-                            "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
+                    Respuesta antes = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                            tokenAdmin, null);
                     importeExacto("con MOQ 1 el margen es entero", antes.cuerpo().get("retailUsd"), "32.50");
 
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "?lang=es",
                             tokenAdmin, Map.of("moq", 2)).status()).isEqualTo(200);
                     vaciarCaches();
-                    Respuesta conMoq = llamar(HttpMethod.GET,
-                            "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
-                    importeExacto("con MOQ 2 el margen se parte por la mitad",
-                            conMoq.cuerpo().get("retailUsd"), "22.75");
+                    Respuesta conMoq = llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
+                            tokenAdmin, null);
+                    importeExacto("con MOQ 2 el margen se parte por la mitad", conMoq.cuerpo().get("retailUsd"),
+                            "22.75");
                     assertThat(conMoq.cuerpo().get("baseFormatted").asText()).isEqualTo("$17.50");
                 }),
 
@@ -720,8 +706,9 @@ class AdminJourneyIT extends BaseIntegration {
                             tokenAdmin, Map.of("moq", 1)).status()).isEqualTo(200);
                     vaciarCaches();
                     importeExacto("MOQ 1 queda fuera del ajuste",
-                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "32.50");
+                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin,
+                                    null).cuerpo().get("retailUsd"),
+                            "32.50");
                 }),
 
                 paso("Apagar el ajuste devuelve el margen entero aunque el MOQ sea mayor que uno", () -> {
@@ -731,8 +718,9 @@ class AdminJourneyIT extends BaseIntegration {
                             Map.of("enabled", false, "factorPercent", 50)).status()).isEqualTo(200);
                     vaciarCaches();
                     importeExacto("sin ajuste, el MOQ deja de importar",
-                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "32.50");
+                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin,
+                                    null).cuerpo().get("retailUsd"),
+                            "32.50");
                 }),
 
                 paso("Un factor del 0 % deja el producto con MOQ al precio de COSTE más IVA y envío", () -> {
@@ -741,16 +729,17 @@ class AdminJourneyIT extends BaseIntegration {
                             Map.of("enabled", true, "factorPercent", 0)).status()).isEqualTo(200);
                     vaciarCaches();
                     importeExacto("margen anulado por el ajuste",
-                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "13.00");
+                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin,
+                                    null).cuerpo().get("retailUsd"),
+                            "13.00");
                 }),
 
-                paso("Un factor por encima de 100 se rechaza", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/moq-rule", tokenAdmin,
+                paso("Un factor por encima de 100 se rechaza",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/moq-rule", tokenAdmin,
                                 Map.of("enabled", true, "factorPercent", 101)).status()).isEqualTo(400)),
 
-                paso("Un factor negativo se rechaza", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/moq-rule", tokenAdmin,
+                paso("Un factor negativo se rechaza",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/moq-rule", tokenAdmin,
                                 Map.of("enabled", true, "factorPercent", -1)).status()).isEqualTo(400)),
 
                 paso("Deja el ajuste y el MOQ como estaban para el resto del recorrido", () -> {
@@ -760,34 +749,32 @@ class AdminJourneyIT extends BaseIntegration {
                             Map.of("moq", 1));
                     vaciarCaches();
                     importeExacto("de vuelta al precio del recorrido",
-                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "32.50");
+                            llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin,
+                                    null).cuerpo().get("retailUsd"),
+                            "32.50");
                 }));
     }
 
     /* ── 6-bis. Promociones y cupones ───────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloquePromociones() {
-        return List.of(
-                paso("Crea una rebaja automática del 5 % sobre el producto: 32,50 → 30,88 $", () -> {
-                    // Sin código: se aplica sola en el escaparate. 32,50 × 0,95 = 30,875 → 30,88 al céntimo.
-                    Map<String, Object> rebaja = promocion("Rebaja de certificación", null,
-                            new BigDecimal("5"), null);
-                    rebaja.put("scope", "PRODUCT");
-                    rebaja.put("productIds", List.of(idProducto.toString()));
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin, rebaja);
-                    assertThat(r.status()).isEqualTo(200);
-                    idPromocion = UUID.fromString(r.cuerpo().get("id").asText());
-                    assertThat(r.cuerpo().get("live").asBoolean()).isTrue();
-                    vaciarCaches();
+        return List.of(paso("Crea una rebaja automática del 5 % sobre el producto: 32,50 → 30,88 $", () -> {
+            // Sin código: se aplica sola en el escaparate. 32,50 × 0,95 = 30,875 → 30,88 al céntimo.
+            Map<String, Object> rebaja = promocion("Rebaja de certificación", null, new BigDecimal("5"), null);
+            rebaja.put("scope", "PRODUCT");
+            rebaja.put("productIds", List.of(idProducto.toString()));
+            Respuesta r = llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin, rebaja);
+            assertThat(r.status()).isEqualTo(200);
+            idPromocion = UUID.fromString(r.cuerpo().get("id").asText());
+            assertThat(r.cuerpo().get("live").asBoolean()).isTrue();
+            vaciarCaches();
 
-                    Respuesta ficha = llamar(HttpMethod.GET,
-                            "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
-                    importeExacto("precio ya rebajado", ficha.cuerpo().get("displayPrice"), "30.88");
-                    assertThat(ficha.cuerpo().get("originalFormatted").asText())
-                            .as("y se enseña tachado el de antes").isEqualTo("$32.50");
-                    assertThat(ficha.cuerpo().get("discountPercent").asInt()).isEqualTo(5);
-                }),
+            Respuesta ficha = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
+            importeExacto("precio ya rebajado", ficha.cuerpo().get("displayPrice"), "30.88");
+            assertThat(ficha.cuerpo().get("originalFormatted").asText()).as("y se enseña tachado el de antes")
+                    .isEqualTo("$32.50");
+            assertThat(ficha.cuerpo().get("discountPercent").asInt()).isEqualTo(5);
+        }),
 
                 paso("El SUELO del precio protege el margen: un 25 % no puede bajar del precio base", () -> {
                     // 32,50 × 0,75 = 24,375, por debajo de los 25,00 de base con margen. El suelo lo corta
@@ -796,8 +783,8 @@ class AdminJourneyIT extends BaseIntegration {
                             promocionProducto("Rebaja de certificación", new BigDecimal("25"))).status())
                             .isEqualTo(200);
                     vaciarCaches();
-                    Respuesta ficha = llamar(HttpMethod.GET,
-                            "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
+                    Respuesta ficha = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es", null,
+                            null);
                     importeExacto("el suelo corta la rebaja", ficha.cuerpo().get("displayPrice"), "25.00");
                     assertThat(ficha.cuerpo().get("discountPercent").asInt())
                             .as("el porcentaje anunciado es el REAL tras el suelo").isEqualTo(23);
@@ -814,48 +801,45 @@ class AdminJourneyIT extends BaseIntegration {
                 paso("Un cupón NUNCA se anuncia en el escaparate", () -> {
                     // Es la diferencia con la rebaja: el cupón solo lo conoce quien recibe el código.
                     assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
-                            promocion("Cupón de certificación", "ADMINCERT", new BigDecimal("20"), null))
-                            .status()).isEqualTo(200);
+                            promocion("Cupón de certificación", "ADMINCERT", new BigDecimal("20"), null)).status())
+                            .isEqualTo(200);
                     Respuesta r = llamar(HttpMethod.GET, "/api/catalog/promotions/live?lang=es", null, null);
                     List<String> anunciadas = new ArrayList<>();
                     r.cuerpo().forEach(n -> anunciadas.add(n.get("name").asText()));
                     assertThat(anunciadas).doesNotContain("Cupón de certificación");
                 }),
 
-                paso("Repetir el código de un cupón se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
-                                promocion("Otro", "ADMINCERT", new BigDecimal("20"), null)).status())
-                                .isEqualTo(422)),
+                paso("Repetir el código de un cupón se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
+                                promocion("Otro", "ADMINCERT", new BigDecimal("20"), null)).status()).isEqualTo(422)),
 
-                paso("Pedir porcentaje E importe a la vez se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
-                                promocion("Ambos", "CERTAMBOS", new BigDecimal("10"), 500)).status())
-                                .isEqualTo(422)),
+                paso("Pedir porcentaje E importe a la vez se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
+                                promocion("Ambos", "CERTAMBOS", new BigDecimal("10"), 500)).status()).isEqualTo(422)),
 
-                paso("No indicar ni porcentaje ni importe también se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
+                paso("No indicar ni porcentaje ni importe también se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
                                 promocion("Ninguno", "CERTNADA", null, null)).status()).isEqualTo(422)),
 
                 paso("Un 100 % se rechaza: el tope del porcentaje es 99", () ->
-                        // Valor límite por arriba: 99 vale, 100 no.
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
-                                promocion("Todo gratis", "CERT100", new BigDecimal("100"), null)).status())
-                                .isEqualTo(422)),
+                // Valor límite por arriba: 99 vale, 100 no.
+                assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
+                        promocion("Todo gratis", "CERT100", new BigDecimal("100"), null)).status()).isEqualTo(422)),
 
                 paso("Un 99 % sí se acepta (el borde por arriba)", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
                             promocion("Casi gratis", "CERT99", new BigDecimal("99"), null));
                     assertThat(r.status()).isEqualTo(200);
-                    llamar(HttpMethod.DELETE, "/api/admin/promotions/" + r.cuerpo().get("id").asText(),
-                            tokenAdmin, null);
+                    llamar(HttpMethod.DELETE, "/api/admin/promotions/" + r.cuerpo().get("id").asText(), tokenAdmin,
+                            null);
                 }),
 
-                paso("Un 0 % se rechaza: el mínimo del porcentaje es 1", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
+                paso("Un 0 % se rechaza: el mínimo del porcentaje es 1",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
                                 promocion("Cero", "CERT0", BigDecimal.ZERO, null)).status()).isEqualTo(422)),
 
-                paso("Un importe fijo de cero se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
+                paso("Un importe fijo de cero se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
                                 promocion("Cero fijo", "CERT0F", null, 0)).status()).isEqualTo(422)),
 
                 paso("Una ventana que acaba ANTES de empezar se rechaza", () -> {
@@ -867,11 +851,11 @@ class AdminJourneyIT extends BaseIntegration {
                 }),
 
                 paso("Un alcance por CATEGORÍA sin categorías se rechaza", () -> {
-                    Map<String, Object> sinCategorias = promocion("Sin categorías", "CERTSINCAT",
-                            new BigDecimal("10"), null);
+                    Map<String, Object> sinCategorias = promocion("Sin categorías", "CERTSINCAT", new BigDecimal("10"),
+                            null);
                     sinCategorias.put("scope", "CATEGORY");
-                    assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin, sinCategorias)
-                            .status()).isEqualTo(422);
+                    assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin, sinCategorias).status())
+                            .isEqualTo(422);
                 }),
 
                 paso("Una promoción SIN nombre se rechaza por validación", () -> {
@@ -886,33 +870,32 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("active").asBoolean()).isFalse();
                     vaciarCaches();
-                    Respuesta ficha = llamar(HttpMethod.GET,
-                            "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
-                    importeExacto("sin rebaja, el precio de siempre", ficha.cuerpo().get("displayPrice"),
-                            "32.50");
+                    Respuesta ficha = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es", null,
+                            null);
+                    importeExacto("sin rebaja, el precio de siempre", ficha.cuerpo().get("displayPrice"), "32.50");
                     assertThat(ficha.cuerpo().get("discountPercent").isNull()).isTrue();
                 }),
 
-                paso("Editar una promoción que no existe responde 404", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/promotions/" + UUID.randomUUID(),
+                paso("Editar una promoción que no existe responde 404",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/promotions/" + UUID.randomUUID(),
                                 tokenAdmin, promocionProducto("Fantasma", new BigDecimal("10"))).status())
                                 .isEqualTo(404)),
 
                 paso("Borra la promoción; repetir el borrado es idempotente y no la resucita", () -> {
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/promotions/" + idPromocion, tokenAdmin,
-                            null).status()).isEqualTo(204);
+                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/promotions/" + idPromocion, tokenAdmin, null)
+                            .status()).isEqualTo(204);
                     assertThat(enteroEnBd("SELECT count(*) FROM promotion WHERE id = ?", idPromocion)).isZero();
                     // El borrado no comprueba existencia previa: repetirlo responde 204 igualmente. No es
                     // un fallo (el efecto buscado ya se cumple), pero queda fijado por escrito.
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/promotions/" + idPromocion, tokenAdmin,
-                            null).status()).isEqualTo(204);
+                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/promotions/" + idPromocion, tokenAdmin, null)
+                            .status()).isEqualTo(204);
                     assertThat(enteroEnBd("SELECT count(*) FROM promotion WHERE id = ?", idPromocion)).isZero();
                     vaciarCaches();
                 }),
 
                 paso("Limpia el cupón de administración para no alterar el resto del recorrido", () -> {
-                    List<String> ids = jdbcTemplate.queryForList(
-                            "SELECT id::text FROM promotion WHERE code IS NOT NULL", String.class);
+                    List<String> ids = jdbcTemplate
+                            .queryForList("SELECT id::text FROM promotion WHERE code IS NOT NULL", String.class);
                     for (String id : ids) {
                         llamar(HttpMethod.DELETE, "/api/admin/promotions/" + id, tokenAdmin, null);
                     }
@@ -924,23 +907,22 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 7. El pedido del cliente: estados, envío, entrega y reembolso ──────────────────────────── */
 
     private List<DynamicTest> bloquePedidoDelCliente() {
-        return List.of(
-                paso("Un cliente compra dos unidades y paga 91,42 $ con su monedero", () -> {
-                    Respuesta direccion = llamar(HttpMethod.POST, "/api/me/addresses", tokenCliente,
-                            Map.of("fullName", "Cliente Cert", "line1", "Calle Mayor 1", "city", "Madrid",
-                                    "postalCode", "28001", "country", "ES"));
-                    assertThat(direccion.status()).isEqualTo(201);
+        return List.of(paso("Un cliente compra dos unidades y paga 91,42 $ con su monedero", () -> {
+            Respuesta direccion = llamar(HttpMethod.POST, "/api/me/addresses", tokenCliente,
+                    Map.of("fullName", "Cliente Cert", "line1", "Calle Mayor 1", "city", "Madrid", "postalCode",
+                            "28001", "country", "ES"));
+            assertThat(direccion.status()).isEqualTo(201);
 
-                    Map<String, Object> compra = new LinkedHashMap<>();
-                    compra.put("shippingAddressId", direccion.cuerpo().get("id").asText());
-                    compra.put("items", List.of(linea(idProducto, idVariante, 2)));
-                    compra.put("paymentMethod", "WALLET");
-                    Respuesta r = llamar(HttpMethod.POST, "/api/me/orders/checkout", tokenCliente, compra);
-                    assertThat(r.status()).isEqualTo(201);
-                    idPedido = UUID.fromString(r.cuerpo().get("id").asText());
-                    importeExacto("total pagado por el cliente", r.cuerpo().get("total"), "91.42");
-                    assertThat(saldoCliente()).isEqualTo(SALDO_INICIAL - TOTAL_PEDIDO);
-                }),
+            Map<String, Object> compra = new LinkedHashMap<>();
+            compra.put("shippingAddressId", direccion.cuerpo().get("id").asText());
+            compra.put("items", List.of(linea(idProducto, idVariante, 2)));
+            compra.put("paymentMethod", "WALLET");
+            Respuesta r = llamar(HttpMethod.POST, "/api/me/orders/checkout", tokenCliente, compra);
+            assertThat(r.status()).isEqualTo(201);
+            idPedido = UUID.fromString(r.cuerpo().get("id").asText());
+            importeExacto("total pagado por el cliente", r.cuerpo().get("total"), "91.42");
+            assertThat(saldoCliente()).isEqualTo(SALDO_INICIAL - TOTAL_PEDIDO);
+        }),
 
                 paso("El administrador ve el pedido en su bandeja con el importe exacto", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/admin/orders?page=0&size=20", tokenAdmin, null);
@@ -951,8 +933,7 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(fila.get("status").asText()).isEqualTo("PAID");
                     assertThat(fila.get("totalCents").asLong()).isEqualTo(TOTAL_PEDIDO);
                     assertThat(fila.get("subtotalCents").asLong()).isEqualTo(UNIDAD_CENTIMOS * 2L);
-                    assertThat(fila.get("shippingCents").asLong())
-                            .isEqualTo(ENVIO_ES_CENTIMOS + DESPACHO_ES_CENTIMOS);
+                    assertThat(fila.get("shippingCents").asLong()).isEqualTo(ENVIO_ES_CENTIMOS + DESPACHO_ES_CENTIMOS);
                     assertThat(fila.get("source").asText()).isEqualTo("PLATFORM");
                     assertThat(fila.get("totalFormatted").asText()).isEqualTo("$91.42");
                 }),
@@ -964,8 +945,8 @@ class AdminJourneyIT extends BaseIntegration {
                 }),
 
                 paso("El detalle del pedido trae la línea comprada con sus importes al céntimo", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/orders/" + idPedido + "?lang=es",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/orders/" + idPedido + "?lang=es", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("PAID");
                     assertThat(r.cuerpo().get("items")).hasSize(1);
@@ -975,31 +956,29 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(linea.get("lineTotalCents").asInt()).isEqualTo(UNIDAD_CENTIMOS * 2);
                 }),
 
-                paso("Un pedido inexistente responde 404", () ->
-                        assertThat(llamar(HttpMethod.GET, "/api/admin/orders/" + UUID.randomUUID(), tokenAdmin,
-                                null).status()).isEqualTo(404)),
+                paso("Un pedido inexistente responde 404", () -> assertThat(
+                        llamar(HttpMethod.GET, "/api/admin/orders/" + UUID.randomUUID(), tokenAdmin, null).status())
+                        .isEqualTo(404)),
 
                 paso("No se puede marcar EN CAMINO un pedido que aún no salió al proveedor", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/ship",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/ship", tokenAdmin, null);
                     assertThat(r.status()).isEqualTo(422);
                     assertThat(textoEnBd("SELECT status FROM customer_order WHERE id = ?", idPedido))
                             .as("el estado no se mueve").isEqualTo("PAID");
                 }),
 
                 paso("No se puede ENTREGAR un pedido que no está en camino", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/deliver",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/deliver", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(422);
-                    assertThat(textoEnBd("SELECT status FROM customer_order WHERE id = ?", idPedido))
-                            .isEqualTo("PAID");
-                    assertThat(enteroEnBd("SELECT count(*) FROM operator_order_action WHERE order_id = ?",
-                            idPedido)).as("una entrega rechazada no acredita comisión").isZero();
+                    assertThat(textoEnBd("SELECT status FROM customer_order WHERE id = ?", idPedido)).isEqualTo("PAID");
+                    assertThat(enteroEnBd("SELECT count(*) FROM operator_order_action WHERE order_id = ?", idPedido))
+                            .as("una entrega rechazada no acredita comisión").isZero();
                 }),
 
                 paso("Lo envía al proveedor: pasa a REMITIDO y queda sellada la fecha", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/forward",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/forward", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("FORWARDED");
                     assertThat(r.cuerpo().get("forwardedAt").isNull()).isFalse();
@@ -1010,50 +989,46 @@ class AdminJourneyIT extends BaseIntegration {
                     // cualquier otro estado devuelve 200 con el pedido intacto, en silencio. Enviar y
                     // entregar sí rechazan con 422, así que la incoherencia está en este único punto: el
                     // panel no distingue "hecho" de "no se ha hecho nada".
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/forward",
-                            tokenAdmin, null);
-                    assertThat(r.status()).as("hoy responde 200 en vez de rechazar el estado imposible")
-                            .isEqualTo(200);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/forward", tokenAdmin,
+                            null);
+                    assertThat(r.status()).as("hoy responde 200 en vez de rechazar el estado imposible").isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("FORWARDED");
                 }),
 
                 paso("Lo marca EN CAMINO", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/ship",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/ship", tokenAdmin, null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("SHIPPED");
                     assertThat(r.cuerpo().get("shippedAt").isNull()).isFalse();
                 }),
 
                 paso("El cliente ve el cambio en el seguimiento de SU pedido", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/me/orders/" + idPedido + "/tracking",
-                            tokenCliente, null);
+                    Respuesta r = llamar(HttpMethod.GET, "/api/me/orders/" + idPedido + "/tracking", tokenCliente,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("SHIPPED");
                 }),
 
-                paso("Volver a marcarlo en camino se rechaza (estado imposible)", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/ship", tokenAdmin,
-                                null).status()).isEqualTo(422)));
+                paso("Volver a marcarlo en camino se rechaza (estado imposible)", () -> assertThat(
+                        llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/ship", tokenAdmin, null).status())
+                        .isEqualTo(422)));
     }
 
     /* ── 8. Operadores y sus comisiones ─────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueOperadores() {
-        return List.of(
-                paso("El OPERADOR entrega el pedido: es su trabajo y llega a esa ruta", () -> {
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/deliver",
-                            tokenOperador, null);
-                    assertThat(r.status()).isEqualTo(200);
-                    assertThat(r.cuerpo().get("status").asText()).isEqualTo("DELIVERED");
-                    assertThat(r.cuerpo().get("deliveredAt").isNull()).isFalse();
-                }),
+        return List.of(paso("El OPERADOR entrega el pedido: es su trabajo y llega a esa ruta", () -> {
+            Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/deliver", tokenOperador, null);
+            assertThat(r.status()).isEqualTo(200);
+            assertThat(r.cuerpo().get("status").asText()).isEqualTo("DELIVERED");
+            assertThat(r.cuerpo().get("deliveredAt").isNull()).isFalse();
+        }),
 
                 paso("La entrega le acredita 14,16 ¥ de comisión: el 10 % de la base sin IVA", () -> {
                     // 80,00 ¥ × 2 = 160,00 ¥ brutos → /1,13 = 141,592920 de base → ×10 % = 14,159292
                     // → 1.416 fen al céntimo más cercano. Se comprueba contra el apunte guardado.
-                    Map<String, Object> apunte = jdbcTemplate.queryForMap(
-                            "SELECT commission_cny_cents, item_count, order_source, commission_pct, action"
+                    Map<String, Object> apunte = jdbcTemplate
+                            .queryForMap("SELECT commission_cny_cents, item_count, order_source, commission_pct, action"
                                     + " FROM operator_order_action WHERE order_id = ?", idPedido);
                     assertThat(apunte.get("action")).isEqualTo("DELIVERED");
                     assertThat(((Number) apunte.get("commission_cny_cents")).longValue())
@@ -1078,47 +1053,48 @@ class AdminJourneyIT extends BaseIntegration {
                 paso("El propio operador consulta SUS ganancias por la ruta que sí tiene abierta", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/admin/operator/earnings", tokenOperador, null);
                     assertThat(r.status()).isEqualTo(200);
-                    assertThat(r.cuerpo().get("totalCommissionCnyCents").asLong())
-                            .isEqualTo(COMISION_CNY_CENTIMOS);
+                    assertThat(r.cuerpo().get("totalCommissionCnyCents").asLong()).isEqualTo(COMISION_CNY_CENTIMOS);
                     assertThat(r.cuerpo().get("operations").asInt()).isEqualTo(1);
                 }),
 
                 paso("Su histórico de operaciones muestra la entrega que hizo", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/operator/history?page=0&size=20",
-                            tokenOperador, null);
+                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/operator/history?page=0&size=20", tokenOperador,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("total").asInt()).isEqualTo(1);
-                    assertThat(r.cuerpo().get("items").get(0).get("orderId").asText())
-                            .isEqualTo(idPedido.toString());
+                    assertThat(r.cuerpo().get("items").get(0).get("orderId").asText()).isEqualTo(idPedido.toString());
                     assertThat(r.cuerpo().get("items").get(0).get("commissionCnyCents").asLong())
                             .isEqualTo(COMISION_CNY_CENTIMOS);
                 }),
 
                 paso("El operador NO puede ver el informe global de todos los operadores", () ->
-                        // La ruta en plural es del administrador; la singular es la del propio operador.
-                        // Una letra separa los dos niveles de acceso y así queda fijado por escrito.
-                        assertThat(llamar(HttpMethod.GET, "/api/admin/operators/report", tokenOperador, null)
-                                .status()).isEqualTo(403)),
+                // La ruta en plural es del administrador; la singular es la del propio operador.
+                // Una letra separa los dos niveles de acceso y así queda fijado por escrito.
+                assertThat(llamar(HttpMethod.GET, "/api/admin/operators/report", tokenOperador, null).status())
+                        .isEqualTo(403)),
 
                 paso("Un usuario NORMAL no llega a ninguna de las dos rutas", () -> {
-                    assertThat(llamar(HttpMethod.GET, "/api/admin/operators/report", tokenUsuarioNormal, null)
-                            .status()).isEqualTo(403);
-                    assertThat(llamar(HttpMethod.GET, "/api/admin/operator/earnings", tokenUsuarioNormal, null)
-                            .status()).isEqualTo(403);
+                    assertThat(llamar(HttpMethod.GET, "/api/admin/operators/report", tokenUsuarioNormal, null).status())
+                            .isEqualTo(403);
+                    assertThat(
+                            llamar(HttpMethod.GET, "/api/admin/operator/earnings", tokenUsuarioNormal, null).status())
+                            .isEqualTo(403);
                 }),
 
                 paso("Entregar dos veces no acredita la comisión otra vez", () -> {
                     // La segunda entrega se rechaza por estado; el apunte sigue siendo uno solo.
-                    assertThat(llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/deliver", tokenOperador,
-                            null).status()).isEqualTo(422);
+                    assertThat(
+                            llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/deliver", tokenOperador, null)
+                                    .status())
+                            .isEqualTo(422);
                     assertThat(enteroEnBd("SELECT count(*) FROM operator_order_action WHERE order_id = ?", idPedido))
                             .isEqualTo(1);
                 }),
 
                 paso("Reembolsa el pedido entregado y el cliente recupera 91,42 $ EXACTOS", () -> {
                     long antes = saldoCliente();
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("REFUNDED");
                     assertThat(saldoCliente()).isEqualTo(antes + TOTAL_PEDIDO);
@@ -1127,8 +1103,8 @@ class AdminJourneyIT extends BaseIntegration {
 
                 paso("Reembolsar otra vez es idempotente y NO devuelve el dinero dos veces", () -> {
                     long antes = saldoCliente();
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("REFUNDED");
                     assertThat(saldoCliente()).as("el dinero no se puede devolver dos veces").isEqualTo(antes);
@@ -1136,8 +1112,8 @@ class AdminJourneyIT extends BaseIntegration {
 
                 paso("Cancelar un pedido YA reembolsado no vuelve a mover dinero", () -> {
                     long antes = saldoCliente();
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/cancel",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/cancel", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("CANCELLED");
                     assertThat(saldoCliente()).isEqualTo(antes);
@@ -1145,17 +1121,19 @@ class AdminJourneyIT extends BaseIntegration {
 
                 paso("Reembolsar un pedido cancelado se rechaza y no mueve un céntimo", () -> {
                     long antes = saldoCliente();
-                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund",
-                            tokenAdmin, null);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund", tokenAdmin,
+                            null);
                     assertThat(r.status()).isEqualTo(422);
                     assertThat(saldoCliente()).isEqualTo(antes);
                     assertThat(textoEnBd("SELECT status FROM customer_order WHERE id = ?", idPedido))
                             .isEqualTo("CANCELLED");
                 }),
 
-                paso("Cancelar un pedido ya cancelado es idempotente", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/cancel", tokenAdmin,
-                                null).cuerpo().get("status").asText()).isEqualTo("CANCELLED")),
+                paso("Cancelar un pedido ya cancelado es idempotente",
+                        () -> assertThat(
+                                llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/cancel", tokenAdmin, null)
+                                        .cuerpo().get("status").asText())
+                                .isEqualTo("CANCELLED")),
 
                 paso("Un lote de reembolsos sobre identificadores inexistentes no tumba la petición", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/bulk-refund", tokenAdmin,
@@ -1169,13 +1147,12 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 9. Gestión de usuarios ─────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueUsuarios() {
-        return List.of(
-                paso("Lista los usuarios de la plataforma", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/users?page=0&size=25", tokenAdmin, null);
-                    assertThat(r.status()).isEqualTo(200);
-                    // Administrador, cliente, operador y el usuario normal de los cruces.
-                    assertThat(r.cuerpo().get("totalElements").asInt()).isEqualTo(4);
-                }),
+        return List.of(paso("Lista los usuarios de la plataforma", () -> {
+            Respuesta r = llamar(HttpMethod.GET, "/api/admin/users?page=0&size=25", tokenAdmin, null);
+            assertThat(r.status()).isEqualTo(200);
+            // Administrador, cliente, operador y el usuario normal de los cruces.
+            assertThat(r.cuerpo().get("totalElements").asInt()).isEqualTo(4);
+        }),
 
                 paso("Filtra por rol y encuentra exactamente al operador", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/admin/users?role=OPERATOR", tokenAdmin, null);
@@ -1185,56 +1162,58 @@ class AdminJourneyIT extends BaseIntegration {
 
                 paso("Crea un usuario desde el panel", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/users", tokenAdmin,
-                            Map.of("email", "cert-gestionado@example.com", "password", "GestionAdmin123!",
-                                    "role", "USER", "displayName", "Usuario Gestionado"));
+                            Map.of("email", "cert-gestionado@example.com", "password", "GestionAdmin123!", "role",
+                                    "USER", "displayName", "Usuario Gestionado"));
                     assertThat(r.status()).isEqualTo(201);
                     idUsuarioGestionado = UUID.fromString(r.cuerpo().get("id").asText());
                 }),
 
-                paso("Crear otro usuario con el MISMO correo se rechaza", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/users", tokenAdmin,
-                                Map.of("email", "cert-gestionado@example.com", "password", "GestionAdmin123!",
-                                        "role", "USER")).status()).isEqualTo(409)),
+                paso("Crear otro usuario con el MISMO correo se rechaza",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/users", tokenAdmin,
+                                Map.of("email", "cert-gestionado@example.com", "password", "GestionAdmin123!", "role",
+                                        "USER"))
+                                .status()).isEqualTo(409)),
 
-                paso("Un rol inventado se rechaza por validación", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/users", tokenAdmin,
-                                Map.of("email", "cert-rol-malo@example.com", "password", "GestionAdmin123!",
-                                        "role", "SUPERJEFE")).status()).isEqualTo(400)),
+                paso("Un rol inventado se rechaza por validación",
+                        () -> assertThat(llamar(HttpMethod.POST, "/api/admin/users", tokenAdmin,
+                                Map.of("email", "cert-rol-malo@example.com", "password", "GestionAdmin123!", "role",
+                                        "SUPERJEFE"))
+                                .status()).isEqualTo(400)),
 
                 paso("Edita su ficha: nombre, empresa y país", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/users/" + idUsuarioGestionado, tokenAdmin,
-                            Map.of("displayName", "Gestionado Editado", "companyName", "NX036 SL",
-                                    "country", "ES"));
+                            Map.of("displayName", "Gestionado Editado", "companyName", "NX036 SL", "country", "ES"));
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("displayName").asText()).isEqualTo("Gestionado Editado");
                     assertThat(r.cuerpo().get("companyName").asText()).isEqualTo("NX036 SL");
                 }),
 
                 paso("Le sube el rol a OPERADOR y se lo vuelve a bajar", () -> {
-                    assertThat(llamar(HttpMethod.PUT, "/api/admin/users/" + idUsuarioGestionado + "/role",
-                            tokenAdmin, Map.of("role", "OPERATOR")).cuerpo().get("role").asText())
-                            .isEqualTo("OPERATOR");
-                    assertThat(llamar(HttpMethod.PUT, "/api/admin/users/" + idUsuarioGestionado + "/role",
-                            tokenAdmin, Map.of("role", "USER")).cuerpo().get("role").asText()).isEqualTo("USER");
+                    assertThat(llamar(HttpMethod.PUT, "/api/admin/users/" + idUsuarioGestionado + "/role", tokenAdmin,
+                            Map.of("role", "OPERATOR")).cuerpo().get("role").asText()).isEqualTo("OPERATOR");
+                    assertThat(llamar(HttpMethod.PUT, "/api/admin/users/" + idUsuarioGestionado + "/role", tokenAdmin,
+                            Map.of("role", "USER")).cuerpo().get("role").asText()).isEqualTo("USER");
                 }),
 
                 paso("Le bloquea la cuenta durante una hora y se la desbloquea", () -> {
-                    Respuesta bloqueo = llamar(HttpMethod.POST, "/api/admin/users/" + idUsuarioGestionado
-                            + "/lock?minutes=60", tokenAdmin, null);
+                    Respuesta bloqueo = llamar(HttpMethod.POST,
+                            "/api/admin/users/" + idUsuarioGestionado + "/lock?minutes=60", tokenAdmin, null);
                     assertThat(bloqueo.status()).isEqualTo(200);
                     assertThat(bloqueo.cuerpo().get("lockedUntil").isNull()).isFalse();
-                    Respuesta desbloqueo = llamar(HttpMethod.POST, "/api/admin/users/" + idUsuarioGestionado
-                            + "/unlock", tokenAdmin, null);
+                    Respuesta desbloqueo = llamar(HttpMethod.POST,
+                            "/api/admin/users/" + idUsuarioGestionado + "/unlock", tokenAdmin, null);
                     assertThat(desbloqueo.cuerpo().get("lockedUntil").isNull()).isTrue();
                 }),
 
-                paso("Le activa la cuenta manualmente", () ->
-                        assertThat(llamar(HttpMethod.POST, "/api/admin/users/" + idUsuarioGestionado + "/activate",
-                                tokenAdmin, null).cuerpo().get("active").asBoolean()).isTrue()),
+                paso("Le activa la cuenta manualmente",
+                        () -> assertThat(
+                                llamar(HttpMethod.POST, "/api/admin/users/" + idUsuarioGestionado + "/activate",
+                                        tokenAdmin, null).cuerpo().get("active").asBoolean())
+                                .isTrue()),
 
                 paso("Le reinicia la contraseña y le llega el correo", () -> {
-                    assertThat(llamar(HttpMethod.POST, "/api/admin/users/" + idUsuarioGestionado
-                            + "/reset-password", tokenAdmin, null).status()).isEqualTo(204);
+                    assertThat(llamar(HttpMethod.POST, "/api/admin/users/" + idUsuarioGestionado + "/reset-password",
+                            tokenAdmin, null).status()).isEqualTo(204);
                     assertThat(enteroEnBd("SELECT count(*) FROM outbound_email WHERE to_address = ?",
                             "cert-gestionado@example.com")).isPositive();
                 }),
@@ -1252,21 +1231,22 @@ class AdminJourneyIT extends BaseIntegration {
                 paso("El borrado del panel es LÓGICO: anonimiza y desactiva, pero conserva la fila", () -> {
                     // La fila NO puede desaparecer: pedidos, facturas y el libro del monedero la
                     // referencian y esos datos hay que conservarlos. Lo que se borra es el dato personal.
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/users/" + idUsuarioGestionado, tokenAdmin,
-                            null).status()).isEqualTo(204);
+                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/users/" + idUsuarioGestionado, tokenAdmin, null)
+                            .status()).isEqualTo(204);
                     Map<String, Object> fila = jdbcTemplate.queryForMap(
                             "SELECT email, active, deleted_at, display_name FROM users WHERE id = ?",
                             idUsuarioGestionado);
                     assertThat(fila).as("la fila sigue existiendo").isNotNull();
                     assertThat((Boolean) fila.get("active")).as("queda desactivada").isFalse();
                     assertThat(fila.get("deleted_at")).as("con su fecha de baja").isNotNull();
-                    assertThat((String) fila.get("email"))
-                            .as("y el correo real ya no está").isNotEqualTo("cert-gestionado@example.com");
+                    assertThat((String) fila.get("email")).as("y el correo real ya no está")
+                            .isNotEqualTo("cert-gestionado@example.com");
                 }),
 
                 paso("Sus direcciones, que son dato personal sin obligación de conservar, sí se borran",
-                        () -> assertThat(enteroEnBd("SELECT count(*) FROM user_address WHERE user_id = ?",
-                                idUsuarioGestionado)).isZero()),
+                        () -> assertThat(
+                                enteroEnBd("SELECT count(*) FROM user_address WHERE user_id = ?", idUsuarioGestionado))
+                                .isZero()),
 
                 paso("Y desaparece del listado del panel", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/admin/users?page=0&size=50", tokenAdmin, null);
@@ -1277,38 +1257,35 @@ class AdminJourneyIT extends BaseIntegration {
 
                 paso("Volver a borrarlo es idempotente y no vuelve a tocar nada", () -> {
                     String correoAnonimo = textoEnBd("SELECT email FROM users WHERE id = ?", idUsuarioGestionado);
-                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/users/" + idUsuarioGestionado, tokenAdmin,
-                            null).status()).isEqualTo(204);
-                    assertThat(enteroEnBd("SELECT count(*) FROM users WHERE id = ?", idUsuarioGestionado))
-                            .isEqualTo(1);
+                    assertThat(llamar(HttpMethod.DELETE, "/api/admin/users/" + idUsuarioGestionado, tokenAdmin, null)
+                            .status()).isEqualTo(204);
+                    assertThat(enteroEnBd("SELECT count(*) FROM users WHERE id = ?", idUsuarioGestionado)).isEqualTo(1);
                     assertThat(textoEnBd("SELECT email FROM users WHERE id = ?", idUsuarioGestionado))
                             .isNotEqualTo(correoAnonimo);
                 }),
 
-                paso("Borrar a alguien que nunca existió responde 404", () ->
-                        assertThat(llamar(HttpMethod.DELETE, "/api/admin/users/" + UUID.randomUUID(), tokenAdmin,
-                                null).status()).isEqualTo(404)),
+                paso("Borrar a alguien que nunca existió responde 404", () -> assertThat(
+                        llamar(HttpMethod.DELETE, "/api/admin/users/" + UUID.randomUUID(), tokenAdmin, null).status())
+                        .isEqualTo(404)),
 
                 paso("Invita a un usuario nuevo, y repetir la invitación se rechaza", () -> {
                     Respuesta invitacion = llamar(HttpMethod.POST, "/api/admin/users/invite", tokenAdmin,
                             Map.of("email", "cert-invitado@example.com", "role", "USER"));
                     assertThat(invitacion.status()).isEqualTo(201);
                     assertThat(llamar(HttpMethod.POST, "/api/admin/users/invite", tokenAdmin,
-                            Map.of("email", "cert-invitado@example.com", "role", "USER")).status())
-                            .isEqualTo(409);
+                            Map.of("email", "cert-invitado@example.com", "role", "USER")).status()).isEqualTo(409);
                 }));
     }
 
     /* ── 10. Monedas y tasas ────────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueMonedas() {
-        return List.of(
-                paso("Ve todas las monedas configuradas, activas e inactivas", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/currency/all", tokenAdmin, null);
-                    assertThat(r.status()).isEqualTo(200);
-                    assertThat(r.cuerpo()).hasSize(3);
-                    assertThat(buscar(r.cuerpo(), "code", "CNY").get("active").asBoolean()).isTrue();
-                }),
+        return List.of(paso("Ve todas las monedas configuradas, activas e inactivas", () -> {
+            Respuesta r = llamar(HttpMethod.GET, "/api/admin/currency/all", tokenAdmin, null);
+            assertThat(r.status()).isEqualTo(200);
+            assertThat(r.cuerpo()).hasSize(3);
+            assertThat(buscar(r.cuerpo(), "code", "CNY").get("active").asBoolean()).isTrue();
+        }),
 
                 paso("Cambia la tasa del euro y el cambio se refleja de inmediato", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/currency/EUR", tokenAdmin,
@@ -1322,30 +1299,31 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(ficha.cuerpo().get("displayCurrency").asText()).isEqualTo("EUR");
                 }),
 
-                paso("Una tasa negativa se rechaza", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/EUR", tokenAdmin,
-                                Map.of("rateVsUsd", -1)).status()).isEqualTo(400)),
+                paso("Una tasa negativa se rechaza", () -> assertThat(
+                        llamar(HttpMethod.PUT, "/api/admin/currency/EUR", tokenAdmin, Map.of("rateVsUsd", -1)).status())
+                        .isEqualTo(400)),
 
-                paso("Una tasa de CERO también se rechaza: no es un cambio, es una división por cero", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/EUR", tokenAdmin,
-                                Map.of("rateVsUsd", 0)).status()).isEqualTo(400)),
+                paso("Una tasa de CERO también se rechaza: no es un cambio, es una división por cero", () -> assertThat(
+                        llamar(HttpMethod.PUT, "/api/admin/currency/EUR", tokenAdmin, Map.of("rateVsUsd", 0)).status())
+                        .isEqualTo(400)),
 
-                paso("Una moneda que no existe responde 404", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/XXX", tokenAdmin,
-                                Map.of("rateVsUsd", 1)).status()).isEqualTo(404)),
+                paso("Una moneda que no existe responde 404", () -> assertThat(
+                        llamar(HttpMethod.PUT, "/api/admin/currency/XXX", tokenAdmin, Map.of("rateVsUsd", 1)).status())
+                        .isEqualTo(404)),
 
                 paso("Desactiva el euro y deja de publicarse en la lista de monedas activas", () -> {
-                    assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/EUR/active?active=false", tokenAdmin,
-                            null).cuerpo().get("active").asBoolean()).isFalse();
+                    assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/EUR/active?active=false", tokenAdmin, null)
+                            .cuerpo().get("active").asBoolean()).isFalse();
                     Respuesta activas = llamar(HttpMethod.GET, "/api/currency/rates", null, null);
                     List<String> codigos = new ArrayList<>();
                     activas.cuerpo().forEach(n -> codigos.add(n.get("code").asText()));
                     assertThat(codigos).containsExactlyInAnyOrder("USD", "CNY");
                 }),
 
-                paso("Sin el parámetro obligatorio, el interruptor de la moneda se rechaza", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/EUR/active", tokenAdmin, null)
-                                .status()).isEqualTo(400)),
+                paso("Sin el parámetro obligatorio, el interruptor de la moneda se rechaza",
+                        () -> assertThat(
+                                llamar(HttpMethod.PUT, "/api/admin/currency/EUR/active", tokenAdmin, null).status())
+                                .isEqualTo(400)),
 
                 paso("Activa varias monedas en un solo movimiento", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/currency/bulk-active", tokenAdmin,
@@ -1371,14 +1349,13 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 11. Reglas aduaneras por país ──────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueAduanas() {
-        return List.of(
-                paso("Lista las reglas aduaneras configuradas", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/customs-rules", tokenAdmin, null);
-                    assertThat(r.status()).isEqualTo(200);
-                    JsonNode espana = buscar(r.cuerpo(), "countryCode", "ES");
-                    assertThat(espana.get("taxMode").asText()).isEqualTo("DDP");
-                    assertThat(espana.get("handlingFeeCents").asInt()).isEqualTo(DESPACHO_ES_CENTIMOS);
-                }),
+        return List.of(paso("Lista las reglas aduaneras configuradas", () -> {
+            Respuesta r = llamar(HttpMethod.GET, "/api/admin/customs-rules", tokenAdmin, null);
+            assertThat(r.status()).isEqualTo(200);
+            JsonNode espana = buscar(r.cuerpo(), "countryCode", "ES");
+            assertThat(espana.get("taxMode").asText()).isEqualTo("DDP");
+            assertThat(espana.get("handlingFeeCents").asInt()).isEqualTo(DESPACHO_ES_CENTIMOS);
+        }),
 
                 paso("Actualiza la regla de España añadiendo un 10 % sobre el impuesto adelantado", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
@@ -1394,23 +1371,23 @@ class AdminJourneyIT extends BaseIntegration {
                             .isEqualTo(ENVIO_ES_CENTIMOS + 250 + 154);
                 }),
 
-                paso("Un recargo NEGATIVO se rechaza por validación", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
+                paso("Un recargo NEGATIVO se rechaza por validación",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
                                 reglaAduanera("DDP", 0, "SURCHARGE", -1, 0, 0, 0)).status()).isEqualTo(400)),
 
-                paso("Un modo fiscal VACÍO se rechaza por validación", () ->
-                        assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
+                paso("Un modo fiscal VACÍO se rechaza por validación",
+                        () -> assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
                                 reglaAduanera("", 0, "SURCHARGE", 0, 0, 0, 0)).status()).isEqualTo(400)),
 
                 paso("En modo DDU no hay recargo: el impuesto lo paga el destinatario", () -> {
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
-                            reglaAduanera("DDU", 0, "SURCHARGE", DESPACHO_ES_CENTIMOS, 1000, 0, 0))
-                            .status()).isEqualTo(200);
+                            reglaAduanera("DDU", 0, "SURCHARGE", DESPACHO_ES_CENTIMOS, 1000, 0, 0)).status())
+                            .isEqualTo(200);
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.cuerpo().get("taxMode").asText()).isEqualTo("DDU");
-                    assertThat(r.cuerpo().get("amountUsdCents").asInt())
-                            .as("sin recargo de despacho, solo el porte").isEqualTo(ENVIO_ES_CENTIMOS);
+                    assertThat(r.cuerpo().get("amountUsdCents").asInt()).as("sin recargo de despacho, solo el porte")
+                            .isEqualTo(ENVIO_ES_CENTIMOS);
                 }),
 
                 paso("Un umbral JUSTO por encima del pedido no lo supera", () -> {
@@ -1423,15 +1400,13 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("amountUsdCents").asInt()).isEqualTo(ENVIO_ES_CENTIMOS);
                 }),
 
-                paso("Un umbral EXACTAMENTE igual al pedido tampoco lo supera (la comparación es estricta)",
-                        () -> {
-                            assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
-                                    reglaAduanera("DDP", 65.00, "SURCHARGE", 0, 0, 5000, 0)).status())
-                                    .isEqualTo(200);
-                            Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
-                                    Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
-                            assertThat(r.cuerpo().get("customsThresholdExceeded").asBoolean()).isFalse();
-                        }),
+                paso("Un umbral EXACTAMENTE igual al pedido tampoco lo supera (la comparación es estricta)", () -> {
+                    assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
+                            reglaAduanera("DDP", 65.00, "SURCHARGE", 0, 0, 5000, 0)).status()).isEqualTo(200);
+                    Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
+                            Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
+                    assertThat(r.cuerpo().get("customsThresholdExceeded").asBoolean()).isFalse();
+                }),
 
                 paso("Un céntimo por debajo del pedido SÍ lo supera y aparece el recargo formal", () -> {
                     // 64,99 < 65,00 → superado. Recargo = 50,00 fijos + 5 % del valor (3,25) = 53,25.
@@ -1440,8 +1415,7 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.cuerpo().get("customsThresholdExceeded").asBoolean()).isTrue();
-                    assertThat(r.cuerpo().get("amountUsdCents").asInt())
-                            .isEqualTo(ENVIO_ES_CENTIMOS + 5000 + 325);
+                    assertThat(r.cuerpo().get("amountUsdCents").asInt()).isEqualTo(ENVIO_ES_CENTIMOS + 5000 + 325);
                 }),
 
                 paso("Con la política de BLOQUEO, el destino rechaza la compra ANTES de cobrar", () -> {
@@ -1485,20 +1459,19 @@ class AdminJourneyIT extends BaseIntegration {
     /* ── 12. Panel de métricas ──────────────────────────────────────────────────────────────────── */
 
     private List<DynamicTest> bloqueMetricas() {
-        return List.of(
-                paso("El panel cuadra: seis productos, un pedido y 91,42 $ de volumen", () -> {
-                    Respuesta r = llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", tokenAdmin, null);
-                    assertThat(r.status()).isEqualTo(200);
-                    assertThat(r.cuerpo().get("totalProducts").asLong()).isEqualTo(6);
-                    assertThat(r.cuerpo().get("activeProducts").asLong()).isEqualTo(6);
-                    assertThat(r.cuerpo().get("draftProducts").asLong()).isZero();
-                    assertThat(r.cuerpo().get("totalOrders").asLong()).isEqualTo(1);
-                    // El volumen es la suma de los totales de los pedidos: un único pedido de 80,53.
-                    importeExacto("volumen bruto en dólares", r.cuerpo().get("gmvUsd"), "91.42");
-                    assertThat(r.cuerpo().get("displayCurrency").asText()).isEqualTo("USD");
-                    // Sin planes contratados no hay ingreso recurrente que enseñar.
-                    importeExacto("ingreso recurrente mensual", r.cuerpo().get("mrrUsd"), "0.00");
-                }),
+        return List.of(paso("El panel cuadra: seis productos, un pedido y 91,42 $ de volumen", () -> {
+            Respuesta r = llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", tokenAdmin, null);
+            assertThat(r.status()).isEqualTo(200);
+            assertThat(r.cuerpo().get("totalProducts").asLong()).isEqualTo(6);
+            assertThat(r.cuerpo().get("activeProducts").asLong()).isEqualTo(6);
+            assertThat(r.cuerpo().get("draftProducts").asLong()).isZero();
+            assertThat(r.cuerpo().get("totalOrders").asLong()).isEqualTo(1);
+            // El volumen es la suma de los totales de los pedidos: un único pedido de 80,53.
+            importeExacto("volumen bruto en dólares", r.cuerpo().get("gmvUsd"), "91.42");
+            assertThat(r.cuerpo().get("displayCurrency").asText()).isEqualTo("USD");
+            // Sin planes contratados no hay ingreso recurrente que enseñar.
+            importeExacto("ingreso recurrente mensual", r.cuerpo().get("mrrUsd"), "0.00");
+        }),
 
                 paso("El número de usuarios del panel coincide con los que hay de verdad", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", tokenAdmin, null);
@@ -1535,22 +1508,21 @@ class AdminJourneyIT extends BaseIntegration {
 
     private List<DynamicTest> bloqueAutorizacionCruzada() {
         List<Operacion> sensibles = List.of(
-                new Operacion("dar de alta un producto", HttpMethod.POST,
-                        "/api/admin/catalog/products/create", producto("Intruso", 10.0, 1)),
-                new Operacion("importar productos en lote", HttpMethod.POST,
-                        "/api/admin/catalog/products/bulk", List.of()),
+                new Operacion("dar de alta un producto", HttpMethod.POST, "/api/admin/catalog/products/create",
+                        producto("Intruso", 10.0, 1)),
+                new Operacion("importar productos en lote", HttpMethod.POST, "/api/admin/catalog/products/bulk",
+                        List.of()),
                 new Operacion("cambiar el estado de un producto", HttpMethod.PUT,
-                        "/api/admin/catalog/products/" + UUID.randomUUID() + "/status",
-                        Map.of("status", "PAUSED")),
+                        "/api/admin/catalog/products/" + UUID.randomUUID() + "/status", Map.of("status", "PAUSED")),
                 new Operacion("borrar un producto", HttpMethod.DELETE,
                         "/api/admin/catalog/products/" + UUID.randomUUID(), null),
-                new Operacion("crear una categoría", HttpMethod.POST,
-                        "/api/admin/catalog/categories", Map.of("slug", "intrusa", "nameZh", "x")),
+                new Operacion("crear una categoría", HttpMethod.POST, "/api/admin/catalog/categories",
+                        Map.of("slug", "intrusa", "nameZh", "x")),
                 new Operacion("borrar una categoría", HttpMethod.DELETE,
                         "/api/admin/catalog/categories/" + UUID.randomUUID(), null),
                 new Operacion("crear una regla de margen", HttpMethod.POST, "/api/admin/pricing/rules",
-                        Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 999,
-                                "description", "intrusión")),
+                        Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 999, "description",
+                                "intrusión")),
                 new Operacion("listar las reglas de margen", HttpMethod.GET, "/api/admin/pricing/rules", null),
                 new Operacion("ver la bandeja de pedidos", HttpMethod.GET, "/api/admin/orders", null),
                 new Operacion("remitir un pedido al proveedor", HttpMethod.POST,
@@ -1566,17 +1538,14 @@ class AdminJourneyIT extends BaseIntegration {
                         Map.of("email", "intruso@example.com", "password", "Intruso123!", "role", "ADMIN")),
                 new Operacion("cambiar el rol de un usuario", HttpMethod.PUT,
                         "/api/admin/users/" + UUID.randomUUID() + "/role", Map.of("role", "ADMIN")),
-                new Operacion("borrar un usuario", HttpMethod.DELETE,
-                        "/api/admin/users/" + UUID.randomUUID(), null),
-                new Operacion("ver el informe de operadores", HttpMethod.GET,
-                        "/api/admin/operators/report", null),
-                new Operacion("ver las ganancias de operador", HttpMethod.GET,
-                        "/api/admin/operator/earnings", null),
+                new Operacion("borrar un usuario", HttpMethod.DELETE, "/api/admin/users/" + UUID.randomUUID(), null),
+                new Operacion("ver el informe de operadores", HttpMethod.GET, "/api/admin/operators/report", null),
+                new Operacion("ver las ganancias de operador", HttpMethod.GET, "/api/admin/operator/earnings", null),
                 new Operacion("cambiar la tasa de una moneda", HttpMethod.PUT, "/api/admin/currency/EUR",
                         Map.of("rateVsUsd", 1)),
                 new Operacion("ver todas las monedas", HttpMethod.GET, "/api/admin/currency/all", null),
-                new Operacion("cambiar la regla aduanera de un país", HttpMethod.PUT,
-                        "/api/admin/customs-rules/ES", reglaAduanera("DDP", 0, "SURCHARGE", 0, 0, 0, 0)),
+                new Operacion("cambiar la regla aduanera de un país", HttpMethod.PUT, "/api/admin/customs-rules/ES",
+                        reglaAduanera("DDP", 0, "SURCHARGE", 0, 0, 0, 0)),
                 new Operacion("ver las reglas aduaneras", HttpMethod.GET, "/api/admin/customs-rules", null),
                 new Operacion("ver el panel de métricas", HttpMethod.GET, "/api/admin/dashboard/metrics", null),
                 new Operacion("ver los monederos de todos", HttpMethod.GET, "/api/admin/wallets", null));
@@ -1586,11 +1555,10 @@ class AdminJourneyIT extends BaseIntegration {
             pasos.add(paso("Un usuario NORMAL no puede " + operacion.descripcion() + ": 403", () -> {
                 Respuesta conUsuario = llamar(operacion.metodo(), operacion.uri(), tokenUsuarioNormal,
                         operacion.cuerpo());
-                assertThat(conUsuario.status())
-                        .as("%s con un token de usuario normal", operacion.descripcion()).isEqualTo(403);
+                assertThat(conUsuario.status()).as("%s con un token de usuario normal", operacion.descripcion())
+                        .isEqualTo(403);
                 Respuesta sinToken = llamar(operacion.metodo(), operacion.uri(), null, operacion.cuerpo());
-                assertThat(sinToken.status())
-                        .as("%s sin token", operacion.descripcion()).isEqualTo(401);
+                assertThat(sinToken.status()).as("%s sin token", operacion.descripcion()).isEqualTo(401);
             }));
         }
         pasos.add(paso("Y el rechazo no filtra NADA del recurso protegido", () -> {
@@ -1661,9 +1629,11 @@ class AdminJourneyIT extends BaseIntegration {
         idCliente = UUID.randomUUID();
         crearUsuario(idCliente, "cert-comprador@example.com", "USER");
         tokenCliente = jwt.userToken(idCliente, "cert-comprador@example.com", "USER");
-        jdbcTemplate.update("INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
-                + " status, created_at, updated_at)"
-                + " VALUES (gen_random_uuid(), ?, ?, 0, 'USD', 'ACTIVE', now(), now())", idCliente, SALDO_INICIAL);
+        jdbcTemplate.update(
+                "INSERT INTO wallet (id, user_id, balance_usd_cents, hold_usd_cents, currency_default,"
+                        + " status, created_at, updated_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, 0, 'USD', 'ACTIVE', now(), now())",
+                idCliente, SALDO_INICIAL);
 
         UUID idNormal = UUID.randomUUID();
         crearUsuario(idNormal, "cert-normal@example.com", "USER");
@@ -1672,8 +1642,8 @@ class AdminJourneyIT extends BaseIntegration {
         insertarDivisa("USD", "Dólar", "$", "en-US", "1.00000000");
         insertarDivisa("CNY", "Yuan", "¥", "zh-CN", "8.00000000");
         insertarDivisa("EUR", "Euro", "€", "es-ES", "0.90000000");
-        assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/USD", tokenAdmin,
-                Map.of("rateVsUsd", 1, "active", true)).status()).isEqualTo(200);
+        assertThat(llamar(HttpMethod.PUT, "/api/admin/currency/USD", tokenAdmin, Map.of("rateVsUsd", 1, "active", true))
+                .status()).isEqualTo(200);
 
         insertarZona("ES", "España", "EU", 499, 350, 8, 18);
         insertarZona("US", "Estados Unidos", "AM", 799, 450, 10, 20);
@@ -1687,14 +1657,16 @@ class AdminJourneyIT extends BaseIntegration {
         assertThat(llamar(HttpMethod.PUT, "/api/admin/pricing/moq-rule", tokenAdmin,
                 Map.of("enabled", true, "factorPercent", 50)).status()).isEqualTo(200);
 
-        assertThat(llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
-                Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 150, "active", true,
-                        "position", 0, "description", "Certificación: margen global del escaparate"))
-                .status()).isEqualTo(201);
+        assertThat(
+                llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
+                        Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE", "marginValue", 150, "active", true,
+                                "position", 0, "description", "Certificación: margen global del escaparate"))
+                        .status())
+                .isEqualTo(201);
 
         Respuesta categoria = llamar(HttpMethod.POST, "/api/admin/catalog/categories", tokenAdmin,
-                Map.of("slug", SLUG_CATEGORIA, "nameZh", "认证", "position", 0,
-                        "nameTranslations", Map.of("es", "Certificación", "en", "Certification")));
+                Map.of("slug", SLUG_CATEGORIA, "nameZh", "认证", "position", 0, "nameTranslations",
+                        Map.of("es", "Certificación", "en", "Certification")));
         assertThat(categoria.status()).isEqualTo(200);
         idCategoria = UUID.fromString(categoria.cuerpo().asText());
 
@@ -1726,12 +1698,10 @@ class AdminJourneyIT extends BaseIntegration {
         // Identificador externo EXPLÍCITO: es la clave del upsert. Sin él, la importación lo genera y
         // reimportar el mismo lote crearía productos nuevos en vez de actualizarlos.
         cuerpo.put("externalId", "CERT-" + Math.abs(String.valueOf(titulo).hashCode()));
-        cuerpo.put("imageUrls", List.of("https://cert.local/" + (titulo == null ? "x" : titulo.hashCode())
-                + ".jpg"));
+        cuerpo.put("imageUrls", List.of("https://cert.local/" + (titulo == null ? "x" : titulo.hashCode()) + ".jpg"));
         cuerpo.put("variantAxes", List.of(Map.of("name", "Color", "values", List.of("Rojo"))));
         cuerpo.put("variants", List.of(Map.of("sku", "CERT-" + Math.abs(String.valueOf(titulo).hashCode()),
-                "optionValues", Map.of("Color", "Rojo"), "price", precioCny, "stock", 25,
-                "packageWeightGrams", 500)));
+                "optionValues", Map.of("Color", "Rojo"), "price", precioCny, "stock", 25, "packageWeightGrams", 500)));
         return cuerpo;
     }
 
@@ -1773,9 +1743,10 @@ class AdminJourneyIT extends BaseIntegration {
     }
 
     private void crearUsuario(UUID id, String email, String rol) {
-        jdbcTemplate.update("INSERT INTO users (id, email, password_hash, role, active, language, display_name,"
-                + " failed_login_count, created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, true, 'es', ?, 0, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, role, active, language, display_name,"
+                        + " failed_login_count, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, ?, true, 'es', ?, 0, now(), now())",
                 id, email, passwordEncoder.encode(CLAVE_ADMIN), rol, "Cert " + rol);
     }
 
@@ -1785,11 +1756,11 @@ class AdminJourneyIT extends BaseIntegration {
                 codigo, nombre, simbolo, locale, tasa);
     }
 
-    private void insertarZona(String pais, String nombre, String zona, int base, int porKg, int etaMin,
-            int etaMax) {
-        jdbcTemplate.update("INSERT INTO cainiao_shipping_zone (id, country_code, country_name, zone, base_cents,"
-                + " per_kg_cents, eta_min_days, eta_max_days, enabled, created_at, updated_at)"
-                + " VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
+    private void insertarZona(String pais, String nombre, String zona, int base, int porKg, int etaMin, int etaMax) {
+        jdbcTemplate.update(
+                "INSERT INTO cainiao_shipping_zone (id, country_code, country_name, zone, base_cents,"
+                        + " per_kg_cents, eta_min_days, eta_max_days, enabled, created_at, updated_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, ?, true, now(), now())",
                 pais, nombre, zona, base, porKg, etaMin, etaMax);
     }
 
@@ -1847,19 +1818,16 @@ class AdminJourneyIT extends BaseIntegration {
 
     /** Variante para cuerpos que no son JSON (la importación por líneas viaja como texto plano). */
     private Respuesta llamarTexto(HttpMethod metodo, String uri, String token, String cuerpo, String tipo) {
-        EntityExchangeResult<byte[]> resultado = client.method(metodo).uri(uri)
-                .header("X-Forwarded-For", IP_PROPIA)
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.parseMediaType(tipo)).bodyValue(cuerpo)
-                .exchange().expectBody().returnResult();
+        EntityExchangeResult<byte[]> resultado = client.method(metodo).uri(uri).header("X-Forwarded-For", IP_PROPIA)
+                .header(HttpHeaders.AUTHORIZATION, bearer(token)).contentType(MediaType.parseMediaType(tipo))
+                .bodyValue(cuerpo).exchange().expectBody().returnResult();
         return new Respuesta(resultado.getStatus().value(), interpretar(resultado.getResponseBody()));
     }
 
     /** Petición del escaparate con una moneda de visualización concreta (cabecera {@code X-Currency}). */
     private Respuesta llamarConMoneda(String uri, String moneda) {
-        EntityExchangeResult<byte[]> resultado = client.get().uri(uri)
-                .header("X-Forwarded-For", IP_PROPIA).header("X-Currency", moneda)
-                .exchange().expectBody().returnResult();
+        EntityExchangeResult<byte[]> resultado = client.get().uri(uri).header("X-Forwarded-For", IP_PROPIA)
+                .header("X-Currency", moneda).exchange().expectBody().returnResult();
         return new Respuesta(resultado.getStatus().value(), interpretar(resultado.getResponseBody()));
     }
 
@@ -1889,8 +1857,8 @@ class AdminJourneyIT extends BaseIntegration {
     private static void importeExacto(String concepto, JsonNode nodo, String esperado) {
         assertThat(nodo).as("%s: el importe no viene en la respuesta", concepto).isNotNull();
         assertThat(nodo.isNull()).as("%s: el importe llega nulo", concepto).isFalse();
-        assertThat(new BigDecimal(nodo.asText())).as("%s", concepto)
-                .usingComparator(BigDecimal::compareTo).isEqualTo(new BigDecimal(esperado));
+        assertThat(new BigDecimal(nodo.asText())).as("%s", concepto).usingComparator(BigDecimal::compareTo)
+                .isEqualTo(new BigDecimal(esperado));
     }
 
     /** Primer elemento de un array JSON cuyo campo {@code campo} vale {@code valor}. */

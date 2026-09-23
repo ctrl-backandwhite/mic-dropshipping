@@ -84,8 +84,7 @@ class ProductSearchServiceTest {
     void seConservaElOrdenDeRelevanciaDelBuscador() throws IOException {
         UUID primero = UUID.randomUUID();
         UUID segundo = UUID.randomUUID();
-        when(client.search(any(SearchRequest.class), any(Class.class)))
-                .thenReturn(respuesta(primero, segundo));
+        when(client.search(any(SearchRequest.class), any(Class.class))).thenReturn(respuesta(primero, segundo));
 
         assertThat(service.searchRelevantIds("botas", "es")).contains(List.of(primero, segundo));
     }
@@ -170,15 +169,10 @@ class ProductSearchServiceTest {
      */
     @Test
     void elBuscadorPublicoNoDevuelveNiElCosteDeProveedorNiDeDondeSeCompra() throws IOException {
-        when(client.search(any(SearchRequest.class), any(Class.class))).thenReturn(unHitCon(Map.of(
-                "id", "3f6c1b2e-0000-4000-8000-000000000001",
-                "slug", "botas-de-agua",
-                "titleEs", "Botas de agua",
-                "basePrice", new java.math.BigDecimal("12.80"),
-                "externalId", "OFFER-826531947",
-                "source", "1688",
-                "supplierId", "9a1c1b2e-0000-4000-8000-0000000000ff",
-                "titleZh", "雨靴女款")));
+        when(client.search(any(SearchRequest.class), any(Class.class))).thenReturn(unHitCon(Map.of("id",
+                "3f6c1b2e-0000-4000-8000-000000000001", "slug", "botas-de-agua", "titleEs", "Botas de agua",
+                "basePrice", new java.math.BigDecimal("12.80"), "externalId", "OFFER-826531947", "source", "1688",
+                "supplierId", "9a1c1b2e-0000-4000-8000-0000000000ff", "titleZh", "雨靴女款")));
 
         SearchResultDtoOut resultado = service.searchTyped("botas", "es", 0, 10);
 
@@ -192,30 +186,24 @@ class ProductSearchServiceTest {
      */
     @Test
     void elBuscadorPublicoSigueDevolviendoLoQueElEscaparateNecesitaParaPintarElResultado() throws IOException {
-        when(client.search(any(SearchRequest.class), any(Class.class))).thenReturn(unHitCon(Map.of(
-                "id", "3f6c1b2e-0000-4000-8000-000000000001",
-                "slug", "botas-de-agua",
-                "titleEs", "Botas de agua",
-                "titleEn", "Rain boots",
-                "mainImage", "https://cdn.nx036.com/img/ab/cd.jpg",
-                "rating", 4.6,
-                "monthlySales", 320,
-                "categoryId", "7c2c1b2e-0000-4000-8000-00000000000a",
-                "basePrice", new java.math.BigDecimal("12.80"))));
+        when(client.search(any(SearchRequest.class), any(Class.class))).thenReturn(unHitCon(Map.of("id",
+                "3f6c1b2e-0000-4000-8000-000000000001", "slug", "botas-de-agua", "titleEs", "Botas de agua", "titleEn",
+                "Rain boots", "mainImage", "https://cdn.nx036.com/img/ab/cd.jpg", "rating", 4.6, "monthlySales", 320,
+                "categoryId", "7c2c1b2e-0000-4000-8000-00000000000a", "basePrice", new java.math.BigDecimal("12.80"))));
 
         SearchResultDtoOut resultado = service.searchTyped("botas", "es", 0, 10);
 
         Map<String, Object> devuelto = resultado.getItems().getFirst().getSource();
-        assertThat(devuelto).containsKeys("id", "slug", "titleEs", "titleEn", "mainImage", "rating",
-                "monthlySales", "categoryId");
+        assertThat(devuelto).containsKeys("id", "slug", "titleEs", "titleEn", "mainImage", "rating", "monthlySales",
+                "categoryId");
         // El identificador y la puntuación del motor los añade el servicio, no el índice.
         assertThat(devuelto).containsKeys("_id", "_score");
     }
 
     @SuppressWarnings("unchecked")
     private static SearchResponse<Map> unHitCon(Map<String, Object> fuente) {
-        Hit<Map> hit = new Hit.Builder<Map>().index("products-v2")
-                .id(String.valueOf(fuente.get("id"))).score(1.0).source(fuente).build();
+        Hit<Map> hit = new Hit.Builder<Map>().index("products-v2").id(String.valueOf(fuente.get("id"))).score(1.0)
+                .source(fuente).build();
         HitsMetadata<Map> meta = new HitsMetadata.Builder<Map>().hits(List.of(hit))
                 .total(new TotalHits.Builder().value(1).relation(TotalHitsRelation.Eq).build()).build();
         return new SearchResponse.Builder<Map>().took(1).timedOut(false).hits(meta)

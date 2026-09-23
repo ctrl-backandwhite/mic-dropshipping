@@ -57,9 +57,8 @@ import java.util.stream.Collectors;
 public class AuthUseCaseImpl implements AuthUseCase {
 
     /** UE-27: sus usuarios no pueden cambiar de país (candado anti-trampa del margen por país). */
-    private static final Set<String> EU_COUNTRIES = Set.of(
-            "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT",
-            "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
+    private static final Set<String> EU_COUNTRIES = Set.of("AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
+            "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
 
     private final UserUseCase userUseCase;
     private final AuthenticationManager authenticationManager;
@@ -108,8 +107,8 @@ public class AuthUseCaseImpl implements AuthUseCase {
         String normalizedEmail = req.getEmail().toLowerCase().trim();
         Authentication auth;
         try {
-            auth = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(normalizedEmail, req.getPassword()));
+            auth = authenticationManager
+                    .authenticate(new UsernamePasswordAuthenticationToken(normalizedEmail, req.getPassword()));
         } catch (BadCredentialsException ex) {
             // Contraseña incorrecta: contabiliza el intento fallido para el bloqueo por fuerza bruta.
             // OJO: el authenticate() PROGRAMÁTICO no dispara los AbstractAuthenticationFailureEvent que
@@ -218,11 +217,10 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
     /** Emite el par de tokens para {@code user} y arma la respuesta de login. */
     private LoginDtoOut buildLogin(User user, Set<String> authorities) {
-        UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(),
-                user.getRole().name(), authorities);
-        return LoginDtoOut.builder().token(tokens.accessToken()).refreshToken(tokens.refreshToken())
-                .tokenType("Bearer").expiresIn(tokens.expiresInSeconds())
-                .user(conDivisa(mapper.toMeDtoOut(user, authorities), user))
+        UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(), user.getRole().name(),
+                authorities);
+        return LoginDtoOut.builder().token(tokens.accessToken()).refreshToken(tokens.refreshToken()).tokenType("Bearer")
+                .expiresIn(tokens.expiresInSeconds()).user(conDivisa(mapper.toMeDtoOut(user, authorities), user))
                 .build();
     }
 

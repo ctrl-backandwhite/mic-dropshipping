@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.application.service.PricingService.PricedAm
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,9 @@ class CartQuotePesoTest {
     ProductRepository productRepository;
     @Mock
     PricingService pricingService;
+    /** Sin escalera de cantidades: esta clase mide el PESO y un tramo no la afecta. */
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
     @Mock
     CurrencyRateService currencyService;
     @Mock
@@ -68,9 +72,9 @@ class CartQuotePesoTest {
     void precioCualquiera() {
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(pricingService.displayCurrencySymbol()).thenReturn("€");
-        when(pricingService.priceFor(any(), any())).thenReturn(new PricedAmount(new BigDecimal("1.00"),
-                new BigDecimal("10.00"), new BigDecimal("10.00"), "EUR", "€", "10,00 €", null, null,
-                new BigDecimal("8.00"), BigDecimal.ZERO, BigDecimal.ZERO, "", "", ""));
+        when(pricingService.priceFor(any(), any(), anyInt(), any())).thenReturn(
+                new PricedAmount(new BigDecimal("1.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), "EUR", "€",
+                        "10,00 €", null, null, new BigDecimal("8.00"), BigDecimal.ZERO, BigDecimal.ZERO, "", "", ""));
         when(orderAmounts.lineSubtotal(any(), anyInt(), anyString())).thenReturn(new BigDecimal("10.00"));
         when(currencyService.formatDisplay(any(), anyString())).thenReturn("10,00 €");
     }
@@ -120,8 +124,8 @@ class CartQuotePesoTest {
         when(productRepository.findById(PRODUCTO)).thenReturn(Optional.of(conPeso));
         when(productRepository.findById(otro)).thenReturn(Optional.of(sinPeso));
 
-        CartQuoteOut q = controller.cartQuote(List.of(new CartQuoteItemIn(PRODUCTO, VARIANTE, 2),
-                new CartQuoteItemIn(otro, null, 1)));
+        CartQuoteOut q = controller
+                .cartQuote(List.of(new CartQuoteItemIn(PRODUCTO, VARIANTE, 2), new CartQuoteItemIn(otro, null, 1)));
 
         assertThat(q.totalWeightGrams()).isEqualTo(640);
         assertThat(q.weightIncomplete()).isTrue();

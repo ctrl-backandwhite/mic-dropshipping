@@ -57,8 +57,8 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     /** PERMITIDO: con cuenta, el mismo listado es accesible. */
     @Test
     void catalogProducts_authenticated_isReachable() {
-        client.get().uri(CATALOG_PRODUCTS).header("Authorization", bearer(jwt.userToken("USER")))
-                .exchange().expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+        client.get().uri(CATALOG_PRODUCTS).header("Authorization", bearer(jwt.userToken("USER"))).exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PROHIBIDO: la búsqueda también permite enumerar, así que va detrás del mismo muro. */
@@ -75,101 +75,92 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
      */
     @Test
     void homeSections_anonymous_isReachable() {
-        client.get().uri("/api/catalog/home/sections?lang=es&perSection=6").exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+        client.get().uri("/api/catalog/home/sections?lang=es&perSection=6").exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: margin-estimate exige ROLE_ADMIN. */
     @Test
     void marginEstimate_admin_isAllowed() {
         client.get().uri(String.format(MARGIN_ESTIMATE, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PROHIBIDO: un USER no llega al margen → 403. */
     @Test
     void marginEstimate_user_isForbidden() {
         client.get().uri(String.format(MARGIN_ESTIMATE, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().isEqualTo(403);
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isEqualTo(403);
     }
 
     /** PROHIBIDO: sin token → 401. */
     @Test
     void marginEstimate_anonymous_isUnauthorized() {
-        client.get().uri(String.format(MARGIN_ESTIMATE, UUID.randomUUID())).exchange()
-                .expectStatus().isEqualTo(401);
+        client.get().uri(String.format(MARGIN_ESTIMATE, UUID.randomUUID())).exchange().expectStatus().isEqualTo(401);
     }
 
     /** PERMITIDO: /api/me/** solo pide autenticación; un USER pasa (no 401/403). */
     @Test
     void meOrders_user_isAllowed() {
-        client.get().uri(ME_ORDERS)
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+        client.get().uri(ME_ORDERS).header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PROHIBIDO: /api/me/orders sin token → 401. */
     @Test
     void meOrders_anonymous_isUnauthorized() {
-        client.get().uri(ME_ORDERS).exchange()
-                .expectStatus().isEqualTo(401);
+        client.get().uri(ME_ORDERS).exchange().expectStatus().isEqualTo(401);
     }
 
     /** PERMITIDO: /api/admin/orders/** lo pueden tocar ADMIN y OPERATOR. */
     @Test
     void shipOrder_admin_isAllowed() {
         client.post().uri(String.format(ORDER_SHIP, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: OPERATOR (soporte) también puede procesar órdenes. */
     @Test
     void shipOrder_operator_isAllowed() {
         client.post().uri(String.format(ORDER_SHIP, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PROHIBIDO: un USER no puede marcar enviado → 403. */
     @Test
     void shipOrder_user_isForbidden() {
         client.post().uri(String.format(ORDER_SHIP, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().isEqualTo(403);
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isEqualTo(403);
     }
 
     /** PERMITIDO: las ganancias del operador son para ADMIN y OPERATOR. */
     @Test
     void operatorEarnings_operator_isAllowed() {
-        client.get().uri(OPERATOR_EARNINGS)
-                .header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange()
+        client.get().uri(OPERATOR_EARNINGS).header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange()
                 .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PROHIBIDO: un USER no ve las ganancias del operador → 403. */
     @Test
     void operatorEarnings_user_isForbidden() {
-        client.get().uri(OPERATOR_EARNINGS)
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
+        client.get().uri(OPERATOR_EARNINGS).header("Authorization", bearer(jwt.userToken("USER"))).exchange()
                 .expectStatus().isEqualTo(403);
     }
 
     /** PERMITIDO: el dashboard (resto de /api/admin/**) es EXCLUSIVO de ADMIN. */
     @Test
     void dashboardMetrics_admin_isAllowed() {
-        client.get().uri(DASHBOARD_METRICS)
-                .header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange()
+        client.get().uri(DASHBOARD_METRICS).header("Authorization", bearer(jwt.userToken("ADMIN"))).exchange()
                 .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PROHIBIDO: un OPERATOR no entra al dashboard admin → 403. */
     @Test
     void dashboardMetrics_operator_isForbidden() {
-        client.get().uri(DASHBOARD_METRICS)
-                .header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange()
+        client.get().uri(DASHBOARD_METRICS).header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange()
                 .expectStatus().isEqualTo(403);
     }
 
@@ -185,54 +176,50 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     @Test
     void borrarImagen_revisor_isAllowed() {
         client.delete().uri(String.format(IMAGEN, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: añadir a la galería una foto que venía en una variante. */
     @Test
     void anadirImagen_revisor_isAllowed() {
         client.post().uri(String.format(IMAGENES, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
-                .header("Content-Type", "application/json")
-                .bodyValue("{\"sourceUrl\":\"https://cbu01.alicdn.com/img/ibank/x.jpg\"}").exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).header("Content-Type", "application/json")
+                .bodyValue("{\"sourceUrl\":\"https://cbu01.alicdn.com/img/ibank/x.jpg\"}").exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: reordenar la galería (la primera pasa a ser la principal). */
     @Test
     void reordenarImagenes_revisor_isAllowed() {
         client.put().uri(String.format(ORDEN_IMAGENES, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
-                .header("Content-Type", "application/json")
-                .bodyValue("{\"imageIds\":[]}").exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).header("Content-Type", "application/json")
+                .bodyValue("{\"imageIds\":[]}").exchange().expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: quitar el vídeo de explicación. */
     @Test
     void borrarVideo_revisor_isAllowed() {
         client.delete().uri(String.format(VIDEO, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: corregir el enlace a la oferta de origen, que es contra lo que coteja las fotos. */
     @Test
     void editarUrlDeOrigen_revisor_isAllowed() {
         client.put().uri(String.format(URL_DE_ORIGEN, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
-                .header("Content-Type", "application/json")
-                .bodyValue("{\"sourceUrl\":\"https://detail.1688.com/offer/1.html\"}").exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).header("Content-Type", "application/json")
+                .bodyValue("{\"sourceUrl\":\"https://detail.1688.com/offer/1.html\"}").exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /** PERMITIDO: retirar un color sin foto válida (regla color=imagen). */
     @Test
     void borrarValorDeVariante_revisor_isAllowed() {
         client.delete().uri(String.format(VALOR_DE_VARIANTE, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
-                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange().expectStatus()
+                .value(s -> assertThat(s).isNotIn(401, 403));
     }
 
     /**
@@ -243,10 +230,8 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     @Test
     void edicionRapida_revisor_isForbidden() {
         client.put().uri(String.format(PRODUCTO, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
-                .header("Content-Type", "application/json")
-                .bodyValue("{\"verified\":true}").exchange()
-                .expectStatus().isEqualTo(403);
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).header("Content-Type", "application/json")
+                .bodyValue("{\"verified\":true}").exchange().expectStatus().isEqualTo(403);
     }
 
     /**
@@ -256,15 +241,13 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     @Test
     void borrarProducto_revisor_isForbidden() {
         client.delete().uri(String.format(PRODUCTO, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
-                .expectStatus().isEqualTo(403);
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange().expectStatus().isEqualTo(403);
     }
 
     /** PROHIBIDO: el revisor no entra al panel. */
     @Test
     void dashboardMetrics_revisor_isForbidden() {
-        client.get().uri(DASHBOARD_METRICS)
-                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+        client.get().uri(DASHBOARD_METRICS).header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
                 .expectStatus().isEqualTo(403);
     }
 
@@ -272,15 +255,13 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     @Test
     void marginEstimate_revisor_isForbidden() {
         client.get().uri(String.format(MARGIN_ESTIMATE, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
-                .expectStatus().isEqualTo(403);
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange().expectStatus().isEqualTo(403);
     }
 
     /** PROHIBIDO: y un USER corriente no toca las fotos de nadie. */
     @Test
     void borrarImagen_user_isForbidden() {
         client.delete().uri(String.format(IMAGEN, UUID.randomUUID()))
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().isEqualTo(403);
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isEqualTo(403);
     }
 }

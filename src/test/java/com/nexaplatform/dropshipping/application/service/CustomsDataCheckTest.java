@@ -36,8 +36,7 @@ class CustomsDataCheckTest {
         p.setHsCode("9102190000");
         p.setWeightGrams(300);
         p.setBasePrice(new BigDecimal("12.50"));
-        p.setTranslations(List.of(traduccion("en", "Men's quartz watch"),
-                traduccion("zh", "男士石英手表长方形表壳")));
+        p.setTranslations(List.of(traduccion("en", "Men's quartz watch"), traduccion("zh", "男士石英手表长方形表壳")));
         return p;
     }
 
@@ -72,8 +71,8 @@ class CustomsDataCheckTest {
         // «está» pero YunExpress lo rechaza. Mirar solo si el campo viene relleno no detecta nada.
         ProductEntity p = productoCompleto();
         p.setTitleZh("Reloj de pulsera para hombre");
-        p.setTranslations(List.of(traduccion("en", "Men's quartz watch"),
-                traduccion("zh", "Reloj de pulsera para hombre")));
+        p.setTranslations(
+                List.of(traduccion("en", "Men's quartz watch"), traduccion("zh", "Reloj de pulsera para hombre")));
 
         assertThat(CustomsDataCheck.faltantesDe(p)).containsExactly(CustomsField.CHINESE_NAME);
     }
@@ -117,8 +116,7 @@ class CustomsDataCheckTest {
         ProductEntity p = new ProductEntity();
 
         assertThat(CustomsDataCheck.faltantesDe(p)).containsExactlyInAnyOrder(CustomsField.ENGLISH_NAME,
-                CustomsField.CHINESE_NAME, CustomsField.HS_CODE, CustomsField.UNIT_WEIGHT,
-                CustomsField.DECLARED_VALUE);
+                CustomsField.CHINESE_NAME, CustomsField.HS_CODE, CustomsField.UNIT_WEIGHT, CustomsField.DECLARED_VALUE);
     }
 
     @Test
@@ -127,8 +125,7 @@ class CustomsDataCheckTest {
         String frase = CustomsDataCheck.describe("Reloj de pulsera (SKU-1)",
                 List.of(CustomsField.HS_CODE, CustomsField.CHINESE_NAME));
 
-        assertThat(frase).contains("Reloj de pulsera (SKU-1)")
-                .contains("partida arancelaria (HSCode)")
+        assertThat(frase).contains("Reloj de pulsera (SKU-1)").contains("partida arancelaria (HSCode)")
                 .contains("nombre en chino (CName)");
     }
 

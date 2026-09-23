@@ -115,8 +115,8 @@ class Cov07ProductIndexerSetupTest {
         when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 
-        indexer.onProductIngested(Map.of("productId", p.getId().toString(), "slug", "camisa-lino",
-                "source", "1688", "externalId", "EXT-1"));
+        indexer.onProductIngested(Map.of("productId", p.getId().toString(), "slug", "camisa-lino", "source", "1688",
+                "externalId", "EXT-1"));
 
         verify(client).index(any(IndexRequest.class));
     }
@@ -184,22 +184,21 @@ class Cov07ProductIndexerSetupTest {
 
         ArgumentCaptor<IndexRequest<Map<String, Object>>> captor = captor();
         verify(client).index(captor.capture());
-        assertThat(captor.getValue().document()).containsEntry("hasImage", false)
-                .doesNotContainKey("mainImage");
+        assertThat(captor.getValue().document()).containsEntry("hasImage", false).doesNotContainKey("mainImage");
     }
 
     /* ==================== helpers ==================== */
 
     private static ProductEntity product() {
-        ProductEntity p = ProductEntity.builder().slug("camisa-lino").source("1688").externalId("EXT-1")
-                .titleZh("亚麻衬衫").build();
+        ProductEntity p = ProductEntity.builder().slug("camisa-lino").source("1688").externalId("EXT-1").titleZh("亚麻衬衫")
+                .build();
         p.setId(UUID.randomUUID());
         return p;
     }
 
     private static ProductTranslationEntity translation(String language, String title, String shortDescription) {
-        return ProductTranslationEntity.builder().language(language).title(title)
-                .shortDescription(shortDescription).build();
+        return ProductTranslationEntity.builder().language(language).title(title).shortDescription(shortDescription)
+                .build();
     }
 
     /** Matcher para el overload de lambda (el otro recibe la petición ya construida). */

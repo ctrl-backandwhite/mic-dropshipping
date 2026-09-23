@@ -54,9 +54,9 @@ public class EuComplianceService {
      *                 correo electrónico). Se expone para que el panel de admin pueda avisar; el escaparate
      *                 solo recibe el bloque cuando además está habilitado.
      */
-    public record ResponsiblePersonView(String name, String addressLine, String postalCode, String city,
-            String region, String country, String email, String phone, String role, String roleLabel,
-            boolean enabled, boolean complete) {
+    public record ResponsiblePersonView(String name, String addressLine, String postalCode, String city, String region,
+            String country, String email, String phone, String role, String roleLabel, boolean enabled,
+            boolean complete) {
 
         /** Dirección en una línea, tal y como se imprime en la factura y en la ficha. */
         public String formattedAddress() {
@@ -76,9 +76,8 @@ public class EuComplianceService {
     }
 
     /** Bloque de cumplimiento que viaja con la ficha de producto. */
-    public record ProductComplianceView(String manufacturerName, String manufacturerAddress,
-            String manufacturerEmail, boolean manufacturerComplete, List<String> safetyWarnings,
-            ResponsiblePersonView responsiblePerson) {
+    public record ProductComplianceView(String manufacturerName, String manufacturerAddress, String manufacturerEmail,
+            boolean manufacturerComplete, List<String> safetyWarnings, ResponsiblePersonView responsiblePerson) {
     }
 
     /** Operador económico configurado, esté o no publicable. Lo usa el panel de admin. */
@@ -92,8 +91,7 @@ public class EuComplianceService {
      * es mejor no pintar el bloque y que el aviso del panel lo delate.
      */
     public Optional<ResponsiblePersonView> publishedResponsible(String lang) {
-        return responsible(lang).filter(ResponsiblePersonView::enabled)
-                .filter(ResponsiblePersonView::complete);
+        return responsible(lang).filter(ResponsiblePersonView::enabled).filter(ResponsiblePersonView::complete);
     }
 
     /** Advertencias de seguridad que alcanzan a una categoría, heredadas de sus ancestros. */
@@ -102,11 +100,10 @@ public class EuComplianceService {
     }
 
     /** Bloque completo para la ficha: fabricante del producto + advertencias + operador económico. */
-    public ProductComplianceView forProduct(UUID categoryId, String manufacturerName,
-            String manufacturerAddress, String manufacturerEmail, String lang) {
+    public ProductComplianceView forProduct(UUID categoryId, String manufacturerName, String manufacturerAddress,
+            String manufacturerEmail, String lang) {
         boolean completo = EuComplianceLookup.relleno(manufacturerName)
-                && EuComplianceLookup.relleno(manufacturerAddress)
-                && EuComplianceLookup.relleno(manufacturerEmail);
+                && EuComplianceLookup.relleno(manufacturerAddress) && EuComplianceLookup.relleno(manufacturerEmail);
         return new ProductComplianceView(manufacturerName, manufacturerAddress, manufacturerEmail, completo,
                 safetyWarnings(categoryId, lang), publishedResponsible(lang).orElse(null));
     }
@@ -155,8 +152,7 @@ public class EuComplianceService {
     @Transactional(readOnly = true)
     public List<SafetyWarningView> warningsOfCategory(UUID categoryId) {
         return warningRepository.findByCategoryIdOrderByPositionAsc(categoryId).stream()
-                .map(EuComplianceService::toWarningView)
-                .toList();
+                .map(EuComplianceService::toWarningView).toList();
     }
 
     /**
@@ -172,11 +168,8 @@ public class EuComplianceService {
             Map<String, String> texts, String actor) {
         String codigo = code == null ? "" : code.trim().toUpperCase();
         Instant ahora = Instant.now();
-        CategorySafetyWarningEntity w = warningRepository
-                .findByCategoryIdOrderByPositionAsc(categoryId).stream()
-                .filter(x -> codigo.equalsIgnoreCase(x.getCode()))
-                .findFirst()
-                .orElseGet(() -> {
+        CategorySafetyWarningEntity w = warningRepository.findByCategoryIdOrderByPositionAsc(categoryId).stream()
+                .filter(x -> codigo.equalsIgnoreCase(x.getCode())).findFirst().orElseGet(() -> {
                     CategorySafetyWarningEntity nueva = new CategorySafetyWarningEntity();
                     nueva.setId(UUID.randomUUID());
                     nueva.setCategoryId(categoryId);
@@ -212,11 +205,8 @@ public class EuComplianceService {
             }
             String lang = idioma.trim().toLowerCase();
             CategorySafetyWarningTranslationEntity t = w.getTranslations().stream()
-                    .filter(x -> lang.equalsIgnoreCase(x.getLanguage()))
-                    .findFirst()
-                    .orElseGet(() -> {
-                        CategorySafetyWarningTranslationEntity nueva =
-                                new CategorySafetyWarningTranslationEntity();
+                    .filter(x -> lang.equalsIgnoreCase(x.getLanguage())).findFirst().orElseGet(() -> {
+                        CategorySafetyWarningTranslationEntity nueva = new CategorySafetyWarningTranslationEntity();
                         nueva.setId(UUID.randomUUID());
                         nueva.setWarningId(w.getId());
                         nueva.setLanguage(lang);
@@ -232,8 +222,7 @@ public class EuComplianceService {
     private static SafetyWarningView toWarningView(CategorySafetyWarningEntity w) {
         Map<String, String> textos = new LinkedHashMap<>();
         w.getTranslations().forEach(t -> textos.put(t.getLanguage(), t.getText()));
-        return new SafetyWarningView(w.getId(), w.getCategoryId(), w.getCode(), w.getPosition(), w.isActive(),
-                textos);
+        return new SafetyWarningView(w.getId(), w.getCategoryId(), w.getCode(), w.getPosition(), w.isActive(), textos);
     }
 
     private static String trim(String s) {

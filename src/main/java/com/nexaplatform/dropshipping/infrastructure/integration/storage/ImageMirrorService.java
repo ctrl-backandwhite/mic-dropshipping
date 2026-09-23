@@ -257,14 +257,13 @@ public class ImageMirrorService {
         // producto lista, y colgarlas detrás las dejaba sin reintentar justo cuando la cola se vacía.
         requeueFailedVariantImages(ahora);
         List<ProductImageEntity> candidatas = imageRepository.findFailedForRetry(retryMaxAttempts, retryBatch);
-        List<UUID> listas = candidatas.stream().filter(img -> esperaCumplida(img, ahora))
-                .map(ProductImageEntity::getId).toList();
+        List<UUID> listas = candidatas.stream().filter(img -> esperaCumplida(img, ahora)).map(ProductImageEntity::getId)
+                .toList();
         if (listas.isEmpty()) {
             return;
         }
         imageRepository.requeueToPending(listas);
-        log.info("Mirror reintento: {} de {} imágenes fallidas vuelven a la cola", listas.size(),
-                candidatas.size());
+        log.info("Mirror reintento: {} de {} imágenes fallidas vuelven a la cola", listas.size(), candidatas.size());
     }
 
     /**
@@ -286,8 +285,8 @@ public class ImageMirrorService {
         int valores = variantValueRepository.requeueFailed(antesDe, retryBatch);
         int variantes = variantRepository.requeueFailed(antesDe, retryBatch);
         if (valores + variantes > 0) {
-            log.info("Mirror reintento: {} muestras de color y {} imágenes de variante vuelven a la cola",
-                    valores, variantes);
+            log.info("Mirror reintento: {} muestras de color y {} imágenes de variante vuelven a la cola", valores,
+                    variantes);
         }
     }
 
@@ -335,8 +334,8 @@ public class ImageMirrorService {
         }
         String base = Texts.stripTrailingSlashes(storage.publicUrl()) + "/";
         int missing = 0;
-        for (ProductImageEntity img : imageRepository
-                .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
+        for (ProductImageEntity img : imageRepository.findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED,
+                base)) {
             String cdn = img.getCdnUrl();
             String key = cdn.length() > base.length() ? cdn.substring(base.length()) : "";
             if (!keys.contains(key)) {
@@ -348,7 +347,6 @@ public class ImageMirrorService {
             log.info("Mirror auto-heal: {} imágenes MIRRORED con objeto inexistente reencoladas", missing);
         }
     }
-
 
     /**
      * Espeja a storage las imágenes de las VARIANTES y de los VALORES de eje (p.ej. la foto de cada
@@ -386,12 +384,12 @@ public class ImageMirrorService {
          * ajustes distintos es la clase de cosa que hace que bajar un número no frene nada.
          */
         int ok = 0;
-        ok += espejaEnParalelo(variantRepository.findNeedingImageMirror(prefix, top),
-                ProductVariantEntity::getId, ProductVariantEntity::getImageSourceUrl,
-                variantRepository::markImageCdn, variantRepository::markImageFailed, "variante");
-        ok += espejaEnParalelo(variantValueRepository.findNeedingImageMirror(prefix, top),
-                VariantValueEntity::getId, VariantValueEntity::getImageSourceUrl,
-                variantValueRepository::markImageCdn, variantValueRepository::markImageFailed, "valor");
+        ok += espejaEnParalelo(variantRepository.findNeedingImageMirror(prefix, top), ProductVariantEntity::getId,
+                ProductVariantEntity::getImageSourceUrl, variantRepository::markImageCdn,
+                variantRepository::markImageFailed, "variante");
+        ok += espejaEnParalelo(variantValueRepository.findNeedingImageMirror(prefix, top), VariantValueEntity::getId,
+                VariantValueEntity::getImageSourceUrl, variantValueRepository::markImageCdn,
+                variantValueRepository::markImageFailed, "valor");
         if (ok > 0) {
             log.info("Mirror imágenes de variante/valor: {} subidas a storage", ok);
         }
@@ -569,11 +567,11 @@ public class ImageMirrorService {
             return;
         }
         int ok = espejaEnParalelo(variantRepository.findNeedingImageMirrorByProducts(prefix, productIds),
-                ProductVariantEntity::getId, ProductVariantEntity::getImageSourceUrl,
-                variantRepository::markImageCdn, variantRepository::markImageFailed, "variante");
+                ProductVariantEntity::getId, ProductVariantEntity::getImageSourceUrl, variantRepository::markImageCdn,
+                variantRepository::markImageFailed, "variante");
         ok += espejaEnParalelo(variantValueRepository.findNeedingImageMirrorByProducts(prefix, productIds),
-                VariantValueEntity::getId, VariantValueEntity::getImageSourceUrl,
-                variantValueRepository::markImageCdn, variantValueRepository::markImageFailed, "valor");
+                VariantValueEntity::getId, VariantValueEntity::getImageSourceUrl, variantValueRepository::markImageCdn,
+                variantValueRepository::markImageFailed, "valor");
         if (ok > 0) {
             log.info("Mirror import: {} imágenes de variante y muestra de color de {} producto(s) espejadas "
                     + "al importar", ok, productIds.size());
@@ -612,8 +610,8 @@ public class ImageMirrorService {
     public ReencoladoParaComprimir reencolarParaComprimir(int limite) {
         int reencoladas = imageRepository.reencolarSinComprimir(Math.max(1, Math.min(limite, 2000)));
         long quedan = imageRepository.countByMirrorStatusAndWidthIsNull(MirrorStatus.MIRRORED);
-        log.info("Compresión del histórico: {} imágenes vuelven a la cola, quedan {} sin comprimir",
-                reencoladas, quedan);
+        log.info("Compresión del histórico: {} imágenes vuelven a la cola, quedan {} sin comprimir", reencoladas,
+                quedan);
         return new ReencoladoParaComprimir(reencoladas, quedan);
     }
 
@@ -680,8 +678,8 @@ public class ImageMirrorService {
             Optional<ImagenOrigenEspejadaEntity> conocida = origenesEspejados.findById(hashDeUrl(candidate));
             if (conocida.isPresent()) {
                 ImagenOrigenEspejadaEntity y = conocida.get();
-                imageRepository.markMirrored(id, y.getCdnUrl(), y.getBytes(), y.getHash(), y.getAncho(),
-                        y.getAlto(), MirrorStatus.MIRRORED, Instant.now());
+                imageRepository.markMirrored(id, y.getCdnUrl(), y.getBytes(), y.getHash(), y.getAncho(), y.getAlto(),
+                        MirrorStatus.MIRRORED, Instant.now());
                 imageRepository.resetAttempts(id);
                 if (y.isComprimida()) {
                     // Ya estaba comprimida en su día: no hay nada que hacer en la segunda pasada.
@@ -757,8 +755,8 @@ public class ImageMirrorService {
      * @return cuántas se aligeraron de verdad
      */
     int comprimirPendientesBatch(int limite) {
-        List<ProductImageEntity> pendientes = imageRepository.findPendientesDeComprimir(
-                PageRequest.of(0, Math.max(1, limite)));
+        List<ProductImageEntity> pendientes = imageRepository
+                .findPendientesDeComprimir(PageRequest.of(0, Math.max(1, limite)));
         if (pendientes.isEmpty()) {
             return 0;
         }
@@ -782,8 +780,7 @@ public class ImageMirrorService {
                 String hash = sha256(lista.datos());
                 String key = "media/" + hash.substring(0, 2) + "/" + hash + "." + lista.tipo();
                 String url = storage.upload(key, lista.datos(), lista.contentType());
-                imageRepository.marcaComprimida(img.getId(), url, (long) lista.datos().length, hash,
-                        Instant.now());
+                imageRepository.marcaComprimida(img.getId(), url, (long) lista.datos().length, hash, Instant.now());
                 bytesAntes += original.length;
                 bytesDespues += lista.datos().length;
                 aligeradas++;
@@ -798,8 +795,8 @@ public class ImageMirrorService {
             }
         }
         if (aligeradas > 0) {
-            log.info("Compresión diferida: {} de {} aligeradas, {} kB -> {} kB (quedan {} por comprimir)",
-                    aligeradas, pendientes.size(), bytesAntes / 1024, bytesDespues / 1024,
+            log.info("Compresión diferida: {} de {} aligeradas, {} kB -> {} kB (quedan {} por comprimir)", aligeradas,
+                    pendientes.size(), bytesAntes / 1024, bytesDespues / 1024,
                     imageRepository.cuentaPendientesDeComprimir());
         }
         return aligeradas;
@@ -833,8 +830,8 @@ public class ImageMirrorService {
     /** sha256 de la URL en hexadecimal: es la clave de la memoria de orígenes. */
     static String hashDeUrl(String url) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(url.trim().getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(url.trim().getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("Esta máquina virtual no trae SHA-256", e);
         }
@@ -849,19 +846,10 @@ public class ImageMirrorService {
     private void recuerdaOrigen(String url, Stored s, boolean comprimida) {
         try {
             Instant ahora = Instant.now();
-            origenesEspejados.save(ImagenOrigenEspejadaEntity.builder()
-                    .urlHash(hashDeUrl(url))
-                    .urlOrigen(url.length() > 800 ? url.substring(0, 800) : url)
-                    .cdnUrl(s.url())
-                    .bytes(s.bytes())
-                    .hash(s.hash())
-                    .ancho(enteroONulo(s.ancho()))
-                    .alto(enteroONulo(s.alto()))
-                    .comprimida(comprimida)
-                    .creadaEn(ahora)
-                    .usadaEn(ahora)
-                    .veces(1)
-                    .build());
+            origenesEspejados.save(ImagenOrigenEspejadaEntity.builder().urlHash(hashDeUrl(url))
+                    .urlOrigen(url.length() > 800 ? url.substring(0, 800) : url).cdnUrl(s.url()).bytes(s.bytes())
+                    .hash(s.hash()).ancho(enteroONulo(s.ancho())).alto(enteroONulo(s.alto())).comprimida(comprimida)
+                    .creadaEn(ahora).usadaEn(ahora).veces(1).build());
         } catch (RuntimeException e) {
             log.debug("No se pudo recordar el origen {}: {}", url, e.toString());
         }
@@ -950,9 +938,10 @@ public class ImageMirrorService {
         for (int hop = 0; hop <= maxHops; hop++) {
             URI uri = URI.create(current);
             assertPublicHttpUrl(uri);
-            HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(uri)
-                    .header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
-                    .timeout(Duration.ofSeconds(45)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+            HttpResponse<byte[]> res = http.send(
+                    HttpRequest.newBuilder(uri).header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
+                            .timeout(Duration.ofSeconds(45)).GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
             if (res.statusCode() / 100 == 3) {
                 String loc = res.headers().firstValue("location").orElse(null);
                 if (loc == null) {
@@ -990,8 +979,8 @@ public class ImageMirrorService {
         if (d.length >= 6 && d[0] == 'G' && d[1] == 'I' && d[2] == 'F' && d[3] == '8') {
             return "gif";
         }
-        if (d.length >= 12 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F'
-                && d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P') {
+        if (d.length >= 12 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F' && d[8] == 'W' && d[9] == 'E'
+                && d[10] == 'B' && d[11] == 'P') {
             return "webp";
         }
         throw new IllegalStateException("Contenido no es imagen ráster soportada (jpg/png/webp/gif) — descartado");

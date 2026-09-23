@@ -54,8 +54,7 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
     @Modifying
     @Transactional
     @Query("UPDATE ProductImageEntity i SET i.cdnUrl = :cdnUrl, i.bytes = :bytes, i.hash = :hash, "
-            + "i.width = :ancho, i.height = :alto, "
-            + "i.mirrorStatus = :status, i.mirroredAt = :at WHERE i.id = :id")
+            + "i.width = :ancho, i.height = :alto, " + "i.mirrorStatus = :status, i.mirroredAt = :at WHERE i.id = :id")
     void markMirrored(@Param("id") UUID id, @Param("cdnUrl") String cdnUrl, @Param("bytes") Long bytes,
             @Param("hash") String hash, @Param("ancho") Integer ancho, @Param("alto") Integer alto,
             @Param("status") MirrorStatus status, @Param("at") Instant at);

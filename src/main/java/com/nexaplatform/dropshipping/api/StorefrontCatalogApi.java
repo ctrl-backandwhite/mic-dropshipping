@@ -109,8 +109,7 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Boolean hasVideo, @RequestParam(required = false) Integer minRating,
             @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
             @RequestParam(required = false, defaultValue = "best_match") String sort,
-            @RequestParam(required = false) Boolean verified,
-            @RequestParam(required = false) UUID promotionId,
+            @RequestParam(required = false) Boolean verified, @RequestParam(required = false) UUID promotionId,
             // «Ver los que no suman arancel»: solo los productos que comparten terna con ese grupo y por
             // tanto se declaran con su misma descripción.
             @RequestParam(required = false) UUID dutyGroupId,
@@ -281,6 +280,5 @@ public interface StorefrontCatalogApi {
     @Operation(summary = "Estimate the dropshipping margin for a product")
     @GetMapping("/products/{id}/margin-estimate")
     MarginEstimate marginEstimate(@PathVariable UUID id, @RequestParam(defaultValue = "ES") String country,
-            @RequestParam(defaultValue = "1") int quantity,
-            @RequestParam(required = false) UUID variantId);
+            @RequestParam(defaultValue = "1") int quantity, @RequestParam(required = false) UUID variantId);
 }

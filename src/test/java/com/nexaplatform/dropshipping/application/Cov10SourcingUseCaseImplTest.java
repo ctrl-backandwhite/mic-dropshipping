@@ -113,8 +113,8 @@ class Cov10SourcingUseCaseImplTest {
         when(sourcingQuoteRepository.findByRequestIdOrderByPriceUsdCentsAsc(id))
                 .thenReturn(List.of(SourcingQuote.builder().build(), SourcingQuote.builder().build()));
 
-        assertThat(useCase.myRequests(userId)).singleElement()
-                .extracting(SourcingRequest::getQuotesCount).isEqualTo(2L);
+        assertThat(useCase.myRequests(userId)).singleElement().extracting(SourcingRequest::getQuotesCount)
+                .isEqualTo(2L);
     }
 
     @Test

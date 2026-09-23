@@ -41,29 +41,24 @@ class VariantValueRepositoryIT extends PersistenceITBase {
     @BeforeEach
     void setUp() {
         ProductEntity product = products.save(newProduct("val"));
-        option = em.persistAndFlush(VariantOptionEntity.builder()
-                .product(product)
-                .nameZh("颜色")
-                .name("Color")
-                .position(0)
-                .build());
+        option = em.persistAndFlush(
+                VariantOptionEntity.builder().product(product).nameZh("颜色").name("Color").position(0).build());
     }
 
     @Test
     void findNeedingImageMirror_selectsRowsWithSourceAndNoOurCdnAndNotFailed() {
         VariantValueEntity needsNullCdn = values.save(value("rojo", "https://src/red.jpg", null, null));
-        VariantValueEntity needsOtherCdn =
-                values.save(value("azul", "https://src/blue.jpg", "https://foreign.com/blue.jpg", null));
+        VariantValueEntity needsOtherCdn = values
+                .save(value("azul", "https://src/blue.jpg", "https://foreign.com/blue.jpg", null));
         values.save(value("verde", "https://src/green.jpg", "https://cdn.nexa.local/green.jpg", null));
         values.save(value("negro", "https://src/black.jpg", null, Instant.parse("2026-01-01T00:00:00Z")));
         values.save(value("sinimg", null, null, null));
         values.save(value("vacio", "", null, null));
 
-        List<VariantValueEntity> result =
-                values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50));
+        List<VariantValueEntity> result = values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50));
 
-        assertThat(result).extracting(VariantValueEntity::getId)
-                .containsExactlyInAnyOrder(needsNullCdn.getId(), needsOtherCdn.getId());
+        assertThat(result).extracting(VariantValueEntity::getId).containsExactlyInAnyOrder(needsNullCdn.getId(),
+                needsOtherCdn.getId());
     }
 
     @Test
@@ -72,8 +67,7 @@ class VariantValueRepositoryIT extends PersistenceITBase {
         values.save(value("b", "https://src/b.jpg", null, null));
         values.save(value("c", "https://src/c.jpg", null, null));
 
-        List<VariantValueEntity> result =
-                values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 2));
+        List<VariantValueEntity> result = values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 2));
 
         assertThat(result).hasSize(2);
     }
@@ -105,32 +99,18 @@ class VariantValueRepositoryIT extends PersistenceITBase {
         VariantValueEntity reloaded = values.findById(id).orElseThrow();
         assertThat(reloaded.getImageMirrorFailedAt()).isEqualTo(at);
         assertThat(values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50)))
-                .extracting(VariantValueEntity::getId)
-                .doesNotContain(id);
+                .extracting(VariantValueEntity::getId).doesNotContain(id);
     }
 
     private VariantValueEntity value(String valueZh, String imageSourceUrl, String imageCdnUrl, Instant failedAt) {
-        return VariantValueEntity.builder()
-                .option(option)
-                .valueZh(valueZh)
-                .position(0)
-                .imageSourceUrl(imageSourceUrl)
-                .imageCdnUrl(imageCdnUrl)
-                .imageMirrorFailedAt(failedAt)
-                .build();
+        return VariantValueEntity.builder().option(option).valueZh(valueZh).position(0).imageSourceUrl(imageSourceUrl)
+                .imageCdnUrl(imageCdnUrl).imageMirrorFailedAt(failedAt).build();
     }
 
     private ProductEntity newProduct(String tag) {
-        return ProductEntity.builder()
-                .slug("p-" + tag + "-" + UUID.randomUUID())
-                .externalId("ext-" + tag + "-" + UUID.randomUUID())
-                .source("test")
-                .titleZh("测试产品")
-                .moq(1)
-                .reviewCount(0)
-                .monthlySales(0)
-                .status(ProductStatus.ACTIVE)
-                .build();
+        return ProductEntity.builder().slug("p-" + tag + "-" + UUID.randomUUID())
+                .externalId("ext-" + tag + "-" + UUID.randomUUID()).source("test").titleZh("测试产品").moq(1).reviewCount(0)
+                .monthlySales(0).status(ProductStatus.ACTIVE).build();
     }
 
     /**

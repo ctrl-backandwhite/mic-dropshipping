@@ -351,3 +351,7 @@ databaseChangeLog:
       file: db/changelog/schema-v170-categoria-de-origen-1688.sql
   - include:
       file: db/changelog/schema-v171-espejado-dedup-y-compresion-diferida.sql
+  - include:
+      file: db/changelog/schema-v172-recargo-por-tramo.sql
+  - include:
+      file: db/changelog/schema-v173-envio-nacional-por-variante.sql

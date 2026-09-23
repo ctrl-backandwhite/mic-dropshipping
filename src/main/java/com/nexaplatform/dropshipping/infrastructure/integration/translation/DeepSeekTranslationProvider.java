@@ -40,15 +40,9 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
      * Nombre del idioma en la instrucción. Un código ISO suelto ("pt") el modelo lo interpreta a su
      * manera; el nombre escrito no deja lugar a dudas, y en portugués importa cuál de los dos es.
      */
-    private static final Map<String, String> IDIOMAS = Map.of(
-            "es", "español de España",
-            "en", "inglés",
-            "pt", "portugués de Portugal",
-            "fr", "francés",
-            "de", "alemán",
-            "it", "italiano",
-            "nl", "neerlandés",
-            "zh", "chino simplificado");
+    private static final Map<String, String> IDIOMAS = Map.of("es", "español de España", "en", "inglés", "pt",
+            "portugués de Portugal", "fr", "francés", "de", "alemán", "it", "italiano", "nl", "neerlandés", "zh",
+            "chino simplificado");
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
@@ -85,8 +79,7 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
             throw new IllegalStateException("Falta nexadrop.chat.api-key: no se puede traducir con DeepSeek");
         }
         try {
-            HttpResponse<String> respuesta = http.send(
-                    peticion(text, sourceLang, targetLang),
+            HttpResponse<String> respuesta = http.send(peticion(text, sourceLang, targetLang),
                     HttpResponse.BodyHandlers.ofString());
             if (respuesta.statusCode() / 100 != 2) {
                 throw new IllegalStateException(
@@ -115,13 +108,10 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
         ObjectNode usuario = mensajes.addObject();
         usuario.put("role", "user");
         usuario.put("content", texto);
-        return HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/chat/completions"))
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .header("Content-Type", "application/json")
+        return HttpRequest.newBuilder().uri(URI.create(baseUrl + "/chat/completions"))
+                .timeout(Duration.ofSeconds(timeoutSeconds)).header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(cuerpo.toString()))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(cuerpo.toString())).build();
     }
 
     /**
@@ -141,8 +131,8 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
                 - Conserva las cifras, las unidades, las tallas y los nombres de marca tal cual.
                 - Mantén el registro del original: una reseña de un cliente suena a persona, no a folleto.
                 - Si el texto ya está en %s, devuélvelo sin cambios.
-                - No inventes ni añadas información que no esté en el original.""".formatted(
-                nombreOrigen, nombreDestino, nombreDestino);
+                - No inventes ni añadas información que no esté en el original.""".formatted(nombreOrigen,
+                nombreDestino, nombreDestino);
     }
 
     /** Visible para la prueba, igual que el parseo del asistente. */
@@ -166,9 +156,8 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
      */
     String limpiar(String s) {
         String limpio = s.strip();
-        if (limpio.length() > 1
-                && (limpio.startsWith("\"") && limpio.endsWith("\"")
-                        || limpio.startsWith("«") && limpio.endsWith("»"))) {
+        if (limpio.length() > 1 && (limpio.startsWith("\"") && limpio.endsWith("\"")
+                || limpio.startsWith("«") && limpio.endsWith("»"))) {
             return limpio.substring(1, limpio.length() - 1).strip();
         }
         return limpio;

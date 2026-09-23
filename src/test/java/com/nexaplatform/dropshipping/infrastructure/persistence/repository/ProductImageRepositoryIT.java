@@ -71,11 +71,10 @@ class ProductImageRepositoryIT extends PersistenceITBase {
         images.save(image(1, "https://src/other.jpg", MirrorStatus.MIRRORED, "https://other-cdn.com/x.jpg"));
         images.save(image(2, "https://src/pending.jpg", MirrorStatus.PENDING, null));
 
-        List<ProductImageEntity> result =
-                images.findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, "https://cdn.nexa.local/");
+        List<ProductImageEntity> result = images.findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED,
+                "https://cdn.nexa.local/");
 
-        assertThat(result).extracting(ProductImageEntity::getCdnUrl)
-                .containsExactly("https://cdn.nexa.local/ours.jpg");
+        assertThat(result).extracting(ProductImageEntity::getCdnUrl).containsExactly("https://cdn.nexa.local/ours.jpg");
     }
 
     @Test
@@ -86,8 +85,8 @@ class ProductImageRepositoryIT extends PersistenceITBase {
 
         // Las dimensiones se guardan desde el 4-sep-2026: hasta entonces las columnas existían y nadie
         // las escribía, así que la ficha no podía reservar el hueco de la foto antes de que llegara.
-        images.markMirrored(id, "https://cdn.nexa.local/x.jpg", 4096L, "sha256:abc", 1600, 1200,
-                MirrorStatus.MIRRORED, at);
+        images.markMirrored(id, "https://cdn.nexa.local/x.jpg", 4096L, "sha256:abc", 1600, 1200, MirrorStatus.MIRRORED,
+                at);
 
         // El contexto de persistencia cachea la entidad: hay que limpiar y releer para ver el UPDATE en BD.
         em.flush();
@@ -117,11 +116,11 @@ class ProductImageRepositoryIT extends PersistenceITBase {
     @Test
     void requeueNotMirrored_setsPendingForRowsNotPointingToOurStorage() {
         // Ya espejada en nuestro storage -> NO debe reencolarse.
-        ProductImageEntity ours =
-                images.save(image(0, "https://src/a.jpg", MirrorStatus.MIRRORED, "https://cdn.nexa.local/a.jpg"));
+        ProductImageEntity ours = images
+                .save(image(0, "https://src/a.jpg", MirrorStatus.MIRRORED, "https://cdn.nexa.local/a.jpg"));
         // MIRRORED pero apuntando a otro storage -> SÍ se reencola (cdn NOT LIKE prefix).
-        ProductImageEntity otherCdn =
-                images.save(image(1, "https://src/b.jpg", MirrorStatus.MIRRORED, "https://foreign.com/b.jpg"));
+        ProductImageEntity otherCdn = images
+                .save(image(1, "https://src/b.jpg", MirrorStatus.MIRRORED, "https://foreign.com/b.jpg"));
         // FAILED sin cdn -> SÍ (mirrorStatus <> MIRRORED y cdn null).
         ProductImageEntity failed = images.save(image(2, "https://src/c.jpg", MirrorStatus.FAILED, null));
 
@@ -136,25 +135,13 @@ class ProductImageRepositoryIT extends PersistenceITBase {
     }
 
     private ProductImageEntity image(int position, String sourceUrl, MirrorStatus status, String cdnUrl) {
-        return ProductImageEntity.builder()
-                .product(product)
-                .position(position)
-                .sourceUrl(sourceUrl)
-                .cdnUrl(cdnUrl)
-                .mirrorStatus(status)
-                .build();
+        return ProductImageEntity.builder().product(product).position(position).sourceUrl(sourceUrl).cdnUrl(cdnUrl)
+                .mirrorStatus(status).build();
     }
 
     private ProductEntity newProduct(String tag) {
-        return ProductEntity.builder()
-                .slug("p-" + tag + "-" + UUID.randomUUID())
-                .externalId("ext-" + tag + "-" + UUID.randomUUID())
-                .source("test")
-                .titleZh("测试产品")
-                .moq(1)
-                .reviewCount(0)
-                .monthlySales(0)
-                .status(ProductStatus.ACTIVE)
-                .build();
+        return ProductEntity.builder().slug("p-" + tag + "-" + UUID.randomUUID())
+                .externalId("ext-" + tag + "-" + UUID.randomUUID()).source("test").titleZh("测试产品").moq(1).reviewCount(0)
+                .monthlySales(0).status(ProductStatus.ACTIVE).build();
     }
 }

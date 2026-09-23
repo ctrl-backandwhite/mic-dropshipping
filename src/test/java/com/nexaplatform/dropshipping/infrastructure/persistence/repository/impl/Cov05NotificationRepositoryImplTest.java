@@ -150,8 +150,8 @@ class Cov05NotificationRepositoryImplTest {
         when(notificationJpaRepositoryAdapter.findById(NOTIFICATION_ID)).thenReturn(Optional.of(managed));
 
         // Marcar como leída manda un modelo parcial: si canal/contenido se pisaran, la fila se vaciaría.
-        repository.update(PlatformNotification.builder().id(NOTIFICATION_ID).userId(USER_ID)
-                .readAt(Instant.now()).build());
+        repository.update(
+                PlatformNotification.builder().id(NOTIFICATION_ID).userId(USER_ID).readAt(Instant.now()).build());
 
         assertThat(managed.getChannel()).isEqualTo("EMAIL");
         assertThat(managed.getPayload()).containsEntry("orderNumber", "NX-1001");
@@ -221,13 +221,12 @@ class Cov05NotificationRepositoryImplTest {
      */
     @Test
     void elAltaAnunciaElAvisoNuevo() {
-        when(notificationEntityMapper.toDomain(any())).thenReturn(PlatformNotification.builder()
-                .id(NOTIFICATION_ID).userId(USER_ID).title("Tu pedido va en camino").body("NX-1")
-                .eventType("ORDER_SHIPPED").build());
+        when(notificationEntityMapper.toDomain(any())).thenReturn(PlatformNotification.builder().id(NOTIFICATION_ID)
+                .userId(USER_ID).title("Tu pedido va en camino").body("NX-1").eventType("ORDER_SHIPPED").build());
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user()));
 
-        repository.save(PlatformNotification.builder().userId(USER_ID).title("Tu pedido va en camino")
-                .body("NX-1").eventType("ORDER_SHIPPED").build());
+        repository.save(PlatformNotification.builder().userId(USER_ID).title("Tu pedido va en camino").body("NX-1")
+                .eventType("ORDER_SHIPPED").build());
 
         ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
         verify(eventos).publishEvent(captor.capture());

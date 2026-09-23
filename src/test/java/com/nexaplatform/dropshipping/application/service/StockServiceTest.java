@@ -33,15 +33,13 @@ class StockServiceTest {
         UUID v1 = UUID.randomUUID();
         UUID v2 = UUID.randomUUID();
         // No se descuenta stock en ningún caso: la llamada simplemente no hace nada ni lanza.
-        assertThatCode(() -> service().deductForOrder(orderWith(item(v1, 2), item(v2, 5))))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> service().deductForOrder(orderWith(item(v1, 2), item(v2, 5)))).doesNotThrowAnyException();
     }
 
     @Test
     void restoreForOrder_isNoOp() {
         UUID v = UUID.randomUUID();
-        assertThatCode(() -> service().restoreForOrder(orderWith(item(v, 3))))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> service().restoreForOrder(orderWith(item(v, 3)))).doesNotThrowAnyException();
     }
 
     @Test

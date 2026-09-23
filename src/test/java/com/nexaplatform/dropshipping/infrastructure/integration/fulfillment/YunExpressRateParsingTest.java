@@ -114,8 +114,8 @@ class YunExpressRateParsingTest {
 
     @Test
     void parteElNombreEnNombreYApellidosParaLaEtiqueta() {
-        assertThat(YunExpressFulfillmentService.splitName("Ana María López Ruiz"))
-                .containsExactly("Ana", "María López Ruiz");
+        assertThat(YunExpressFulfillmentService.splitName("Ana María López Ruiz")).containsExactly("Ana",
+                "María López Ruiz");
         // Con una sola palabra se repite: dejar el apellido vacío deja la etiqueta incompleta.
         assertThat(YunExpressFulfillmentService.splitName("Madonna")).containsExactly("Madonna", "Madonna");
         assertThat(YunExpressFulfillmentService.splitName(null)).containsExactly("Customer", "Customer");

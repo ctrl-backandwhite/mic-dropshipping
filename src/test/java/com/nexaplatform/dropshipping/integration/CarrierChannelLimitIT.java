@@ -70,13 +70,13 @@ class CarrierChannelLimitIT extends BaseIntegration {
     @Test
     @DisplayName("la migración siembra los topes de las dos líneas contratadas")
     void laMigracionSiembraLosDosCanales() {
-        Integer canales = jdbcTemplate.queryForObject(
-                "SELECT COUNT(DISTINCT channel_code) FROM carrier_channel_limit", Integer.class);
+        Integer canales = jdbcTemplate.queryForObject("SELECT COUNT(DISTINCT channel_code) FROM carrier_channel_limit",
+                Integer.class);
         assertThat(canales).as("la línea de ropa y la de carga general").isEqualTo(2);
 
         // Cada canal necesita su fila comodín o todos sus destinos caerían a la configuración global.
-        Integer comodines = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM carrier_channel_limit WHERE country_code = '*'", Integer.class);
+        Integer comodines = jdbcTemplate
+                .queryForObject("SELECT COUNT(*) FROM carrier_channel_limit WHERE country_code = '*'", Integer.class);
         assertThat(comodines).isEqualTo(2);
     }
 
@@ -94,8 +94,7 @@ class CarrierChannelLimitIT extends BaseIntegration {
     @Test
     @DisplayName("la línea de ropa no aplica volumétrico y la de carga general divide entre 8000")
     void elVolumetricoDependeDelCanal() {
-        assertThat(limites.resolve(ROPA, "ES").aplicaVolumetrico())
-                .as("«所有国家：包裹实际重量不计材积»").isFalse();
+        assertThat(limites.resolve(ROPA, "ES").aplicaVolumetrico()).as("«所有国家：包裹实际重量不计材积»").isFalse();
         assertThat(limites.resolve(CARGA_GENERAL, "ES").volumetricDivisor()).isEqualTo(8000);
     }
 
@@ -147,13 +146,8 @@ class CarrierChannelLimitIT extends BaseIntegration {
     @Test
     @DisplayName("el administrador lista los límites ordenados por canal y país")
     void elAdministradorListaLosLimites() {
-        client.get().uri(RUTA)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$[0].channelCode").isEqualTo(ROPA)
-                .jsonPath("$[0].countryCode").isEqualTo("*");
+        client.get().uri(RUTA).header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin())).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$[0].channelCode").isEqualTo(ROPA).jsonPath("$[0].countryCode").isEqualTo("*");
     }
 
     @Test
@@ -161,11 +155,8 @@ class CarrierChannelLimitIT extends BaseIntegration {
     void seCreaElLimiteDeUnParNuevo() {
         // Nueve columnas NOT NULL: si la entidad no las rellenara, el INSERT del ORM las nombraría a
         // nulo, el valor por defecto de la base no llegaría a aplicarse y esto respondería 409.
-        client.put().uri(RUTA + "/" + CARGA_GENERAL + "/PT")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(limiteNuevo())
-                .exchange()
-                .expectStatus().isOk();
+        client.put().uri(RUTA + "/" + CARGA_GENERAL + "/PT").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(limiteNuevo()).exchange().expectStatus().isOk();
 
         assertThat(limites.resolve(CARGA_GENERAL, "PT").maxWeightGrams()).isEqualTo(12000);
         assertThat(limites.resolve(CARGA_GENERAL, "PT").minBillableGrams()).isEqualTo(40);
@@ -174,14 +165,12 @@ class CarrierChannelLimitIT extends BaseIntegration {
     @Test
     @DisplayName("editar un límite ya sembrado lo actualiza en su sitio, sin duplicar la fila")
     void editarNoDuplicaLaFila() {
-        client.put().uri(RUTA + "/" + ROPA + "/DK")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(limiteNuevo())
-                .exchange()
-                .expectStatus().isOk();
+        client.put().uri(RUTA + "/" + ROPA + "/DK").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(limiteNuevo()).exchange().expectStatus().isOk();
 
-        Integer filas = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM carrier_channel_limit"
-                + " WHERE channel_code = 'FZZXR' AND country_code = 'DK'", Integer.class);
+        Integer filas = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM carrier_channel_limit" + " WHERE channel_code = 'FZZXR' AND country_code = 'DK'",
+                Integer.class);
         assertThat(filas).isEqualTo(1);
         assertThat(limites.resolve(ROPA, "DK").maxWeightGrams()).isEqualTo(12000);
     }
@@ -191,10 +180,8 @@ class CarrierChannelLimitIT extends BaseIntegration {
     void borrarLaExcepcionDevuelveElDestinoAlValorDelCanal() {
         // Es lo que se quiere cuando el transportista retira una excepción: el país no se queda sin tope,
         // vuelve al del canal.
-        client.delete().uri(RUTA + "/" + ROPA + "/DK")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .exchange()
-                .expectStatus().isNoContent();
+        client.delete().uri(RUTA + "/" + ROPA + "/DK").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .exchange().expectStatus().isNoContent();
 
         assertThat(limites.resolve(ROPA, "DK").maxWeightGrams()).isEqualTo(30000);
         assertThat(limites.resolve(ROPA, "DK").origen()).isEqualTo(Origen.CANAL);
@@ -203,10 +190,8 @@ class CarrierChannelLimitIT extends BaseIntegration {
     @Test
     @DisplayName("borrar un par que no existe responde 404 y no finge que había algo")
     void borrarLoQueNoExisteResponde404() {
-        client.delete().uri(RUTA + "/" + ROPA + "/ZZ")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
-                .exchange()
-                .expectStatus().isNotFound();
+        client.delete().uri(RUTA + "/" + ROPA + "/ZZ").header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin()))
+                .exchange().expectStatus().isNotFound();
     }
 
     @Test
@@ -214,10 +199,9 @@ class CarrierChannelLimitIT extends BaseIntegration {
     void soloUnAdminTocaLosLimites() {
         // Es configuración de costes: quien la cambie decide qué se puede despachar y qué no.
         client.get().uri(RUTA).exchange().expectStatus().isEqualTo(401);
-        client.get().uri(RUTA).header(HttpHeaders.AUTHORIZATION, bearer(jwt.userToken("USER")))
-                .exchange().expectStatus().isEqualTo(403);
-        client.delete().uri(RUTA + "/" + ROPA + "/DK")
-                .header(HttpHeaders.AUTHORIZATION, bearer(jwt.userToken("USER")))
+        client.get().uri(RUTA).header(HttpHeaders.AUTHORIZATION, bearer(jwt.userToken("USER"))).exchange()
+                .expectStatus().isEqualTo(403);
+        client.delete().uri(RUTA + "/" + ROPA + "/DK").header(HttpHeaders.AUTHORIZATION, bearer(jwt.userToken("USER")))
                 .exchange().expectStatus().isEqualTo(403);
     }
 }

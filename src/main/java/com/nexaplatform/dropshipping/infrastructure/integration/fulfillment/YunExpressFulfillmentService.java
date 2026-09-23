@@ -215,8 +215,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * una versión (java:S1075). Sin {@code Environment} (pruebas unitarias) se usa la de la spec.
      */
     private String route(String name, String specDefault) {
-        return environment == null ? specDefault
-                : environment.getProperty(ROUTE_PROPERTY_PREFIX + name, specDefault);
+        return environment == null ? specDefault : environment.getProperty(ROUTE_PROPERTY_PREFIX + name, specDefault);
     }
 
     private String pathPriceTrial() {
@@ -314,8 +313,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         double kg = Math.max(0.1, chargeableGrams / 1000.0);
         int amount = zn.getBaseCents() + (int) Math.round(zn.getPerKgCents() * kg);
-        return new ShippingQuote(true, zn.getCountryCode(), amount, CARRIER_NAME, CARRIER_NAME,
-                zn.getEtaMinDays(), zn.getEtaMaxDays(), zn.getZone());
+        return new ShippingQuote(true, zn.getCountryCode(), amount, CARRIER_NAME, CARRIER_NAME, zn.getEtaMinDays(),
+                zn.getEtaMaxDays(), zn.getZone());
     }
 
     /**
@@ -334,13 +333,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         for (RateOption rate : rates) {
             BigDecimal usd = currencyRateService.toUsd(rate.amount(), rate.currency());
             if (usd == null) {
-                log.warn("YunExpress: no se pudo convertir {} {} a USD para {}",
-                        rate.amount(), rate.currency(), zone.getCountryCode());
+                log.warn("YunExpress: no se pudo convertir {} {} a USD para {}", rate.amount(), rate.currency(),
+                        zone.getCountryCode());
                 continue;
             }
             int cents = usd.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue();
-            out.add(new ShippingOption(rate.productCode(), rate.productName(), cents,
-                    rate.etaMinDays(), rate.etaMaxDays()));
+            out.add(new ShippingOption(rate.productCode(), rate.productName(), cents, rate.etaMinDays(),
+                    rate.etaMaxDays()));
         }
         return out;
     }
@@ -391,8 +390,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (channelLimits != null) {
             return channelLimits.resolve(channelCode, countryCode);
         }
-        return new ChannelLimit(channelCode, countryCode, maxParcelWeightGrams, (int) volumetricDivisor, 0,
-                0, 0, 0, false, CarrierChannelLimitService.Origen.GLOBAL);
+        return new ChannelLimit(channelCode, countryCode, maxParcelWeightGrams, (int) volumetricDivisor, 0, 0, 0, 0,
+                false, CarrierChannelLimitService.Origen.GLOBAL);
     }
 
     /**
@@ -409,8 +408,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * flete, registro, arancel...), así que se agrupa por {@code product_code} y se suman los conceptos —
      * quedarse con una sola línea cotizaría el envío por debajo del coste real.
      */
-    record RateOption(String productCode, String productName, BigDecimal amount, String currency,
-                      int etaMinDays, int etaMaxDays) {
+    record RateOption(String productCode, String productName, BigDecimal amount, String currency, int etaMinDays,
+            int etaMaxDays) {
     }
 
     /**
@@ -424,8 +423,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         BigDecimal usd = currencyRateService.toUsd(best.amount(), best.currency());
         if (usd == null) {
-            log.warn("YunExpress: no se pudo convertir {} {} a USD para {}",
-                    best.amount(), best.currency(), zone.getCountryCode());
+            log.warn("YunExpress: no se pudo convertir {} {} a USD para {}", best.amount(), best.currency(),
+                    zone.getCountryCode());
             return null;
         }
         return usd.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue();
@@ -474,10 +473,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             // Dos filtros, en este orden: primero fuera los que no pueden cumplir lo prometido al cliente
             // (postales y Amazon donde el transportista prepaga el IVA), y después los que el contrato
             // no permite usar. Si no queda ninguno, el llamante cae a la tabla de zonas.
-            return contractedRates(
-                    deliverableRates(parseRates(response.path(RESULT)),
-                            customsValuation.carrierPrepaysVatFor(countryCode)),
-                    contractedChannels());
+            return contractedRates(deliverableRates(parseRates(response.path(RESULT)),
+                    customsValuation.carrierPrepaysVatFor(countryCode)), contractedChannels());
         } catch (RuntimeException e) {
             log.warn("YunExpress: fallo simulando tarifa para {} -> {}", countryCode, e.getMessage());
             return List.of();
@@ -509,10 +506,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (rates == null || rates.isEmpty()) {
             return List.of();
         }
-        return rates.stream()
-                .filter(r -> !prepaidVat || isCompatibleWithPrepaidVat(r.productCode()))
-                .sorted(Comparator.comparing(RateOption::amount))
-                .toList();
+        return rates.stream().filter(r -> !prepaidVat || isCompatibleWithPrepaidVat(r.productCode()))
+                .sorted(Comparator.comparing(RateOption::amount)).toList();
     }
 
     /**
@@ -536,11 +531,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (allowedProductCodes == null || allowedProductCodes.isBlank()) {
             return Set.of();
         }
-        return Arrays.stream(allowedProductCodes.split(","))
-                .map(String::trim)
-                .filter(c -> !c.isEmpty())
-                .map(c -> c.toUpperCase(Locale.ROOT))
-                .collect(Collectors.toSet());
+        return Arrays.stream(allowedProductCodes.split(",")).map(String::trim).filter(c -> !c.isEmpty())
+                .map(c -> c.toUpperCase(Locale.ROOT)).collect(Collectors.toSet());
     }
 
     static List<RateOption> contractedRates(List<RateOption> rates, Set<String> allowed) {
@@ -550,16 +542,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (allowed == null || allowed.isEmpty()) {
             return rates;
         }
-        Set<String> normalizados = allowed.stream()
-                .filter(c -> c != null && !c.isBlank())
-                .map(c -> c.trim().toUpperCase(Locale.ROOT))
-                .collect(Collectors.toSet());
+        Set<String> normalizados = allowed.stream().filter(c -> c != null && !c.isBlank())
+                .map(c -> c.trim().toUpperCase(Locale.ROOT)).collect(Collectors.toSet());
         if (normalizados.isEmpty()) {
             return rates;
         }
-        return rates.stream()
-                .filter(r -> r.productCode() != null
-                        && normalizados.contains(r.productCode().trim().toUpperCase(Locale.ROOT)))
+        return rates.stream().filter(
+                r -> r.productCode() != null && normalizados.contains(r.productCode().trim().toUpperCase(Locale.ROOT)))
                 .toList();
     }
 
@@ -582,7 +571,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             // convert_amount/convert_currency es el importe ya llevado a la divisa de facturación de la
             // cuenta; si no viene, se usa el calculado en la divisa original del rate card.
             BigDecimal amount = item.hasNonNull("convert_amount")
-                    ? item.path("convert_amount").decimalValue() : item.path("calculate_amount").decimalValue();
+                    ? item.path("convert_amount").decimalValue()
+                    : item.path("calculate_amount").decimalValue();
             String currency = item.path("convert_currency").asText(null);
             if (currency == null || currency.isBlank()) {
                 currency = item.path("currency").asText("CNY");
@@ -590,12 +580,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             int[] eta = parseEtaDays(item.path("interval_day").asText(""));
             RateOption previous = byProduct.get(code);
             if (previous == null) {
-                byProduct.put(code, new RateOption(code, item.path("product_name").asText(code),
-                        amount, normalizeCurrency(currency), eta[0], eta[1]));
+                byProduct.put(code, new RateOption(code, item.path("product_name").asText(code), amount,
+                        normalizeCurrency(currency), eta[0], eta[1]));
             } else {
-                byProduct.put(code, new RateOption(previous.productCode(), previous.productName(),
-                        previous.amount().add(amount), previous.currency(),
-                        previous.etaMinDays(), previous.etaMaxDays()));
+                byProduct.put(code,
+                        new RateOption(previous.productCode(), previous.productName(), previous.amount().add(amount),
+                                previous.currency(), previous.etaMinDays(), previous.etaMaxDays()));
             }
         }
         return new ArrayList<>(byProduct.values());
@@ -609,22 +599,21 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Plazo declarado por el canal ("3-8", "7", vacío) a [mínimo, máximo] en días; 0 si no lo informa. */
     static int[] parseEtaDays(String intervalDay) {
         if (intervalDay == null || intervalDay.isBlank()) {
-            return new int[] { 0, 0 };
+            return new int[]{0, 0};
         }
         String[] parts = intervalDay.trim().split("-");
         try {
             int min = Integer.parseInt(parts[0].trim());
             int max = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : min;
-            return new int[] { min, max };
+            return new int[]{min, max};
         } catch (NumberFormatException e) {
-            return new int[] { 0, 0 };
+            return new int[]{0, 0};
         }
     }
 
     /** Milímetros a centímetros con un decimal, que es la unidad que pide la API ({@code size_unit=CM}). */
     private static String cm(int millimeters) {
-        return BigDecimal.valueOf(millimeters)
-                .divide(BigDecimal.valueOf(10), 1, RoundingMode.HALF_UP).toPlainString();
+        return BigDecimal.valueOf(millimeters).divide(BigDecimal.valueOf(10), 1, RoundingMode.HALF_UP).toPlainString();
     }
 
     /** Canales contratados (código → nombre), tal cual los publica la cuenta. Para diagnóstico y admin. */
@@ -633,8 +622,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         List<SupportedCountry> out = new ArrayList<>();
         JsonNode list = response.has("detail") ? response.path("detail") : response.path(RESULT).path("list");
         for (JsonNode item : list) {
-            out.add(new SupportedCountry(item.path("product_code").asText(""),
-                    item.path("product_name").asText("")));
+            out.add(new SupportedCountry(item.path("product_code").asText(""), item.path("product_name").asText("")));
         }
         return out;
     }
@@ -655,8 +643,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         requireCompleteCustoms(order);
         List<ParcelSplitter.Bin> bins = splitOrder(order);
         if (bins.size() > 1) {
-            log.info("YunExpress: pedido {} repartido en {} bultos por los límites del canal",
-                    order.getOrderNumber(), bins.size());
+            log.info("YunExpress: pedido {} repartido en {} bultos por los límites del canal", order.getOrderNumber(),
+                    bins.size());
         }
         // También con un solo bulto se pasa por createShipmentForBin: así el envío guarda su peso y su
         // valor declarado. Delegar en createShipment() los dejaba a cero y el dato se perdía.
@@ -668,8 +656,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                 // Las guías de los bultos anteriores YA existen y están pagadas en el transportista. Antes
                 // esta excepción se las llevaba por delante: no se persistía ninguna, así que no aparecían
                 // ni en el pedido, ni en order_shipment, ni en el registro, y el panel no podía anularlas.
-                log.error("YunExpress: el bulto {} del pedido {} falló con {} guía(s) ya emitida(s): {}",
-                        i + 1, order.getOrderNumber(), results.size(), e.getMessage());
+                log.error("YunExpress: el bulto {} del pedido {} falló con {} guía(s) ya emitida(s): {}", i + 1,
+                        order.getOrderNumber(), results.size(), e.getMessage());
                 throw new EnvioParcialException(results, e);
             }
         }
@@ -691,14 +679,14 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         for (int line = 0; line < items.size(); line++) {
             OrderItem item = items.get(line);
             ProductEntity product = item.getProductId() != null
-                    ? productRepository.findById(item.getProductId()).orElse(null) : null;
+                    ? productRepository.findById(item.getProductId()).orElse(null)
+                    : null;
             ProductVariantEntity variant = variantOf(product, item);
             int unitWeight = product != null ? ParcelAggregator.unitWeightGrams(product, variant) : 500;
             boolean battery = product != null && ParcelAggregator.hasBattery(product);
             for (int q = 0; q < Math.max(1, item.getQuantity()); q++) {
                 units.add(new ParcelSplitter.Unit(line, unitWeight, item.getUnitPriceCents(),
-                        dimension(product, variant, Dimension.LENGTH),
-                        dimension(product, variant, Dimension.WIDTH),
+                        dimension(product, variant, Dimension.LENGTH), dimension(product, variant, Dimension.WIDTH),
                         dimension(product, variant, Dimension.HEIGHT), battery));
             }
         }
@@ -728,7 +716,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     /** Qué medida del paquete se está pidiendo; el producto manda sobre la variante. */
-    private enum Dimension { LENGTH, WIDTH, HEIGHT }
+    private enum Dimension {
+        LENGTH, WIDTH, HEIGHT
+    }
 
     private static int dimension(ProductEntity product, ProductVariantEntity variant, Dimension which) {
         Integer fromProduct = product == null ? null : switch (which) {
@@ -751,8 +741,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (product == null || item.getVariantId() == null || product.getVariants() == null) {
             return null;
         }
-        return product.getVariants().stream()
-                .filter(v -> item.getVariantId().equals(v.getId())).findFirst().orElse(null);
+        return product.getVariants().stream().filter(v -> item.getVariantId().equals(v.getId())).findFirst()
+                .orElse(null);
     }
 
     /** Crea la guía de UN bulto concreto del pedido. */
@@ -787,16 +777,15 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             throw FulfillmentFailure.of(e);
         }
         if (!response.path(SUCCESS).asBoolean(false)) {
-            throw FulfillmentFailure.from("YunExpress rechazó el bulto " + sequenceNo + " del pedido "
-                    + order.getOrderNumber() + ": " + response.path("code").asText("")
-                    + " " + response.path("msg").asText(""));
+            throw FulfillmentFailure
+                    .from("YunExpress rechazó el bulto " + sequenceNo + " del pedido " + order.getOrderNumber() + ": "
+                            + response.path("code").asText("") + " " + response.path("msg").asText(""));
         }
         JsonNode result = response.path(RESULT);
         String waybill = result.path("waybill_number").asText("");
         if (waybill.isBlank()) {
-            throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
-                    "YunExpress no devolvió guía para el bulto " + sequenceNo + " del pedido "
-                            + order.getOrderNumber());
+            throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT, "YunExpress no devolvió guía para el bulto "
+                    + sequenceNo + " del pedido " + order.getOrderNumber());
         }
         subscribeTracking(waybill);
         return new FulfillmentResult(CARRIER_NAME, trackingOf(result, waybill), waybill, etaMax, sequenceNo,
@@ -820,10 +809,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                     line.quantity(), line.unitPrice(), line.currency(), line.unitWeight(), line.material(),
                     line.purpose(), line.skuCode(), line.salesUrl()));
         }
-        FulfillmentProvider.DeclaredReceiver to = new FulfillmentProvider.DeclaredReceiver(
-                receiver.firstName(), receiver.lastName(), receiver.countryCode(), receiver.province(),
-                receiver.city(), receiver.addressLines(), receiver.postalCode(), receiver.phoneNumber(),
-                receiver.email());
+        FulfillmentProvider.DeclaredReceiver to = new FulfillmentProvider.DeclaredReceiver(receiver.firstName(),
+                receiver.lastName(), receiver.countryCode(), receiver.province(), receiver.city(),
+                receiver.addressLines(), receiver.postalCode(), receiver.phoneNumber(), receiver.email());
         return new FulfillmentProvider.ShipmentDeclaration(to, declared);
     }
 
@@ -840,8 +828,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             porLinea.merge(unit.lineIndex(), 1, Integer::sum);
         }
         List<FulfillmentProvider.ParcelContent> out = new ArrayList<>();
-        porLinea.forEach((linea, cantidad) ->
-                out.add(new FulfillmentProvider.ParcelContent(linea, cantidad)));
+        porLinea.forEach((linea, cantidad) -> out.add(new FulfillmentProvider.ParcelContent(linea, cantidad)));
         return out;
     }
 
@@ -894,8 +881,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (!isActive()) {
             if (!mockAllowed()) {
                 throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
-                        "YunExpress no está operativo (enabled=" + enabled + ", credenciales="
-                                + client.hasCredentials() + ") y en producción no se generan envíos simulados");
+                        "YunExpress no está operativo (enabled=" + enabled + ", credenciales=" + client.hasCredentials()
+                                + ") y en producción no se generan envíos simulados");
             }
             String hex = order.getId().toString().replace("-", "").substring(0, 12).toUpperCase();
             log.info("YunExpress mock-mode: envío simulado para pedido {} ({} líneas declaradas, {} céntimos USD, {})",
@@ -913,9 +900,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * {@code InvoiceUsage} (用途, uso) figuran como opcionales, pero son justo lo que la aduana de destino
      * usa para clasificar y liquidar: sin ellos el despacho DDP se ralentiza o se liquida de más.
      */
-    public record ParcelDeclaration(String eName, String cName, String hsCode, int quantity,
-                                    double unitPrice, String currencyCode, double unitWeightKg,
-                                    String invoicePart, String invoiceUsage, String productUrl, String sku) {
+    public record ParcelDeclaration(String eName, String cName, String hsCode, int quantity, double unitPrice,
+            String currencyCode, double unitWeightKg, String invoicePart, String invoiceUsage, String productUrl,
+            String sku) {
     }
 
     /**
@@ -936,23 +923,24 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     public List<ParcelDeclaration> declaredParcels(Order order) {
         String currency = order.getCurrency() != null && !order.getCurrency().isBlank()
-                ? order.getCurrency().toUpperCase() : "USD";
+                ? order.getCurrency().toUpperCase()
+                : "USD";
         Map<String, DeclarationAccumulator> porLinea = new LinkedHashMap<>();
         for (OrderItem item : order.getItems()) {
             ProductEntity product = item.getProductId() != null
-                    ? productRepository.findById(item.getProductId()).orElse(null) : null;
+                    ? productRepository.findById(item.getProductId()).orElse(null)
+                    : null;
             String eName = englishName(item, product);
             String hs = product != null ? product.getHsCode() : null;
             String origen = product != null ? product.getCountryOfOrigin() : null;
             int cantidad = Math.max(1, item.getQuantity());
             porLinea.computeIfAbsent(
                     CustomsDutyLinesService.claveDeLineaDeDeclaracion(hs, eName, origen, item.getProductId()),
-                    clave -> new DeclarationAccumulator(new ParcelDeclaration(
-                            eName, chineseName(item, product), hs, 0, 0.0, currency,
-                            unitWeightKg(product, item),
-                            product != null ? product.getCustomsMaterial() : null,
-                            product != null ? product.getCustomsUsage() : null,
-                            item.getProductSourceUrl(), item.getSkuSnapshot())))
+                    clave -> new DeclarationAccumulator(
+                            new ParcelDeclaration(eName, chineseName(item, product), hs, 0, 0.0, currency,
+                                    unitWeightKg(product, item), product != null ? product.getCustomsMaterial() : null,
+                                    product != null ? product.getCustomsUsage() : null, item.getProductSourceUrl(),
+                                    item.getSkuSnapshot())))
                     .add(cantidad, (long) item.getUnitPriceCents() * cantidad);
         }
         List<ParcelDeclaration> out = new ArrayList<>();
@@ -986,8 +974,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
 
         private ParcelDeclaration toDeclaration() {
             double unitario = cantidad == 0 ? 0.0 : valorCents / 100.0 / cantidad;
-            return new ParcelDeclaration(plantilla.eName(), plantilla.cName(), plantilla.hsCode(), cantidad,
-                    unitario, plantilla.currencyCode(), plantilla.unitWeightKg(), plantilla.invoicePart(),
+            return new ParcelDeclaration(plantilla.eName(), plantilla.cName(), plantilla.hsCode(), cantidad, unitario,
+                    plantilla.currencyCode(), plantilla.unitWeightKg(), plantilla.invoicePart(),
                     plantilla.invoiceUsage(), plantilla.productUrl(), plantilla.sku());
         }
     }
@@ -1027,8 +1015,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         if (product != null && product.getTranslations() != null) {
             Optional<String> fromProduct = product.getTranslations().stream()
-                    .filter(t -> "en".equalsIgnoreCase(t.getLanguage()))
-                    .map(ProductTranslationEntity::getTitle)
+                    .filter(t -> "en".equalsIgnoreCase(t.getLanguage())).map(ProductTranslationEntity::getTitle)
                     .filter(t -> t != null && !t.isBlank()).findFirst();
             if (fromProduct.isPresent()) {
                 return fromProduct.get();
@@ -1057,8 +1044,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         if (product != null && product.getTranslations() != null) {
             Optional<String> fromTranslation = product.getTranslations().stream()
-                    .filter(t -> "zh".equalsIgnoreCase(t.getLanguage()))
-                    .map(ProductTranslationEntity::getTitle)
+                    .filter(t -> "zh".equalsIgnoreCase(t.getLanguage())).map(ProductTranslationEntity::getTitle)
                     .filter(YunExpressFulfillmentService::hasChinese).findFirst();
             if (fromTranslation.isPresent()) {
                 return fromTranslation.get();
@@ -1083,17 +1069,18 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             return 0.0;
         }
         if (item.getVariantId() != null && product.getVariants() != null) {
-            Optional<Integer> grams = product.getVariants().stream()
-                    .filter(v -> item.getVariantId().equals(v.getId()))
+            Optional<Integer> grams = product.getVariants().stream().filter(v -> item.getVariantId().equals(v.getId()))
                     .map(v -> v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0
-                            ? v.getPackageWeightGrams() : v.getWeightGrams())
+                            ? v.getPackageWeightGrams()
+                            : v.getWeightGrams())
                     .filter(g -> g != null && g > 0).findFirst();
             if (grams.isPresent()) {
                 return grams.get() / 1000.0;
             }
         }
         Integer productGrams = product.getPackageWeightGrams() != null && product.getPackageWeightGrams() > 0
-                ? product.getPackageWeightGrams() : product.getWeightGrams();
+                ? product.getPackageWeightGrams()
+                : product.getWeightGrams();
         return productGrams != null && productGrams > 0 ? productGrams / 1000.0 : 0.0;
     }
 
@@ -1135,18 +1122,16 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (!response.path(SUCCESS).asBoolean(false)) {
             // Aquí el carrier SÍ contestó: el código dice si el problema se arregla con el tiempo o si
             // hace falta que alguien cambie el canal, el peso o la declaración.
-            throw FulfillmentFailure.from("YunExpress rechazó el envío del pedido " + order.getOrderNumber()
-                    + ": " + response.path("code").asText("") + " " + response.path("msg").asText(""));
+            throw FulfillmentFailure.from("YunExpress rechazó el envío del pedido " + order.getOrderNumber() + ": "
+                    + response.path("code").asText("") + " " + response.path("msg").asText(""));
         }
         JsonNode result = response.path(RESULT);
         String waybill = result.path("waybill_number").asText("");
         if (waybill.isBlank()) {
             throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
-                    "YunExpress no devolvió número de guía para el pedido " + order.getOrderNumber()
-                            + ": " + result);
+                    "YunExpress no devolvió número de guía para el pedido " + order.getOrderNumber() + ": " + result);
         }
-        log.info("YunExpress: envío creado pedido={} canal={} guía={}",
-                order.getOrderNumber(), channel, waybill);
+        log.info("YunExpress: envío creado pedido={} canal={} guía={}", order.getOrderNumber(), channel, waybill);
         subscribeTracking(waybill);
         return new FulfillmentResult(CARRIER_NAME, trackingOf(result, waybill), waybill, etaMax);
     }
@@ -1162,8 +1147,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (!trackingSubscriptionEnabled) {
             return;
         }
-        YunExpressRequests.SubscribeTracking payload = new YunExpressRequests.SubscribeTracking(
-                List.of(waybillNumber), trackingSubscribeType, List.of("Y"));
+        YunExpressRequests.SubscribeTracking payload = new YunExpressRequests.SubscribeTracking(List.of(waybillNumber),
+                trackingSubscribeType, List.of("Y"));
         try {
             JsonNode response = client.post(pathSubscribe(), payload);
             if (!response.path(SUCCESS).asBoolean(false)) {
@@ -1189,8 +1174,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Cuerpo de {@code /v1/order/package/create} con los nombres de campo de la API. */
     YunExpressRequests.CreateShipment createPayload(Order order, ParcelSpec parcel, String channel,
             CustomsValuation valuation) {
-        return createPayload(order, parcel, channel, valuation, order.getOrderNumber(),
-                declarationInfoOf(order), receiverOf(order));
+        return createPayload(order, parcel, channel, valuation, order.getOrderNumber(), declarationInfoOf(order),
+                receiverOf(order));
     }
 
     /**
@@ -1202,8 +1187,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             CustomsValuation valuation, String customerOrderNumber,
             List<YunExpressRequests.DeclarationLine> declaration, YunExpressRequests.Receiver receiver) {
         YunExpressRequests.Parcel box = new YunExpressRequests.Parcel(
-                new BigDecimal(Math.max(1, parcel.weightGrams()))
-                        .divide(BigDecimal.valueOf(1000), 3, RoundingMode.HALF_UP),
+                new BigDecimal(Math.max(1, parcel.weightGrams())).divide(BigDecimal.valueOf(1000), 3,
+                        RoundingMode.HALF_UP),
                 parcel.hasDimensions() ? new BigDecimal(cm(parcel.lengthMm())) : null,
                 parcel.hasDimensions() ? new BigDecimal(cm(parcel.widthMm())) : null,
                 parcel.hasDimensions() ? new BigDecimal(cm(parcel.heightMm())) : null);
@@ -1212,7 +1197,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         // aplica y declararlo hace que la aduana rechace la liquidación.
         String ioss = iossNumberOrNull();
         YunExpressRequests.CustomsNumber customs = ioss != null && !valuation.deMinimisExceeded()
-                ? new YunExpressRequests.CustomsNumber(ioss) : null;
+                ? new YunExpressRequests.CustomsNumber(ioss)
+                : null;
 
         return new YunExpressRequests.CreateShipment(channel, customerOrderNumber, "KG", "CM", "W", labelType,
                 List.of(box), receiver, declaration, customs, prepaidVatServices(valuation));
@@ -1241,23 +1227,20 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         // va DDP por contrato: Emiratos, Arabia Saudí, Canadá y México con nuestras líneas FZZXR y THPHR
         // (v149). Ahí la marca está puesta y el código es nulo, y eso es exactamente lo que significa.
         String servicioDelPais = valuation == null ? null : valuation.vatPrepayServiceCode();
-        boolean aplica = servicioDelPais != null && !servicioDelPais.isBlank()
-                && prepaidVatServiceCode != null && !prepaidVatServiceCode.isBlank()
-                && valuation.carrierPrepaysVat()
+        boolean aplica = servicioDelPais != null && !servicioDelPais.isBlank() && prepaidVatServiceCode != null
+                && !prepaidVatServiceCode.isBlank() && valuation.carrierPrepaysVat()
                 && valuation.taxMode() == TaxMode.DDP && !valuation.deMinimisExceeded();
         // null y no lista vacía: así el campo desaparece del JSON en vez de viajar como `[]`, que algunas
         // validaciones del transportista rechazan.
-        return aplica
-                ? List.of(new YunExpressRequests.ExtraService(servicioDelPais.trim(), PREPAID_VAT_LABEL))
-                : null;
+        return aplica ? List.of(new YunExpressRequests.ExtraService(servicioDelPais.trim(), PREPAID_VAT_LABEL)) : null;
     }
 
     /** Destinatario a partir del snapshot de dirección del pedido. */
     private YunExpressRequests.Receiver receiverOf(Order order) {
         String[] name = splitName(order.getShippingFullName());
         return new YunExpressRequests.Receiver(name[0], name[1], upper(order.getShippingCountry()),
-                order.getShippingState(), order.getShippingCity(), addressLines(order),
-                order.getShippingPostalCode(), order.getShippingPhone(), order.getShippingEmail());
+                order.getShippingState(), order.getShippingCity(), addressLines(order), order.getShippingPostalCode(),
+                order.getShippingPhone(), order.getShippingEmail());
     }
 
     private static List<String> addressLines(Order order) {
@@ -1277,14 +1260,14 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     static String[] splitName(String fullName) {
         if (fullName == null || fullName.isBlank()) {
-            return new String[] { "Customer", "Customer" };
+            return new String[]{"Customer", "Customer"};
         }
         String trimmed = fullName.trim().replaceAll("\\s+", " ");
         int cut = trimmed.indexOf(' ');
         if (cut < 0) {
-            return new String[] { trimmed, trimmed };
+            return new String[]{trimmed, trimmed};
         }
-        return new String[] { trimmed.substring(0, cut), trimmed.substring(cut + 1) };
+        return new String[]{trimmed.substring(0, cut), trimmed.substring(cut + 1)};
     }
 
     /** {@code declaration_info[]}: la declaración aduanera ya construida, con los nombres de la API. */
@@ -1331,9 +1314,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         RateOption best = cheapestRate(countryCode, parcel,
                 chargeableWeightGrams(parcel, defaultChannel(), countryCode));
         if (best == null) {
-            throw new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
-                    "YunExpress no ofrece ningún canal para " + countryCode
-                            + "; fija nexadrop.yunexpress.product-code con un canal del contrato");
+            throw new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT, "YunExpress no ofrece ningún canal para "
+                    + countryCode + "; fija nexadrop.yunexpress.product-code con un canal del contrato");
         }
         return best.productCode();
     }
@@ -1343,15 +1325,16 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         ParcelAggregator aggregator = new ParcelAggregator();
         for (OrderItem item : order.getItems()) {
             ProductEntity product = item.getProductId() != null
-                    ? productRepository.findById(item.getProductId()).orElse(null) : null;
+                    ? productRepository.findById(item.getProductId()).orElse(null)
+                    : null;
             if (product == null) {
                 aggregator.addUnknown(item.getQuantity());
                 continue;
             }
             ProductVariantEntity variant = null;
             if (item.getVariantId() != null && product.getVariants() != null) {
-                variant = product.getVariants().stream()
-                        .filter(v -> item.getVariantId().equals(v.getId())).findFirst().orElse(null);
+                variant = product.getVariants().stream().filter(v -> item.getVariantId().equals(v.getId())).findFirst()
+                        .orElse(null);
             }
             aggregator.add(product, variant, item.getQuantity());
         }
@@ -1423,14 +1406,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         int stage = (int) Math.min(5, elapsedMin / stageDur);
         String country = countryCode != null ? countryCode : "destino";
 
-        String[][] plan = {
-                { "FORWARDED", "Envío registrado", "Shenzhen, CN" },
-                { SHIPPED, "Recogido por el transportista", "Shenzhen, CN" },
-                { SHIPPED, "En tránsito internacional", "Hub internacional" },
-                { SHIPPED, "Llegó al país de destino", country },
-                { SHIPPED, "En reparto", "Centro de distribución local" },
-                { "DELIVERED", "Entregado al destinatario", country },
-        };
+        String[][] plan = {{"FORWARDED", "Envío registrado", "Shenzhen, CN"},
+                {SHIPPED, "Recogido por el transportista", "Shenzhen, CN"},
+                {SHIPPED, "En tránsito internacional", "Hub internacional"},
+                {SHIPPED, "Llegó al país de destino", country}, {SHIPPED, "En reparto", "Centro de distribución local"},
+                {"DELIVERED", "Entregado al destinatario", country},};
         List<TrackingStep> steps = new ArrayList<>();
         for (int i = 0; i <= stage; i++) {
             steps.add(new TrackingStep(OrderStatus.valueOf(plan[i][0]), plan[i][1], plan[i][2],
@@ -1447,8 +1427,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     private TrackingSnapshot realTrack(String trackingNumber, String countryCode) {
         JsonNode response = client.get(pathTrack(), Map.of("order_number", trackingNumber));
         if (!response.path(SUCCESS).asBoolean(false)) {
-            log.warn("YunExpress: sin trazabilidad para {} -> {} {}", trackingNumber,
-                    response.path("code").asText(""), response.path("msg").asText(""));
+            log.warn("YunExpress: sin trazabilidad para {} -> {} {}", trackingNumber, response.path("code").asText(""),
+                    response.path("msg").asText(""));
             return new TrackingSnapshot(OrderStatus.FORWARDED, List.of());
         }
         JsonNode entry = firstTrackEntry(response.path(RESULT));
@@ -1490,18 +1470,16 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             if (description.isBlank()) {
                 description = node != null ? node.description() : nodeCode;
             }
-            steps.add(new TrackingStep(status, description, location(event, countryCode),
-                    parseInstant(event)));
+            steps.add(new TrackingStep(status, description, location(event, countryCode), parseInstant(event)));
         }
         steps.sort(Comparator.comparing(TrackingStep::occurredAt));
-        OrderStatus current = steps.isEmpty()
-                ? OrderStatus.FORWARDED : steps.get(steps.size() - 1).status();
+        OrderStatus current = steps.isEmpty() ? OrderStatus.FORWARDED : steps.get(steps.size() - 1).status();
         return new TrackingSnapshot(current, steps);
     }
 
     /** Ubicación legible del evento: la más específica que informe YunExpress. */
     private static String location(JsonNode event, String countryCode) {
-        for (String field : new String[] { "process_location", "process_city", "process_province", "process_country" }) {
+        for (String field : new String[]{"process_location", "process_city", "process_province", "process_country"}) {
             String value = event.path(field).asText("");
             if (!value.isBlank()) {
                 return value;
@@ -1515,7 +1493,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * local del punto de escaneo y usarla desordenaría la línea temporal entre husos horarios.
      */
     private static Instant parseInstant(JsonNode event) {
-        for (String field : new String[] { "process_utc_time", "process_time" }) {
+        for (String field : new String[]{"process_utc_time", "process_time"}) {
             String value = event.path(field).asText("");
             if (value.isBlank()) {
                 continue;
@@ -1552,7 +1530,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         java.util.List<CustomsDutyLinesService.Line> lines = new java.util.ArrayList<>();
         for (OrderItem item : order.getItems()) {
             ProductEntity product = item.getProductId() != null
-                    ? productRepository.findById(item.getProductId()).orElse(null) : null;
+                    ? productRepository.findById(item.getProductId()).orElse(null)
+                    : null;
             if (product == null) {
                 continue;
             }

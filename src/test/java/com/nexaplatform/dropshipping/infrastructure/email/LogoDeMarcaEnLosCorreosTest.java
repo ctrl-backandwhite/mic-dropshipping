@@ -107,9 +107,7 @@ class LogoDeMarcaEnLosCorreosTest {
 
         assertThat(html).as("la página de baja no pinta el icono de la marca").contains("<svg");
         assertThat(html).as("la página de baja sigue con la caja de la letra «N»").doesNotContain(">N</div>");
-        assertThat(html)
-                .as("la página de baja usa un color que no es de la marca")
-                .doesNotContain("#7C6CD0");
+        assertThat(html).as("la página de baja usa un color que no es de la marca").doesNotContain("#7C6CD0");
     }
 
     /**

@@ -13,17 +13,15 @@ import java.util.List;
 public enum EuOperatorRole {
 
     /** Art. 4.2.a — fabricante establecido en la Unión. */
-    MANUFACTURER("Fabricante", "Manufacturer", "Fabricante", "制造商", "Fabricant", "Hersteller",
-            "Fabbricante", "Fabrikant"),
+    MANUFACTURER("Fabricante", "Manufacturer", "Fabricante", "制造商", "Fabricant", "Hersteller", "Fabbricante",
+            "Fabrikant"),
 
     /** Art. 4.2.b — importador, cuando el fabricante no está establecido en la Unión. */
-    IMPORTER("Importador", "Importer", "Importador", "进口商", "Importateur", "Importeur",
-            "Importatore", "Importeur"),
+    IMPORTER("Importador", "Importer", "Importador", "进口商", "Importateur", "Importeur", "Importatore", "Importeur"),
 
     /** Art. 4.2.c — representante autorizado con mandato escrito del fabricante. */
-    AUTHORISED_REPRESENTATIVE("Representante autorizado", "Authorised representative",
-            "Representante autorizado", "授权代表", "Mandataire", "Bevollmächtigter",
-            "Rappresentante autorizzato", "Gemachtigde"),
+    AUTHORISED_REPRESENTATIVE("Representante autorizado", "Authorised representative", "Representante autorizado",
+            "授权代表", "Mandataire", "Bevollmächtigter", "Rappresentante autorizzato", "Gemachtigde"),
 
     /** Art. 4.2.d — prestador de servicios logísticos, solo si ninguna de las anteriores está en la Unión. */
     FULFILMENT_SERVICE_PROVIDER("Prestador de servicios logísticos", "Fulfilment service provider",
@@ -46,9 +44,7 @@ public enum EuOperatorRole {
 
     /** Devuelve la figura por su nombre, o {@link #IMPORTER} si el valor almacenado no es reconocible. */
     public static EuOperatorRole from(String value) {
-        return Arrays.stream(values())
-                .filter(r -> r.name().equalsIgnoreCase(value == null ? "" : value.trim()))
-                .findFirst()
-                .orElse(IMPORTER);
+        return Arrays.stream(values()).filter(r -> r.name().equalsIgnoreCase(value == null ? "" : value.trim()))
+                .findFirst().orElse(IMPORTER);
     }
 }

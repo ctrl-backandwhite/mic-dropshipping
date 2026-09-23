@@ -85,9 +85,8 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
     }
 
     /** Cuerpo JSON genérico de las respuestas que hay que leer campo a campo. */
-    protected static final ParameterizedTypeReference<Map<String, Object>> MAPA =
-            new ParameterizedTypeReference<Map<String, Object>>() {
-            };
+    protected static final ParameterizedTypeReference<Map<String, Object>> MAPA = new ParameterizedTypeReference<Map<String, Object>>() {
+    };
 
     /** Destino de todos los pedidos de la prueba: es el único país con cobertura sembrada. */
     protected static final String PAIS = "ES";
@@ -135,24 +134,27 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
 
     /** Cobertura del transportista para el destino: sin fila, el checkout rechaza el país. */
     protected void habilitarEnvio(String pais, int baseCents) {
-        jdbcTemplate.update("INSERT INTO cainiao_shipping_zone (id, country_code, country_name, zone,"
-                + " base_cents, per_kg_cents, eta_min_days, eta_max_days, enabled, created_at)"
-                + " VALUES (?, ?, ?, 'EU', ?, 0, 8, 18, true, now())",
+        jdbcTemplate.update(
+                "INSERT INTO cainiao_shipping_zone (id, country_code, country_name, zone,"
+                        + " base_cents, per_kg_cents, eta_min_days, eta_max_days, enabled, created_at)"
+                        + " VALUES (?, ?, ?, 'EU', ?, 0, 8, 18, true, now())",
                 UUID.randomUUID(), pais, "Pais de prueba", baseCents);
     }
 
     /** Tasa nacional del destino. Se lee sin caché, así que basta con insertarla. */
     protected void fijarIva(String pais, int bps) {
-        jdbcTemplate.update("INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
-                + " created_at, updated_at) VALUES (?, ?, 'IVA', ?, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
+                        + " created_at, updated_at) VALUES (?, ?, 'IVA', ?, true, now(), now())",
                 UUID.randomUUID(), pais, bps);
     }
 
     /** Producto ACTIVO con proveedor (para la cola de compras), traducción y una variante comprable. */
     protected UUID crearProductoActivo() {
         UUID proveedorId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO supplier (id, external_id, source, name, created_at, updated_at)"
-                + " VALUES (?, ?, '1688', 'Proveedor de prueba', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO supplier (id, external_id, source, name, created_at, updated_at)"
+                        + " VALUES (?, ?, '1688', 'Proveedor de prueba', now(), now())",
                 proveedorId, "sup-" + proveedorId);
 
         UUID productoId = UUID.randomUUID();
@@ -167,21 +169,23 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
                 productoId, "producto-ciclo-" + productoId, "ext-" + productoId, proveedorId,
                 BigDecimal.valueOf(PRECIO_UNITARIO_CENTS, 2));
 
-        jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
-                + " updated_at) VALUES (?, ?, 'es', 'Producto de prueba', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product_translation (id, product_id, language, title, created_at,"
+                        + " updated_at) VALUES (?, ?, 'es', 'Producto de prueba', now(), now())",
                 UUID.randomUUID(), productoId);
 
         // El nombre en inglés es el EName de la declaración: sin él la guía no se puede emitir.
-        jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
-                + " updated_at) VALUES (?, ?, 'en', 'Test product', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product_translation (id, product_id, language, title, created_at,"
+                        + " updated_at) VALUES (?, ?, 'en', 'Test product', now(), now())",
                 UUID.randomUUID(), productoId);
 
         // Misma tarifa que la base: el precio del pedido es idéntico se compre con variante o sin ella,
         // y el stock inicial sirve para comprobar la política de inventario del dropshipping.
-        jdbcTemplate.update("INSERT INTO product_variant (id, product_id, sku, title, price, stock, active,"
-                + " created_at, updated_at) VALUES (?, ?, ?, 'Talla U', ?, 40, true, now(), now())",
-                UUID.randomUUID(), productoId, "SKU-" + productoId,
-                BigDecimal.valueOf(PRECIO_UNITARIO_CENTS, 2));
+        jdbcTemplate.update(
+                "INSERT INTO product_variant (id, product_id, sku, title, price, stock, active,"
+                        + " created_at, updated_at) VALUES (?, ?, ?, 'Talla U', ?, 40, true, now(), now())",
+                UUID.randomUUID(), productoId, "SKU-" + productoId, BigDecimal.valueOf(PRECIO_UNITARIO_CENTS, 2));
         return productoId;
     }
 
@@ -221,14 +225,13 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
     /* ==================== Lecturas de la base ==================== */
 
     protected long saldoDe(UUID userId) {
-        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?",
-                Long.class, userId);
+        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?", Long.class,
+                userId);
         return saldo == null ? 0L : saldo;
     }
 
     protected String estadoDe(UUID pedidoId) {
-        return jdbcTemplate.queryForObject("SELECT status FROM customer_order WHERE id = ?", String.class,
-                pedidoId);
+        return jdbcTemplate.queryForObject("SELECT status FROM customer_order WHERE id = ?", String.class, pedidoId);
     }
 
     protected int totalDe(UUID pedidoId) {
@@ -244,15 +247,17 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
 
     /** Nº de abonos al monedero por el concepto dado (el prefijo de la clave de idempotencia). */
     protected int abonosCon(UUID pedidoId, String prefijoClave) {
-        Integer n = jdbcTemplate.queryForObject("SELECT count(*) FROM wallet_transaction"
-                + " WHERE idempotency_key = ?", Integer.class, prefijoClave + pedidoId);
+        Integer n = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM wallet_transaction" + " WHERE idempotency_key = ?", Integer.class,
+                prefijoClave + pedidoId);
         return n == null ? 0 : n;
     }
 
     /** Suma de TODOS los movimientos del monedero de un usuario (para cuadrar el libro con el saldo). */
     protected long sumaMovimientos(UUID userId) {
-        Long suma = jdbcTemplate.queryForObject("SELECT coalesce(sum(t.amount_usd_cents), 0)"
-                + " FROM wallet_transaction t JOIN wallet w ON w.id = t.wallet_id WHERE w.user_id = ?",
+        Long suma = jdbcTemplate.queryForObject(
+                "SELECT coalesce(sum(t.amount_usd_cents), 0)"
+                        + " FROM wallet_transaction t JOIN wallet w ON w.id = t.wallet_id WHERE w.user_id = ?",
                 Long.class, userId);
         return suma == null ? 0L : suma;
     }
@@ -273,8 +278,8 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
      * base, así que el importe no cambia; lo que cambia es que la línea queda ligada a un SKU concreto,
      * que es la única forma de observar si el inventario se mueve.
      */
-    protected Map<String, Object> checkout(UUID userId, UUID productoId, UUID varianteId, int cantidad,
-            String metodo, String claveIdem) {
+    protected Map<String, Object> checkout(UUID userId, UUID productoId, UUID varianteId, int cantidad, String metodo,
+            String claveIdem) {
         Map<String, Object> direccion = new LinkedHashMap<>();
         direccion.put("fullName", "Cliente Ciclo");
         direccion.put("phone", "+34600000001");
@@ -298,19 +303,16 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
         cuerpo.put("paymentMethod", metodo);
 
         return client.post().uri(CHECKOUT).header("Authorization", bearer(tokenDe(userId, "USER")))
-                .contentType(MediaType.APPLICATION_JSON)
-                .headers(h -> {
+                .contentType(MediaType.APPLICATION_JSON).headers(h -> {
                     // Los endpoints de dinero EXIGEN la clave: identifica el INTENTO. Sin ella el
                     // servidor responde 400 en vez de abrir un segundo cobro. Clave nueva por
                     // llamada —cada petición es un intento distinto—; quien quiere un REENVÍO del
                     // mismo intento pasa la suya y se respeta.
                     {
-                        h.set("Idempotency-Key",
-                                claveIdem != null ? claveIdem : UUID.randomUUID().toString());
+                        h.set("Idempotency-Key", claveIdem != null ? claveIdem : UUID.randomUUID().toString());
                     }
-                })
-                .bodyValue(cuerpo).exchange().expectStatus().isCreated().expectBody(MAPA)
-                .returnResult().getResponseBody();
+                }).bodyValue(cuerpo).exchange().expectStatus().isCreated().expectBody(MAPA).returnResult()
+                .getResponseBody();
     }
 
     /** Pedido PAGADO con saldo, listo para recorrer el ciclo. Devuelve su id. */
@@ -333,8 +335,8 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
 
     /** Stock declarado de una variante (informativo en dropshipping: no debería moverse nunca). */
     protected int stockDe(UUID varianteId) {
-        Integer stock = jdbcTemplate.queryForObject("SELECT stock FROM product_variant WHERE id = ?",
-                Integer.class, varianteId);
+        Integer stock = jdbcTemplate.queryForObject("SELECT stock FROM product_variant WHERE id = ?", Integer.class,
+                varianteId);
         return stock == null ? 0 : stock;
     }
 
@@ -346,24 +348,22 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
 
     /** Transición del panel de administración. Devuelve el código HTTP tal cual para poder afirmarlo. */
     protected int transicionAdmin(UUID pedidoId, String accion, String token) {
-        return client.post().uri(ADMIN_ORDERS + pedidoId + "/" + accion)
-                .header("Authorization", bearer(token)).exchange().returnResult(Void.class)
-                .getStatus().value();
+        return client.post().uri(ADMIN_ORDERS + pedidoId + "/" + accion).header("Authorization", bearer(token))
+                .exchange().returnResult(Void.class).getStatus().value();
     }
 
     /** Igual que {@link #transicionAdmin} pero enviando un cuerpo (para probar que se ignora). */
-    protected int transicionAdminConCuerpo(UUID pedidoId, String accion, String token,
-            Map<String, Object> cuerpo) {
-        return client.post().uri(ADMIN_ORDERS + pedidoId + "/" + accion)
-                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(cuerpo).exchange().returnResult(Void.class).getStatus().value();
+    protected int transicionAdminConCuerpo(UUID pedidoId, String accion, String token, Map<String, Object> cuerpo) {
+        return client.post().uri(ADMIN_ORDERS + pedidoId + "/" + accion).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().returnResult(Void.class)
+                .getStatus().value();
     }
 
     /** Cancelación por el propio cliente. {@code aMonedero} elige el destino del reembolso. */
     protected int cancelarComoCliente(UUID userId, UUID pedidoId, boolean aMonedero) {
         return client.post().uri("/api/me/orders/" + pedidoId + "/cancel?refundToWallet=" + aMonedero)
-                .header("Authorization", bearer(tokenDe(userId, "USER"))).exchange()
-                .returnResult(Void.class).getStatus().value();
+                .header("Authorization", bearer(tokenDe(userId, "USER"))).exchange().returnResult(Void.class)
+                .getStatus().value();
     }
 
     /** Lleva el pedido hasta el estado pedido usando SOLO los endpoints reales, en orden. */
@@ -381,16 +381,15 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
         for (String paso : pasos) {
             int codigo = transicionAdmin(pedidoId, paso, token);
             if (codigo != 200) {
-                throw new IllegalStateException("No se pudo avanzar a " + estado + " (" + paso + " → "
-                        + codigo + ")");
+                throw new IllegalStateException("No se pudo avanzar a " + estado + " (" + paso + " → " + codigo + ")");
             }
         }
     }
 
     /** Resumen de ganancias del operador autenticado, tal y como lo ve él por HTTP. */
     protected Map<String, Object> gananciasDelOperador(String token) {
-        return client.get().uri("/api/admin/operator/earnings").header("Authorization", bearer(token))
-                .exchange().expectStatus().isOk().expectBody(MAPA).returnResult().getResponseBody();
+        return client.get().uri("/api/admin/operator/earnings").header("Authorization", bearer(token)).exchange()
+                .expectStatus().isOk().expectBody(MAPA).returnResult().getResponseBody();
     }
 
     /* ==================== Siembra del programa de afiliados ==================== */
@@ -406,23 +405,25 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
         UUID afiliadoUserId = crearUsuario("USER");
         UUID afiliadoId = UUID.randomUUID();
         String codigo = "ref-" + afiliadoId.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO affiliate (id, user_id, code, earnings_usd_cents, payout_usd_cents,"
-                + " referrals_count, active, status, payout_method, created_at, updated_at)"
-                + " VALUES (?, ?, ?, 0, 0, 0, true, 'ACTIVE', 'WALLET', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO affiliate (id, user_id, code, earnings_usd_cents, payout_usd_cents,"
+                        + " referrals_count, active, status, payout_method, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, 0, 0, 0, true, 'ACTIVE', 'WALLET', now(), now())",
                 afiliadoId, afiliadoUserId, codigo);
 
         UUID codigoId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO affiliate_referral_code (id, affiliate_id, code, label, active,"
-                + " clicks, created_at, updated_at) VALUES (?, ?, ?, 'Primary', true, 1, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO affiliate_referral_code (id, affiliate_id, code, label, active,"
+                        + " clicks, created_at, updated_at) VALUES (?, ?, ?, 'Primary', true, 1, now(), now())",
                 codigoId, afiliadoId, codigo);
 
         // Atribución viva: el clic apunta ya al comprador y no caduca durante la prueba.
-        jdbcTemplate.update("INSERT INTO affiliate_attribution (id, referral_code_id, affiliate_id,"
-                + " visitor_token, referred_user_id, clicked_at, expires_at, created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO affiliate_attribution (id, referral_code_id, affiliate_id,"
+                        + " visitor_token, referred_user_id, clicked_at, expires_at, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, now(), now())",
                 UUID.randomUUID(), codigoId, afiliadoId, "visitante-" + compradorId, compradorId,
-                Timestamp.from(Instant.now()),
-                Timestamp.from(Instant.now().plusSeconds(30L * 24 * 3600)));
+                Timestamp.from(Instant.now()), Timestamp.from(Instant.now().plusSeconds(30L * 24 * 3600)));
 
         Map<String, UUID> ids = new HashMap<>();
         ids.put("affiliateId", afiliadoId);
@@ -432,31 +433,33 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
 
     /** Estado de la comisión del afiliado por un pedido (o null si no se generó ninguna). */
     protected String estadoComisionAfiliado(UUID pedidoId) {
-        List<String> filas = jdbcTemplate.queryForList("SELECT c.status FROM affiliate_commission c"
-                + " JOIN affiliate_conversion v ON v.id = c.conversion_id WHERE v.order_id = ?",
+        List<String> filas = jdbcTemplate.queryForList(
+                "SELECT c.status FROM affiliate_commission c"
+                        + " JOIN affiliate_conversion v ON v.id = c.conversion_id WHERE v.order_id = ?",
                 String.class, pedidoId);
         return filas.isEmpty() ? null : filas.get(0);
     }
 
     /** Importe (céntimos) de la comisión del afiliado por un pedido, o -1 si no existe. */
     protected long importeComisionAfiliado(UUID pedidoId) {
-        List<Long> filas = jdbcTemplate.queryForList("SELECT c.amount_cents FROM affiliate_commission c"
-                + " JOIN affiliate_conversion v ON v.id = c.conversion_id WHERE v.order_id = ?",
+        List<Long> filas = jdbcTemplate.queryForList(
+                "SELECT c.amount_cents FROM affiliate_commission c"
+                        + " JOIN affiliate_conversion v ON v.id = c.conversion_id WHERE v.order_id = ?",
                 Long.class, pedidoId);
         return filas.isEmpty() ? -1L : filas.get(0);
     }
 
     /** Estado de la conversión del afiliado por un pedido, o null si no se generó. */
     protected String estadoConversionAfiliado(UUID pedidoId) {
-        List<String> filas = jdbcTemplate.queryForList(
-                "SELECT status FROM affiliate_conversion WHERE order_id = ?", String.class, pedidoId);
+        List<String> filas = jdbcTemplate.queryForList("SELECT status FROM affiliate_conversion WHERE order_id = ?",
+                String.class, pedidoId);
         return filas.isEmpty() ? null : filas.get(0);
     }
 
     /** Ganancias acumuladas del afiliado (se descuentan al anular la comisión). */
     protected long gananciasAfiliado(UUID afiliadoId) {
-        Long v = jdbcTemplate.queryForObject("SELECT earnings_usd_cents FROM affiliate WHERE id = ?",
-                Long.class, afiliadoId);
+        Long v = jdbcTemplate.queryForObject("SELECT earnings_usd_cents FROM affiliate WHERE id = ?", Long.class,
+                afiliadoId);
         return v == null ? 0L : v;
     }
 }

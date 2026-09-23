@@ -331,8 +331,8 @@ class PricingCalculationIT extends BaseIntegration {
         sembrarTramo(producto, 10, new BigDecimal("36.20"));
 
         BigDecimal unaUnidad = precioDe(producto).retailUsd();
-        PriceTierView tramo = transacciones.execute(estado ->
-                productMapper.toPriceTierView(tramos.findByProductIdOrderByMinQtyAsc(producto).get(0)));
+        PriceTierView tramo = transacciones.execute(
+                estado -> productMapper.toPriceTierView(tramos.findByProductIdOrderByMinQtyAsc(producto).get(0)));
 
         assertThat(unaUnidad).isEqualByComparingTo("32.50");
         assertThat(tramo.unitPrice()).isEqualByComparingTo("20.00");
@@ -349,18 +349,13 @@ class PricingCalculationIT extends BaseIntegration {
         UUID producto = sembrarProducto("ficha-usuario", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
 
         client.get().uri("/api/catalog/products/by-id/{id}?lang=es", producto)
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.costUsd").doesNotExist()
-                .jsonPath("$.retailUsd").doesNotExist()
-                .jsonPath("$.appliedMarginPercent").doesNotExist()
-                .jsonPath("$.baseFormatted").doesNotExist()
-                .jsonPath("$.ivaFormatted").doesNotExist()
-                .jsonPath("$.shippingFormatted").doesNotExist()
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.costUsd").doesNotExist().jsonPath("$.retailUsd").doesNotExist()
+                .jsonPath("$.appliedMarginPercent").doesNotExist().jsonPath("$.baseFormatted").doesNotExist()
+                .jsonPath("$.ivaFormatted").doesNotExist().jsonPath("$.shippingFormatted").doesNotExist()
                 // Lo que sí ve: el precio de venta ya compuesto y formateado.
-                .jsonPath("$.displayFormatted").isEqualTo("$32.50")
-                .jsonPath("$.displayPrice").value(v -> importeJson(v, "32.50"));
+                .jsonPath("$.displayFormatted").isEqualTo("$32.50").jsonPath("$.displayPrice")
+                .value(v -> importeJson(v, "32.50"));
     }
 
     /**
@@ -377,13 +372,11 @@ class PricingCalculationIT extends BaseIntegration {
         sembrarVariante(producto, "SKU-1", BASE_CNY, true);
 
         client.get().uri("/api/catalog/products/{id}/variants", producto)
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().isOk()
-                .expectBody()
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isOk().expectBody()
                 .jsonPath("$[0].sku").isEqualTo("SKU-1")
                 // 72,40 es el coste del proveedor en CNY: si apareciera aquí, el margen sería público.
-                .jsonPath("$[0].price").value(v -> importeJson(v, "32.50"))
-                .jsonPath("$[0].price").value(v -> importeDistintoJson(v, "72.40"));
+                .jsonPath("$[0].price").value(v -> importeJson(v, "32.50")).jsonPath("$[0].price")
+                .value(v -> importeDistintoJson(v, "72.40"));
     }
 
     /**
@@ -399,11 +392,8 @@ class PricingCalculationIT extends BaseIntegration {
         UUID producto = sembrarProducto("fuga-cny", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
 
         client.get().uri("/api/catalog/products/by-id/{id}?lang=es", producto)
-                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.basePrice").doesNotExist()
-                .jsonPath("$.currency").doesNotExist();
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.basePrice").doesNotExist().jsonPath("$.currency").doesNotExist();
     }
 
     /* ==================================================================================
@@ -449,18 +439,18 @@ class PricingCalculationIT extends BaseIntegration {
         });
     }
 
-    private UUID sembrarProducto(String slug, BigDecimal baseCny, BigDecimal ivaCny, BigDecimal envioCny,
-            int moq) {
+    private UUID sembrarProducto(String slug, BigDecimal baseCny, BigDecimal ivaCny, BigDecimal envioCny, int moq) {
         return sembrarProductoConRecargo(slug, baseCny, ivaCny, envioCny, moq, BigDecimal.ZERO);
     }
 
     /** Igual que {@link #sembrarProducto} pero fijando el recargo fijo en CNY (30-ago-2026). */
-    private UUID sembrarProductoConRecargo(String slug, BigDecimal baseCny, BigDecimal ivaCny,
-            BigDecimal envioCny, int moq, BigDecimal surchargeCny) {
+    private UUID sembrarProductoConRecargo(String slug, BigDecimal baseCny, BigDecimal ivaCny, BigDecimal envioCny,
+            int moq, BigDecimal surchargeCny) {
         UUID id = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, moq, base_price, "
-                + "currency, iva_cny, shipping_cny, surcharge_cny, status, hs_code, weight_grams) "
-                + "VALUES (?, ?, ?, '1688', ?, ?, ?, 'CNY', ?, ?, ?, 'ACTIVE', '610910', 500)",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, moq, base_price, "
+                        + "currency, iva_cny, shipping_cny, surcharge_cny, status, hs_code, weight_grams) "
+                        + "VALUES (?, ?, ?, '1688', ?, ?, ?, 'CNY', ?, ?, ?, 'ACTIVE', '610910', 500)",
                 id, slug, "ext-" + slug, "测试商品 " + slug, moq, baseCny, ivaCny, envioCny, surchargeCny);
         return id;
     }
@@ -476,9 +466,10 @@ class PricingCalculationIT extends BaseIntegration {
     }
 
     private void sembrarDivisa(String codigo, String nombre, String simbolo, String locale, String tasa) {
-        jdbcTemplate.update("INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active) "
-                + "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, TRUE) ON CONFLICT (code) DO UPDATE "
-                + "SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = TRUE",
+        jdbcTemplate.update(
+                "INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active) "
+                        + "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, TRUE) ON CONFLICT (code) DO UPDATE "
+                        + "SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = TRUE",
                 codigo, nombre, simbolo, locale, new BigDecimal(tasa));
     }
 

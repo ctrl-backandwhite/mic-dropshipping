@@ -32,17 +32,14 @@ class JwtRevocacionSinRedisTest {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
         ValueOperations<String, String> ops = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(ops);
-        when(ops.get(anyString()))
-                .thenThrow(new RedisConnectionFailureException("Unable to connect to Redis"));
+        when(ops.get(anyString())).thenThrow(new RedisConnectionFailureException("Unable to connect to Redis"));
 
         JwtRevocationService servicio = new JwtRevocationService(redis);
 
         // Sin el arreglo, esta línea lanzaba la excepción y la petición moría con un 500.
         boolean valido = servicio.isStillValid("cliente-1", 1_700_000_000L);
 
-        assertThat(valido)
-                .as("con Redis caído se cae al registro en memoria, no se rechaza a nadie")
-                .isTrue();
+        assertThat(valido).as("con Redis caído se cae al registro en memoria, no se rechaza a nadie").isTrue();
     }
 
     @Test

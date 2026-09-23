@@ -19,10 +19,9 @@ public record ShippingQuote(boolean supported, String countryCode, int amountUsd
      * Cotización sin opciones que elegir: la de la tabla de zonas de respaldo. Mantiene la forma anterior
      * para no obligar a cambiar a quien no ofrece alternativas.
      */
-    public ShippingQuote(boolean supported, String countryCode, int amountUsdCents, String carrier,
-            String serviceName, int etaMinDays, int etaMaxDays, String zone) {
-        this(supported, countryCode, amountUsdCents, carrier, serviceName, etaMinDays, etaMaxDays, zone,
-                List.of());
+    public ShippingQuote(boolean supported, String countryCode, int amountUsdCents, String carrier, String serviceName,
+            int etaMinDays, int etaMaxDays, String zone) {
+        this(supported, countryCode, amountUsdCents, carrier, serviceName, etaMinDays, etaMaxDays, zone, List.of());
     }
 
     /** Destino no cubierto por el transportista. */

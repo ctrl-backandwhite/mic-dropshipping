@@ -23,10 +23,8 @@ public class SearchFunctionContributor implements FunctionContributor {
         var registry = functionContributions.getFunctionRegistry();
         var types = functionContributions.getTypeConfiguration().getBasicTypeRegistry();
 
-        registry.registerPattern("nx_norm", "nx_norm(?1)",
-                types.resolve(StandardBasicTypes.STRING));
-        registry.registerPattern("word_similarity", "word_similarity(?1,?2)",
-                types.resolve(StandardBasicTypes.DOUBLE));
+        registry.registerPattern("nx_norm", "nx_norm(?1)", types.resolve(StandardBasicTypes.STRING));
+        registry.registerPattern("word_similarity", "word_similarity(?1,?2)", types.resolve(StandardBasicTypes.DOUBLE));
         // nx_wmatch(needle, col): ¿la aguja casa como PALABRA dentro de col (plurales/erratas/multi-término)?
         // Usa el OPERADOR <% de pg_trgm (a diferencia de la función word_similarity, el operador SÍ aprovecha
         // el índice GIN → búsqueda rápida). El umbral lo fija pg_trgm.word_similarity_threshold (0.45, v119).

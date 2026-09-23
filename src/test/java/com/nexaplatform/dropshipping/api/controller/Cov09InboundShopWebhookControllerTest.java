@@ -92,8 +92,8 @@ class Cov09InboundShopWebhookControllerTest {
         if (secret != null) {
             metadata.put("inboundSecret", secret);
         }
-        ShopConnectionEntity shop = ShopConnectionEntity.builder().user(owner).platform("shopify")
-                .metadata(metadata).build();
+        ShopConnectionEntity shop = ShopConnectionEntity.builder().user(owner).platform("shopify").metadata(metadata)
+                .build();
         shop.setId(shopId);
         when(shopRepo.findById(shopId)).thenReturn(Optional.of(shop));
         return shop;
@@ -127,8 +127,7 @@ class Cov09InboundShopWebhookControllerTest {
         when(shopRepo.findById(shopId)).thenReturn(Optional.empty());
         byte[] raw = bytes("{}");
 
-        assertThatThrownBy(() -> subject.receiveOrder(shopId, "cafe", null, raw))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> subject.receiveOrder(shopId, "cafe", null, raw)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -179,8 +178,8 @@ class Cov09InboundShopWebhookControllerTest {
     void unPedidoConLaListaDeLineasVaciaSeRechaza() {
         shop(SECRET);
 
-        assertThat(post("{\"items\":[],\"shippingAddress\":{\"city\":\"Madrid\"}}", null)
-                .getStatusCode().value()).isEqualTo(400);
+        assertThat(post("{\"items\":[],\"shippingAddress\":{\"city\":\"Madrid\"}}", null).getStatusCode().value())
+                .isEqualTo(400);
     }
 
     @Test
@@ -188,8 +187,8 @@ class Cov09InboundShopWebhookControllerTest {
         // Dejarlo pasar solo aplaza el fallo hasta que el transportista pide destinatario: ya está cobrado.
         shop(SECRET);
 
-        ResponseEntity<OrderView> res = post(
-                "{\"items\":[{\"productId\":\"%s\",\"quantity\":1}]}".formatted(productId), null);
+        ResponseEntity<OrderView> res = post("{\"items\":[{\"productId\":\"%s\",\"quantity\":1}]}".formatted(productId),
+                null);
 
         assertThat(res.getStatusCode().value()).isEqualTo(400);
         verify(orderUseCase, never()).createOrder(any(), any(), any());
@@ -238,8 +237,7 @@ class Cov09InboundShopWebhookControllerTest {
         ArgumentCaptor<CreateOrderRequest> captor = ArgumentCaptor.forClass(CreateOrderRequest.class);
         verify(orderUseCase).createOrder(isNull(), eq(ownerId), captor.capture());
         CreateOrderRequest req = captor.getValue();
-        assertThat(req.items()).singleElement()
-                .satisfies(it -> assertThat(it.productId()).isEqualTo(productId));
+        assertThat(req.items()).singleElement().satisfies(it -> assertThat(it.productId()).isEqualTo(productId));
         assertThat(req.items().get(0).quantity()).isEqualTo(3);
     }
 
@@ -320,8 +318,7 @@ class Cov09InboundShopWebhookControllerTest {
         shop(SECRET);
         ProductEntity product = new ProductEntity();
         product.setId(productId);
-        when(listingRepo.findByShopConnection_IdAndRemoteProductId(shopId, "1688-123"))
-                .thenReturn(Optional.empty());
+        when(listingRepo.findByShopConnection_IdAndRemoteProductId(shopId, "1688-123")).thenReturn(Optional.empty());
         when(productRepo.findFirstByExternalId("1688-123")).thenReturn(Optional.of(product));
         when(listingRepo.findByShopConnection_IdAndProduct_Id(shopId, productId))
                 .thenReturn(Optional.of(mock(ShopProductListingEntity.class)));

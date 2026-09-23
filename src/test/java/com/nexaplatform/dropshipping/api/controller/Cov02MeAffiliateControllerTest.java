@@ -84,8 +84,8 @@ class Cov02MeAffiliateControllerTest {
     }
 
     private static AffiliateReferralCodeEntity codigo(String code, int clicks) {
-        AffiliateReferralCodeEntity c = AffiliateReferralCodeEntity.builder().code(code).label("Principal")
-                .active(true).clicks(clicks).build();
+        AffiliateReferralCodeEntity c = AffiliateReferralCodeEntity.builder().code(code).label("Principal").active(true)
+                .clicks(clicks).build();
         c.setId(UUID.randomUUID());
         return c;
     }
@@ -239,8 +239,8 @@ class Cov02MeAffiliateControllerTest {
 
     @Test
     void pedirCobroSinCuerpoUsaLaCarteraComoMetodoPorDefecto() {
-        AffiliatePayoutEntity creado = AffiliatePayoutEntity.builder().affiliateId(afiliado.getId())
-                .amountCents(9000).currency("EUR").status("REQUESTED").method("WALLET").build();
+        AffiliatePayoutEntity creado = AffiliatePayoutEntity.builder().affiliateId(afiliado.getId()).amountCents(9000)
+                .currency("EUR").status("REQUESTED").method("WALLET").build();
         creado.setId(UUID.randomUUID());
         when(service.requestPayout(USER_ID, "WALLET")).thenReturn(creado);
 
@@ -252,8 +252,8 @@ class Cov02MeAffiliateControllerTest {
 
     @Test
     void pedirCobroConMetodoNuloEnElCuerpoTambienCaeEnCartera() {
-        AffiliatePayoutEntity creado = AffiliatePayoutEntity.builder().affiliateId(afiliado.getId())
-                .amountCents(9000).currency("EUR").status("REQUESTED").method("WALLET").build();
+        AffiliatePayoutEntity creado = AffiliatePayoutEntity.builder().affiliateId(afiliado.getId()).amountCents(9000)
+                .currency("EUR").status("REQUESTED").method("WALLET").build();
         creado.setId(UUID.randomUUID());
         when(service.requestPayout(USER_ID, "WALLET")).thenReturn(creado);
 
@@ -264,8 +264,8 @@ class Cov02MeAffiliateControllerTest {
 
     @Test
     void pedirCobroRespetaElMetodoElegido() {
-        AffiliatePayoutEntity creado = AffiliatePayoutEntity.builder().affiliateId(afiliado.getId())
-                .amountCents(9000).currency("EUR").status("REQUESTED").method("BANK").build();
+        AffiliatePayoutEntity creado = AffiliatePayoutEntity.builder().affiliateId(afiliado.getId()).amountCents(9000)
+                .currency("EUR").status("REQUESTED").method("BANK").build();
         creado.setId(UUID.randomUUID());
         when(service.requestPayout(USER_ID, "BANK")).thenReturn(creado);
 
@@ -314,8 +314,8 @@ class Cov02MeAffiliateControllerTest {
 
     @Test
     void desactivarUnCodigoDevuelveSuNuevoEstado() {
-        AffiliateReferralCodeEntity desactivado = AffiliateReferralCodeEntity.builder().code("ana01")
-                .label("Principal").active(false).clicks(3).build();
+        AffiliateReferralCodeEntity desactivado = AffiliateReferralCodeEntity.builder().code("ana01").label("Principal")
+                .active(false).clicks(3).build();
         desactivado.setId(UUID.randomUUID());
         when(service.setCodeActive(USER_ID, desactivado.getId(), false)).thenReturn(desactivado);
 
@@ -330,11 +330,9 @@ class Cov02MeAffiliateControllerTest {
         // El sujeto sale del token y el servicio comprueba propiedad: sin eso bastaba conocer un
         // identificador de código para apagar el enlace de otro y cortarle las comisiones futuras.
         UUID codigoAjeno = UUID.randomUUID();
-        when(service.setCodeActive(USER_ID, codigoAjeno, false))
-                .thenThrow(new NotFoundException("Code not found"));
+        when(service.setCodeActive(USER_ID, codigoAjeno, false)).thenThrow(new NotFoundException("Code not found"));
 
-        assertThatThrownBy(() -> controller.toggle(auth, codigoAjeno, false))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> controller.toggle(auth, codigoAjeno, false)).isInstanceOf(NotFoundException.class);
     }
 
     @Test

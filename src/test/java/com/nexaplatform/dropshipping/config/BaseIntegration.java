@@ -124,10 +124,8 @@ public abstract class BaseIntegration {
         // en el catálogo, que cambia entre ejecuciones; y como `TRUNCATE a, b, c` toma un bloqueo
         // exclusivo por tabla EN EL ORDEN EN QUE SE LISTAN, cada pasada pedía los bloqueos en un orden
         // distinto. Eso es exactamente lo que se necesita para un interbloqueo por orden de bloqueo.
-        List<String> tables = jdbcTemplate.queryForList(
-                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-                        + "AND tablename NOT LIKE 'databasechange%' AND tablename <> 'jwk_keys' "
-                        + "ORDER BY tablename",
+        List<String> tables = jdbcTemplate.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
+                + "AND tablename NOT LIKE 'databasechange%' AND tablename <> 'jwk_keys' " + "ORDER BY tablename",
                 String.class);
         if (tables.isEmpty()) {
             return;

@@ -43,22 +43,20 @@ class ShipmentDeclarationPersistenceIT extends PersistenceITBase {
      * {@code customer_order}, así que no vale un identificador inventado.
      */
     private UUID pedido(String orderNumber) {
-        AddressEntity direccion = em.persist(AddressEntity.builder().fullName("Ana López")
-                .line1("Calle Mayor 1").city("Zaragoza").postalCode("50001").country("ES")
-                .createdAt(Instant.now()).build());
+        AddressEntity direccion = em.persist(AddressEntity.builder().fullName("Ana López").line1("Calle Mayor 1")
+                .city("Zaragoza").postalCode("50001").country("ES").createdAt(Instant.now()).build());
         CustomerOrderEntity pedido = em.persist(CustomerOrderEntity.builder().orderNumber(orderNumber)
-                .source("PLATFORM").shippingAddress(direccion).status(OrderStatus.FORWARDED)
-                .subtotalCents(1200).shippingCents(0).taxCents(0).customsDutyCents(0).totalCents(1200)
-                .discountCents(0).currency("USD").placedAt(Instant.now()).build());
+                .source("PLATFORM").shippingAddress(direccion).status(OrderStatus.FORWARDED).subtotalCents(1200)
+                .shippingCents(0).taxCents(0).customsDutyCents(0).totalCents(1200).discountCents(0).currency("USD")
+                .placedAt(Instant.now()).build());
         em.flush();
         return pedido.getId();
     }
 
     private static OrderShipmentEntity bulto(UUID orderId, String waybill, Map<String, Object> declaration) {
         return OrderShipmentEntity.builder().orderId(orderId).sequenceNo(1).carrier("Standard Shipping")
-                .productCode("BPA").waybillNumber(waybill).trackingNumber(waybill).status("FORWARDED")
-                .weightGrams(500).declaredValueCents(1200).declaration(declaration)
-                .createdAt(Instant.now()).build();
+                .productCode("BPA").waybillNumber(waybill).trackingNumber(waybill).status("FORWARDED").weightGrams(500)
+                .declaredValueCents(1200).declaration(declaration).createdAt(Instant.now()).build();
     }
 
     /** Lo que se le declara al transportista: a quién va el paquete y qué lleva. */

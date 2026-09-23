@@ -82,8 +82,7 @@ public class InvoiceService {
         return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
                 .filter(p -> p.getSettlementAmount() != null && ccy.equalsIgnoreCase(p.getSettlementCurrency()))
-                .map(p -> p.getSettlementAmount())
-                .findFirst().orElse(null);
+                .map(p -> p.getSettlementAmount()).findFirst().orElse(null);
     }
 
     // Datos fiscales del EMISOR (la plataforma) para que la factura sea un documento legal.
@@ -315,8 +314,7 @@ public class InvoiceService {
         // que dar el total—, pero enseñar los dos importes con el arancel contado dos veces hacía que las
         // filas sumaran el total MÁS el arancel. Es la misma resta que hace OrderAmounts, que es lo que ve
         // el comprador en su pedido: antes el «Envío» de la factura y el del pedido no coincidían.
-        return new InvoiceAmounts(subtotal, shipping.subtract(customsDuty), tax, discount, total, vatRate,
-                customsDuty);
+        return new InvoiceAmounts(subtotal, shipping.subtract(customsDuty), tax, discount, total, vatRate, customsDuty);
     }
 
     /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
@@ -374,8 +372,10 @@ public class InvoiceService {
         if (it.getVariantId() != null) {
             ProductVariantEntity v = variantRepository.findById(it.getVariantId()).orElse(null);
             if (v != null) {
-                if (notBlank(v.getImageCdnUrl())) return v.getImageCdnUrl();
-                if (notBlank(v.getImageSourceUrl())) return v.getImageSourceUrl();
+                if (notBlank(v.getImageCdnUrl()))
+                    return v.getImageCdnUrl();
+                if (notBlank(v.getImageSourceUrl()))
+                    return v.getImageSourceUrl();
             }
         }
         return it.getImageUrlSnapshot();
@@ -387,11 +387,15 @@ public class InvoiceService {
 
     /** MIME por magic bytes. openhtmltopdf renderiza JPEG/PNG/GIF (WEBP no, sin plugin). */
     private static String guessMime(byte[] b) {
-        if (b.length >= 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF) return "image/jpeg";
-        if (b.length >= 4 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') return "image/png";
-        if (b.length >= 6 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F') return "image/gif";
-        if (b.length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F'
-                && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P') return "image/webp";
+        if (b.length >= 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF)
+            return "image/jpeg";
+        if (b.length >= 4 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G')
+            return "image/png";
+        if (b.length >= 6 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F')
+            return "image/gif";
+        if (b.length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F' && b[8] == 'W' && b[9] == 'E'
+                && b[10] == 'B' && b[11] == 'P')
+            return "image/webp";
         return "image/jpeg";
     }
 
@@ -545,7 +549,6 @@ public class InvoiceService {
         return currency != null && !currency.isBlank() ? currency.toUpperCase(Locale.ROOT) : "USD";
     }
 
-
     /**
      * Bloque fiscal del EMISOR, idéntico en la factura de pedidos y en la de planes. Solo se pinta si
      * hay razón social configurada: los datos legales salen de la configuración del entorno y NUNCA se
@@ -614,7 +617,8 @@ public class InvoiceService {
         BigDecimal usd = BigDecimal.valueOf(usdCents).movePointLeft(2);
         // HALF_UP también en USD (antes UP): el catálogo, el carrito, el pedido y el cobro usan HALF_UP,
         // así que la factura debe usar el MISMO redondeo o mostraría 1 céntimo de más por línea en USD.
-        return "USD".equalsIgnoreCase(currency) ? usd.setScale(2, RoundingMode.HALF_UP)
+        return "USD".equalsIgnoreCase(currency)
+                ? usd.setScale(2, RoundingMode.HALF_UP)
                 : currencyRateService.usdTo(usd, currency);
     }
 

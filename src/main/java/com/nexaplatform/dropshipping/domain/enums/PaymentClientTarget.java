@@ -19,8 +19,7 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum PaymentClientTarget {
 
-    WEB("web"),
-    MOBILE("mobile");
+    WEB("web"), MOBILE("mobile");
 
     private final String code;
 

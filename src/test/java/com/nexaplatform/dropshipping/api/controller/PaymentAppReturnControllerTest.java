@@ -41,8 +41,8 @@ class PaymentAppReturnControllerTest {
         ResponseEntity<Void> respuesta = controller.appReturn(paymentId, "ok", "cs_test_123");
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.FOUND);
-        assertThat(respuesta.getHeaders().getLocation()).hasToString(
-                "nx036://pago/retorno?paymentId=" + paymentId + "&kind=recharge&sessionId=cs_test_123");
+        assertThat(respuesta.getHeaders().getLocation())
+                .hasToString("nx036://pago/retorno?paymentId=" + paymentId + "&kind=recharge&sessionId=cs_test_123");
     }
 
     @Test
@@ -68,8 +68,8 @@ class PaymentAppReturnControllerTest {
 
         ResponseEntity<Void> respuesta = controller.appReturn(paymentId, "ok", "cs_test_9");
 
-        assertThat(respuesta.getHeaders().getLocation()).hasToString("nx036://pago/retorno?paymentId="
-                + paymentId + "&kind=order&orderId=" + orderId + "&sessionId=cs_test_9");
+        assertThat(respuesta.getHeaders().getLocation()).hasToString("nx036://pago/retorno?paymentId=" + paymentId
+                + "&kind=order&orderId=" + orderId + "&sessionId=cs_test_9");
     }
 
     /** Un estado desconocido se trata como cancelado: nunca se anuncia un cobro que no consta. */

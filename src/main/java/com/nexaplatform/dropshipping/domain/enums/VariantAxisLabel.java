@@ -17,29 +17,63 @@ import java.util.Map;
  */
 public enum VariantAxisLabel {
 
-    COLOR("Color", new Translations("Color", "Color", "Cor", "颜色", "Couleur", "Farbe", "Colore", "Kleur")),
-    TALLA("Talla", new Translations("Talla", "Size", "Tamanho", "尺码", "Taille", "Größe", "Taglia", "Maat")),
-    TAMANO("Tamaño", new Translations("Tamaño", "Size", "Tamanho", "尺寸", "Taille", "Größe", "Dimensione", "Formaat")),
-    MEDIDAS("Medidas",
-            new Translations("Medidas", "Measurements", "Medidas", "尺寸规格", "Dimensions", "Maße", "Misure", "Afmetingen")),
-    ESTAMPADO("Estampado",
-            new Translations("Estampado", "Pattern", "Estampado", "图案", "Motif", "Muster", "Fantasia", "Print")),
-    MODELO("Modelo", new Translations("Modelo", "Model", "Modelo", "型号", "Modèle", "Modell", "Modello", "Model")),
-    CAPACIDAD("Capacidad",
-            new Translations("Capacidad", "Capacity", "Capacidade", "容量", "Capacité", "Kapazität", "Capacità",
-                    "Capaciteit")),
-    MATERIAL("Material",
-            new Translations("Material", "Material", "Material", "材质", "Matière", "Material", "Materiale", "Materiaal")),
-    ESTILO("Estilo", new Translations("Estilo", "Style", "Estilo", "款式", "Style", "Stil", "Stile", "Stijl")),
-    ALTURA_RECOMENDADA("Altura recomendada",
-            new Translations("Altura recomendada", "Recommended height", "Altura recomendada", "建议身高",
-                    "Taille recommandée", "Empfohlene Körpergröße", "Altezza consigliata", "Aanbevolen lengte"));
+    COLOR("Color", new Translations("Color", "Color", "Cor", "颜色", "Couleur", "Farbe", "Colore", "Kleur")), TALLA(
+            "Talla",
+            new Translations("Talla", "Size", "Tamanho", "尺码", "Taille", "Größe", "Taglia", "Maat")), TAMANO("Tamaño",
+                    new Translations("Tamaño", "Size", "Tamanho", "尺寸", "Taille", "Größe", "Dimensione",
+                            "Formaat")), MEDIDAS(
+                                    "Medidas",
+                                    new Translations("Medidas", "Measurements", "Medidas", "尺寸规格", "Dimensions", "Maße",
+                                            "Misure", "Afmetingen")), ESTAMPADO(
+                                                    "Estampado",
+                                                    new Translations("Estampado", "Pattern", "Estampado", "图案", "Motif",
+                                                            "Muster", "Fantasia", "Print")), MODELO(
+                                                                    "Modelo",
+                                                                    new Translations("Modelo", "Model", "Modelo", "型号",
+                                                                            "Modèle", "Modell", "Modello",
+                                                                            "Model")), CAPACIDAD(
+                                                                                    "Capacidad",
+                                                                                    new Translations("Capacidad",
+                                                                                            "Capacity", "Capacidade",
+                                                                                            "容量", "Capacité",
+                                                                                            "Kapazität", "Capacità",
+                                                                                            "Capaciteit")), MATERIAL(
+                                                                                                    "Material",
+                                                                                                    new Translations(
+                                                                                                            "Material",
+                                                                                                            "Material",
+                                                                                                            "Material",
+                                                                                                            "材质",
+                                                                                                            "Matière",
+                                                                                                            "Material",
+                                                                                                            "Materiale",
+                                                                                                            "Materiaal")), ESTILO(
+                                                                                                                    "Estilo",
+                                                                                                                    new Translations(
+                                                                                                                            "Estilo",
+                                                                                                                            "Style",
+                                                                                                                            "Estilo",
+                                                                                                                            "款式",
+                                                                                                                            "Style",
+                                                                                                                            "Stil",
+                                                                                                                            "Stile",
+                                                                                                                            "Stijl")), ALTURA_RECOMENDADA(
+                                                                                                                                    "Altura recomendada",
+                                                                                                                                    new Translations(
+                                                                                                                                            "Altura recomendada",
+                                                                                                                                            "Recommended height",
+                                                                                                                                            "Altura recomendada",
+                                                                                                                                            "建议身高",
+                                                                                                                                            "Taille recommandée",
+                                                                                                                                            "Empfohlene Körpergröße",
+                                                                                                                                            "Altezza consigliata",
+                                                                                                                                            "Aanbevolen lengte"));
 
-    private static final Map<String, VariantAxisLabel> POR_NOMBRE = Map.ofEntries(
-            Map.entry("color", COLOR), Map.entry("talla", TALLA), Map.entry("tamaño", TAMANO),
-            Map.entry("tamano", TAMANO), Map.entry("medidas", MEDIDAS), Map.entry("estampado", ESTAMPADO),
-            Map.entry("modelo", MODELO), Map.entry("capacidad", CAPACIDAD), Map.entry("material", MATERIAL),
-            Map.entry("estilo", ESTILO), Map.entry("altura recomendada", ALTURA_RECOMENDADA));
+    private static final Map<String, VariantAxisLabel> POR_NOMBRE = Map.ofEntries(Map.entry("color", COLOR),
+            Map.entry("talla", TALLA), Map.entry("tamaño", TAMANO), Map.entry("tamano", TAMANO),
+            Map.entry("medidas", MEDIDAS), Map.entry("estampado", ESTAMPADO), Map.entry("modelo", MODELO),
+            Map.entry("capacidad", CAPACIDAD), Map.entry("material", MATERIAL), Map.entry("estilo", ESTILO),
+            Map.entry("altura recomendada", ALTURA_RECOMENDADA));
 
     private final String spanish;
     private final Translations translations;

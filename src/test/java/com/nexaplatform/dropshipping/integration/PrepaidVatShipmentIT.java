@@ -70,8 +70,7 @@ import static org.mockito.Mockito.when;
         "nexadrop.yunexpress.ioss-number=IM3720000000",
         // Límite REAL del canal contratado (BPA), para que un pedido de dos unidades se reparta en dos
         // bultos y se pueda comprobar que el prepago viaja en TODAS las guías, no solo en la primera.
-        "nexadrop.yunexpress.max-parcel-weight-grams=600"
-})
+        "nexadrop.yunexpress.max-parcel-weight-grams=600"})
 class PrepaidVatShipmentIT extends BaseIntegration {
 
     /** Alta de envío en la Open Platform: la petición cuyo cuerpo se captura. */
@@ -130,8 +129,7 @@ class PrepaidVatShipmentIT extends BaseIntegration {
         assertThat(alta.extraServices()).hasSize(1);
         assertThat(alta.extraServices().getFirst().extraCode()).isEqualTo(SERVICIO_PREPAGO);
         assertThat(alta.extraServices().getFirst().extraValue()).isEqualTo(ETIQUETA_PREPAGO);
-        assertThat(alta.customsNumber()).as("bajo la franquicia el IOSS del comercio viaja con el prepago")
-                .isNotNull();
+        assertThat(alta.customsNumber()).as("bajo la franquicia el IOSS del comercio viaja con el prepago").isNotNull();
         assertThat(alta.customsNumber().iossCode()).isEqualTo(IOSS);
     }
 
@@ -151,8 +149,7 @@ class PrepaidVatShipmentIT extends BaseIntegration {
 
         YunExpressRequests.CreateShipment alta = altaDeEnvio(pedido("AE", 1, VALOR_BAJO_CENTS));
 
-        assertThat(alta.extraServices())
-                .as("el canal ya va DDP por contrato: pedir V1 aquí tumba el alta del envío")
+        assertThat(alta.extraServices()).as("el canal ya va DDP por contrato: pedir V1 aquí tumba el alta del envío")
                 .isNullOrEmpty();
     }
 
@@ -270,15 +267,11 @@ class PrepaidVatShipmentIT extends BaseIntegration {
      * entonces el interruptor no funcionaría el día que hiciera falta usarlo.
      */
     @Nested
-    @TestPropertySource(properties = {
-            "nexadrop.yunexpress.enabled=true",
-            "nexadrop.yunexpress.product-code=BPA",
-            "nexadrop.yunexpress.ioss-number=IM3720000000",
-            "nexadrop.yunexpress.max-parcel-weight-grams=600",
+    @TestPropertySource(properties = {"nexadrop.yunexpress.enabled=true", "nexadrop.yunexpress.product-code=BPA",
+            "nexadrop.yunexpress.ioss-number=IM3720000000", "nexadrop.yunexpress.max-parcel-weight-grams=600",
             // El interruptor: si la cuenta del transportista no tiene dado de alta el servicio, mandarlo
             // hace fallar el alta de TODOS los envíos, y eso hay que poder apagarlo sin desplegar.
-            "nexadrop.yunexpress.prepaid-vat-service-code="
-    })
+            "nexadrop.yunexpress.prepaid-vat-service-code="})
     class ConElServicioDeshabilitado {
 
         @Test
@@ -331,8 +324,7 @@ class PrepaidVatShipmentIT extends BaseIntegration {
      * recorre las traducciones del producto, que son perezosas, y sin sesión abierta no se podrían leer.
      */
     private void despachar(Order pedido) {
-        new TransactionTemplate(transacciones)
-                .executeWithoutResult(estado -> envios.createShipments(pedido));
+        new TransactionTemplate(transacciones).executeWithoutResult(estado -> envios.createShipments(pedido));
     }
 
     /**
@@ -343,8 +335,7 @@ class PrepaidVatShipmentIT extends BaseIntegration {
     private List<YunExpressRequests.CreateShipment> altasCapturadas() {
         ArgumentCaptor<Object> cuerpos = ArgumentCaptor.forClass(Object.class);
         verify(transportista, atLeastOnce()).post(eq(RUTA_ALTA), cuerpos.capture());
-        return cuerpos.getAllValues().stream()
-                .map(YunExpressRequests.CreateShipment.class::cast).toList();
+        return cuerpos.getAllValues().stream().map(YunExpressRequests.CreateShipment.class::cast).toList();
     }
 
     /** Respuesta del transportista dando la guía por creada; lo que devuelva no altera lo que se le mandó. */
@@ -410,13 +401,13 @@ class PrepaidVatShipmentIT extends BaseIntegration {
      */
     private void sembrarRegla(String pais, String modoFiscal, boolean prepagaElTransportista,
             String servicioDePrepago) {
-        jdbcTemplate.update("INSERT INTO country_customs_rule (id, country_code, tax_mode,"
-                + " de_minimis_amount, de_minimis_currency, over_threshold_policy, handling_fee_cents,"
-                + " handling_percent_bps, carrier_prepays_vat, vat_prepay_service_code, active,"
-                + " created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, 'USD', 'SURCHARGE', 0, 0, ?, ?, true, now(), now())",
-                UUID.randomUUID(), pais, modoFiscal, FRANQUICIA_USD, prepagaElTransportista,
-                servicioDePrepago);
+        jdbcTemplate.update(
+                "INSERT INTO country_customs_rule (id, country_code, tax_mode,"
+                        + " de_minimis_amount, de_minimis_currency, over_threshold_policy, handling_fee_cents,"
+                        + " handling_percent_bps, carrier_prepays_vat, vat_prepay_service_code, active,"
+                        + " created_at, updated_at)"
+                        + " VALUES (?, ?, ?, ?, 'USD', 'SURCHARGE', 0, 0, ?, ?, true, now(), now())",
+                UUID.randomUUID(), pais, modoFiscal, FRANQUICIA_USD, prepagaElTransportista, servicioDePrepago);
     }
 
     /**
@@ -426,11 +417,12 @@ class PrepaidVatShipmentIT extends BaseIntegration {
     private UUID insertarProducto() {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
-        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, shipping_cny, iva_cny, weight_grams, hs_code, customs_material,"
-                + " customs_usage, created_at, updated_at)"
-                + " VALUES (?, ?, ?, 'TEST', '棉T恤', 'ACTIVE', 1, 45.0000, 'USD', 0, 0, ?, '6109100000',"
-                + " 'Cotton', 'Daily wear', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                        + " base_price, currency, shipping_cny, iva_cny, weight_grams, hs_code, customs_material,"
+                        + " customs_usage, created_at, updated_at)"
+                        + " VALUES (?, ?, ?, 'TEST', '棉T恤', 'ACTIVE', 1, 45.0000, 'USD', 0, 0, ?, '6109100000',"
+                        + " 'Cotton', 'Daily wear', now(), now())",
                 id, "producto-" + sufijo, "ext-" + sufijo, PESO_UNIDAD_GRAMOS);
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
                 + " updated_at) VALUES (gen_random_uuid(), ?, 'en', 'Cotton T-shirt', now(), now())", id);

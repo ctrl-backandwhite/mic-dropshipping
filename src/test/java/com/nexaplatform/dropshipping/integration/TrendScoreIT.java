@@ -48,8 +48,8 @@ class TrendScoreIT {
 
     @AfterEach
     void limpiar() {
-        jdbc.update("DELETE FROM order_item WHERE order_id IN"
-                + " (SELECT id FROM customer_order WHERE user_id = ?)", usuario);
+        jdbc.update("DELETE FROM order_item WHERE order_id IN" + " (SELECT id FROM customer_order WHERE user_id = ?)",
+                usuario);
         jdbc.update("DELETE FROM customer_order WHERE user_id = ?", usuario);
         jdbc.update("DELETE FROM product WHERE category_id = ?", categoria);
         jdbc.update("DELETE FROM address WHERE id = ?", direccion);

@@ -53,7 +53,8 @@ public class WooCommerceConnector implements ShopConnector {
         }
         String base = normalizeBase(shop.getShopHandle());
         if (base == null) {
-            return PushResult.fail("URL de tienda inválida: se esperaba la URL base de WordPress (https://mi-tienda.com).");
+            return PushResult
+                    .fail("URL de tienda inválida: se esperaba la URL base de WordPress (https://mi-tienda.com).");
         }
         try {
             // Map.of no admite nulos: un producto sin título NI slug reventaba con un NPE que el catch
@@ -63,18 +64,15 @@ public class WooCommerceConnector implements ShopConnector {
                 return PushResult.fail("El producto no tiene título ni identificador: complétalo antes de publicarlo.");
             }
             BigDecimal price = product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO;
-            Map<String, Object> body = Map.of(
-                    "name", title,
-                    "type", "simple",
-                    "regular_price", price.toPlainString(),
+            Map<String, Object> body = Map.of("name", title, "type", "simple", "regular_price", price.toPlainString(),
                     "description", product.getDescriptionZh() != null ? product.getDescriptionZh() : "",
-                    "short_description", product.getShortDescriptionZh() != null ? product.getShortDescriptionZh() : "");
+                    "short_description",
+                    product.getShortDescriptionZh() != null ? product.getShortDescriptionZh() : "");
             String json = objectMapper.writeValueAsString(body);
             String basic = Base64.getEncoder().encodeToString(decryptedToken.getBytes(StandardCharsets.UTF_8));
             URI uri = URI.create(base + "/wp-json/wc/v3/products");
             HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(15))
-                    .header("Authorization", "Basic " + basic)
-                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Basic " + basic).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json)).build();
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() / 100 == 2) {
@@ -120,7 +118,6 @@ public class WooCommerceConnector implements ShopConnector {
         }
         return h;
     }
-
 
     private String truncate(String s) {
         if (s == null) {

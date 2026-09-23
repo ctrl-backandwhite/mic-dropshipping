@@ -38,11 +38,9 @@ class PasswordPolicyTest {
         // La lista COMMON se consulta DESPUÉS de exigir mayúscula, dígito y símbolo, y ninguna de sus
         // entradas los tiene: el rechazo llega siempre por la familia que falta, nunca por "too common".
         // Se rechazan igual —no hay agujero—, pero esa rama no es alcanzable y el test lo dice.
-        assertThatThrownBy(() -> policy.validate("password1234"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> policy.validate("password1234")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("uppercase");
-        assertThatThrownBy(() -> policy.validate("Qwerty123"))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> policy.validate("Qwerty123")).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("symbol");
     }
 
@@ -65,8 +63,8 @@ class PasswordPolicyTest {
         assertThat(limite).hasSize(128);
         long inicio = System.nanoTime();
         assertThatThrownBy(() -> policy.validate(limite)).isInstanceOf(BusinessException.class);
-        assertThat((System.nanoTime() - inicio) / 1_000_000)
-                .as("validar 128 caracteres sin mayúscula").isLessThan(200L);
+        assertThat((System.nanoTime() - inicio) / 1_000_000).as("validar 128 caracteres sin mayúscula")
+                .isLessThan(200L);
     }
 
     @Test

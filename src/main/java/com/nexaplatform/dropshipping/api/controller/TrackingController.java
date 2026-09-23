@@ -86,8 +86,8 @@ public class TrackingController {
         try {
             syncScheduler.syncOrderById(id);
         } catch (RuntimeException e) {
-            log.warn("::> [TRACKING] Reintento hecho, pero no se pudo refrescar el seguimiento pedido={} causa={}",
-                    id, e.getMessage());
+            log.warn("::> [TRACKING] Reintento hecho, pero no se pudo refrescar el seguimiento pedido={} causa={}", id,
+                    e.getMessage());
         }
     }
 }

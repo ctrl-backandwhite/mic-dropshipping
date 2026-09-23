@@ -149,7 +149,8 @@ class Cov07ProductRepositoryImplTest {
 
     @Test
     void unaImagenSinRolNiEstadoDeEspejoRecibeLosValoresPorDefecto() {
-        model.setImages(new ArrayList<>(List.of(ProductImage.builder().position(3).sourceUrl("http://o/1.jpg").build())));
+        model.setImages(
+                new ArrayList<>(List.of(ProductImage.builder().position(3).sourceUrl("http://o/1.jpg").build())));
 
         ProductEntity saved = saveAndCapture();
 
@@ -225,8 +226,8 @@ class Cov07ProductRepositoryImplTest {
     @Test
     void lasVariantesConservanPrecioStockYEjesDeOpcion() {
         model.setVariants(new ArrayList<>(List.of(ProductVariant.builder().externalId("SKU-1").sku("SKU-1")
-                .title("Rojo / M").price(new BigDecimal("12.50")).stock(7).active(true)
-                .options(Map.of("Color", "Rojo")).imageCdnUrl("http://cdn/v.jpg").build())));
+                .title("Rojo / M").price(new BigDecimal("12.50")).stock(7).active(true).options(Map.of("Color", "Rojo"))
+                .imageCdnUrl("http://cdn/v.jpg").build())));
 
         ProductEntity saved = saveAndCapture();
 
@@ -267,9 +268,9 @@ class Cov07ProductRepositoryImplTest {
 
     @Test
     void guardarTramosReemplazaLosAnterioresYLaMonedaPorDefectoEsCny() {
-        model.setPriceTiers(new ArrayList<>(List.of(
-                ProductPriceTier.builder().minQty(1).maxQty(9).unitPrice(new BigDecimal("10")).build(),
-                ProductPriceTier.builder().minQty(10).unitPrice(new BigDecimal("8")).currency("USD").build())));
+        model.setPriceTiers(new ArrayList<>(
+                List.of(ProductPriceTier.builder().minQty(1).maxQty(9).unitPrice(new BigDecimal("10")).build(),
+                        ProductPriceTier.builder().minQty(10).unitPrice(new BigDecimal("8")).currency("USD").build())));
         ProductPriceTierEntity antiguo = ProductPriceTierEntity.builder().minQty(1).build();
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(any())).thenReturn(List.of(antiguo));
 
@@ -360,8 +361,8 @@ class Cov07ProductRepositoryImplTest {
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(id)).thenReturn(List.of(tier));
         when(productEntityMapper.toPriceTierDomainList(List.of(tier))).thenReturn(tiers);
 
-        assertThat(repository.findWithDetailsBySlug("camisa-lino")).get()
-                .extracting(Product::getPriceTiers).isEqualTo(tiers);
+        assertThat(repository.findWithDetailsBySlug("camisa-lino")).get().extracting(Product::getPriceTiers)
+                .isEqualTo(tiers);
         assertThat(repository.findWithDetailsById(id)).get().extracting(Product::getPriceTiers).isEqualTo(tiers);
     }
 

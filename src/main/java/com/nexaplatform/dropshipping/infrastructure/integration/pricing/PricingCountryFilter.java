@@ -99,8 +99,8 @@ public class PricingCountryFilter extends OncePerRequestFilter {
                 return null;
             }
             UUID id = UUID.fromString(auth.getName());
-            return userRepository.findById(id).map(UserEntity::getCountry)
-                    .filter(c -> c != null && !c.isBlank()).orElse(null);
+            return userRepository.findById(id).map(UserEntity::getCountry).filter(c -> c != null && !c.isBlank())
+                    .orElse(null);
         } catch (IllegalArgumentException e) {
             // El subject no es un UUID: token de servicio o de cliente OAuth, no una persona con ficha.
             return null;

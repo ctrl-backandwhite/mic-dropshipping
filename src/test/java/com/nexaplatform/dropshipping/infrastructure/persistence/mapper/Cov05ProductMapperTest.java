@@ -41,7 +41,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,6 +83,10 @@ class Cov05ProductMapperTest {
     void setUp() {
         when(pricingService.priceFor(any(ProductEntity.class))).thenReturn(PRICED);
         when(pricingService.priceFor(any(ProductEntity.class), any(ProductVariantEntity.class))).thenReturn(PRICED);
+        // La firma con cantidad y escalera: es la que usa `toPriceTierView` desde que el tramo se
+        // tarifica por la MISMA vía que el cobro. Sin este stub Mockito devuelve null y el mapper
+        // revienta con NPE — que es como se quedaron estas cuatro pruebas al cambiar el código.
+        lenient().when(pricingService.priceFor(any(ProductEntity.class), any(), anyInt(), any())).thenReturn(PRICED);
     }
 
     @AfterEach
@@ -94,9 +100,9 @@ class Cov05ProductMapperTest {
     }
 
     private ProductEntity product() {
-        ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE).slug("vestido-rojo").source("1688").externalId("1").titleZh("连衣裙")
-                .shortDescriptionZh("短").descriptionZh("长").basePrice(new BigDecimal("12.50")).currency("CNY")
-                .build();
+        ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE).slug("vestido-rojo").source("1688")
+                .externalId("1").titleZh("连衣裙").shortDescriptionZh("短").descriptionZh("长")
+                .basePrice(new BigDecimal("12.50")).currency("CNY").build();
         p.setId(UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"));
         p.setImages(new ArrayList<>());
         p.setTranslations(new ArrayList<>());
@@ -358,8 +364,8 @@ class Cov05ProductMapperTest {
         VariantValueEntity color = VariantValueEntity.builder().valueZh("黑色").value("黑色")
                 .translations(new ArrayList<>()).build();
         color.getTranslations().add(VariantValueTranslationEntity.builder().language("es").value("Negro").build());
-        VariantValueEntity talla = VariantValueEntity.builder().valueZh("L").value("L")
-                .translations(new ArrayList<>()).build();
+        VariantValueEntity talla = VariantValueEntity.builder().valueZh("L").value("L").translations(new ArrayList<>())
+                .build();
         talla.getTranslations().add(VariantValueTranslationEntity.builder().language("es").value("L").build());
         p.getVariantOptions().add(VariantOptionEntity.builder().nameZh("Color").position(0)
                 .values(new ArrayList<>(List.of(color))).build());
@@ -460,7 +466,8 @@ class Cov05ProductMapperTest {
         ProductEntity p = product();
         ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(10).maxQty(49)
                 .unitPrice(new BigDecimal("14.13")).currency("CNY").build();
-        when(pricingService.priceForSupplierAmount(p, null, new BigDecimal("14.13")))
+        // Se tarifica por la misma puerta que el cobro, con la cantidad mínima del tramo.
+        when(pricingService.priceFor(p, null, 10, List.of(tier)))
                 .thenReturn(precio(new BigDecimal("28.26"), "EUR", "28,26 €"));
 
         PriceTierView view = mapper.toPriceTierView(tier);
@@ -474,8 +481,8 @@ class Cov05ProductMapperTest {
 
     /** PricedAmount con lo único que lee la vista del tramo: importe, divisa y texto formateado. */
     private static PricedAmount precio(BigDecimal importe, String divisa, String formateado) {
-        return new PricedAmount(null, null, importe, divisa, "€", formateado, null, null,
-                null, null, null, null, null, null);
+        return new PricedAmount(null, null, importe, divisa, "€", formateado, null, null, null, null, null, null, null,
+                null);
     }
 
     @Test
@@ -486,12 +493,36 @@ class Cov05ProductMapperTest {
         ProductEntity p = product();
         ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(1)
                 .unitPrice(new BigDecimal("9.00")).currency(null).build();
-        when(pricingService.priceForSupplierAmount(any(), any(), any()))
+        when(pricingService.priceFor(any(ProductEntity.class), any(), anyInt(), any()))
                 .thenReturn(precio(new BigDecimal("18.00"), "EUR", "18,00 €"));
 
         mapper.toPriceTierView(tier);
 
-        verify(pricingService).priceForSupplierAmount(p, null, new BigDecimal("9.00"));
+        // Con SU producto, no con otro: si no, saldrían los impuestos de otro país o un envío que
+        // no es el de esta pieza.
+        verify(pricingService).priceFor(p, null, 1, List.of(tier));
+    }
+
+    @Test
+    @DisplayName("el tramo se tarifica con SU recargo, no con el del producto")
+    void elTramoSeTarificaConSuPropioRecargo() {
+        // El recargo cubre un coste que NO escala con la cantidad -gestion de la compra, manipulado,
+        // la parte fija del despacho-. Cobrando el del producto en todos los tramos, quien se lleva
+        // diez mil unidades pagaba diez mil veces un cargo que solo se incurre una vez, justo en la
+        // tabla que le promete que comprar mas sale mas barato.
+        ProductEntity p = product();
+        ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(200)
+                .unitPrice(new BigDecimal("9.00")).currency("CNY").surchargeCny(new BigDecimal("0.80")).build();
+        when(pricingService.priceFor(any(ProductEntity.class), any(), anyInt(), any()))
+                .thenReturn(precio(new BigDecimal("18.00"), "EUR", "18,00 €"));
+
+        mapper.toPriceTierView(tier);
+
+        // El mapper tarifica ESTE producto, con la CANTIDAD MÍNIMA del tramo y la escalera entera:
+        // eso es lo suyo. Que dentro se use el recargo del tramo y no el del producto lo comprueba
+        // `RecargoDelPrimerTramoTest` sobre el PricingService de verdad — aquí es un simulacro, y
+        // afirmar sobre un simulacro no demuestra que el recargo se cobre.
+        verify(pricingService).priceFor(p, null, 200, List.of(tier));
     }
 
     @Test
@@ -500,7 +531,7 @@ class Cov05ProductMapperTest {
         ProductEntity p = product();
         ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(1)
                 .unitPrice(new BigDecimal("7.00")).currency("CNY").build();
-        when(pricingService.priceForSupplierAmount(any(), any(), any()))
+        when(pricingService.priceFor(any(ProductEntity.class), any(), anyInt(), any()))
                 .thenReturn(precio(null, null, null));
         when(pricingService.displayCurrencyCode()).thenReturn("EUR");
         when(currencyRateService.formatDisplay(null, "EUR")).thenReturn("—");

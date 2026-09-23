@@ -66,15 +66,13 @@ class BulkProductRulesTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
     void sinTituloEnNingunIdiomaLaFilaSeRechaza(String title) {
-        assertThatThrownBy(() -> BulkProductRules.assertTitle(title))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> BulkProductRules.assertTitle(title)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Falta el título");
     }
 
     @Test
     void unTituloNuloTambienSeRechaza() {
-        assertThatThrownBy(() -> BulkProductRules.assertTitle(null))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> BulkProductRules.assertTitle(null)).isInstanceOf(BusinessException.class);
     }
 
     // ---------------------------------------------------------------- precio
@@ -110,8 +108,7 @@ class BulkProductRulesTest {
         r.setPrice(null);
 
         assertThatThrownBy(() -> BulkProductRules.resolvePrice(r, "Reloj de pulsera"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Falta el precio real")
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Falta el precio real")
                 .hasMessageContaining("Reloj de pulsera");
     }
 
@@ -121,8 +118,7 @@ class BulkProductRulesTest {
         r.setPrice(null);
         r.setTieredPricing(List.of(tier(1, null), tier(50, null)));
 
-        assertThatThrownBy(() -> BulkProductRules.resolvePrice(r, "Reloj"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> BulkProductRules.resolvePrice(r, "Reloj")).isInstanceOf(BusinessException.class);
     }
 
     // ---------------------------------------------------------------- envío e IVA
@@ -134,8 +130,7 @@ class BulkProductRulesTest {
         r.setShippingCny(null);
 
         assertThatThrownBy(() -> BulkProductRules.assertShippingAndVat(r, "Reloj"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("shippingCny")
+                .isInstanceOf(BusinessException.class).hasMessageContaining("shippingCny")
                 .hasMessageContaining("Reloj");
     }
 
@@ -145,8 +140,7 @@ class BulkProductRulesTest {
         r.setIvaCny(null);
 
         assertThatThrownBy(() -> BulkProductRules.assertShippingAndVat(r, "Reloj"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ivaCny");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("ivaCny");
     }
 
     @Test
@@ -165,8 +159,9 @@ class BulkProductRulesTest {
         BulkProductDtoIn r = row();
         assertThatCode(() -> BulkProductRules.assertRequiredAttributes(r, List.of(), "moda-relojes"))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> BulkProductRules.assertRequiredAttributes(r,
-                List.of(attr("material", false)), "moda-relojes")).doesNotThrowAnyException();
+        assertThatCode(
+                () -> BulkProductRules.assertRequiredAttributes(r, List.of(attr("material", false)), "moda-relojes"))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -175,8 +170,7 @@ class BulkProductRulesTest {
         List<CategoryAttributeSchemaEntity> schema = List.of(attr("material", true));
 
         assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(r, schema, "moda-relojes"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("material")
+                .isInstanceOf(BusinessException.class).hasMessageContaining("material")
                 .hasMessageContaining("moda-relojes");
     }
 
@@ -185,8 +179,9 @@ class BulkProductRulesTest {
         BulkProductDtoIn r = row();
         r.setAttributes(List.of(given("  Material  ", "Acero inoxidable")));
 
-        assertThatCode(() -> BulkProductRules.assertRequiredAttributes(r,
-                List.of(attr("material", true)), "moda-relojes")).doesNotThrowAnyException();
+        assertThatCode(
+                () -> BulkProductRules.assertRequiredAttributes(r, List.of(attr("material", true)), "moda-relojes"))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -235,8 +230,7 @@ class BulkProductRulesTest {
         BulkProductDtoIn r = row();
         r.setExternalId("1688-" + "9".repeat(200));
 
-        assertThat(BulkProductRules.externalIdOf(r, "Reloj", s -> s, 1L))
-                .hasSize(BulkProductRules.MAX_EXTERNAL_ID);
+        assertThat(BulkProductRules.externalIdOf(r, "Reloj", s -> s, 1L)).hasSize(BulkProductRules.MAX_EXTERNAL_ID);
     }
 
     @Test
@@ -256,8 +250,7 @@ class BulkProductRulesTest {
         BulkProductDtoIn r = row();
         r.setImageUrls(List.of("https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/a.jpg"));
 
-        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj"))
-                .containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
     }
 
     @Test
@@ -266,8 +259,7 @@ class BulkProductRulesTest {
         r.setImageUrls(List.of("https://cdn/a.jpg"));
         r.setImageUrl("https://cdn/z.jpg");
 
-        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj"))
-                .containsExactly("https://cdn/a.jpg", "https://cdn/z.jpg");
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/a.jpg", "https://cdn/z.jpg");
     }
 
     @Test
@@ -319,18 +311,15 @@ class BulkProductRulesTest {
         BulkProductDtoIn r = row();
         r.setExternalId("1688-123456789");
 
-        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no tiene imágenes")
-                .hasMessageContaining("1688-123456789");
+        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj")).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no tiene imágenes").hasMessageContaining("1688-123456789");
     }
 
     @Test
     void sinIdentificadorElMensajeDeFaltaDeImagenIdentificaPorElTitulo() {
         BulkProductDtoIn r = row();
         assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj de pulsera"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Reloj de pulsera");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("Reloj de pulsera");
     }
 
     /**
@@ -339,19 +328,18 @@ class BulkProductRulesTest {
      * {@code /tfs/} en vez de {@code /img/ibank/}.
      */
     @ParameterizedTest
-    @ValueSource(strings = {
-            "https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png",
+    @ValueSource(strings = {"https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png",
             "https://gw.alicdn.com/tfs/TB1i56xWhv1gK0jSZFFXXb0sXXa-200-200.png",
-            "https://gw.alicdn.com/tfs/TB10qL.khnaK1RjSZFtXXbC2VXa-256-172.png",
-    })
+            "https://gw.alicdn.com/tfs/TB10qL.khnaK1RjSZFtXXbC2VXa-256-172.png",})
     void losRecursosDeLaInterfazDelProveedorNoSonFotosDeProducto(String url) {
         assertThat(BulkProductRules.isProductPhoto(url)).isFalse();
     }
 
     @Test
     void unaFotoDeProductoDelProveedorSiCuentaComoFoto() {
-        assertThat(BulkProductRules.isProductPhoto(
-                "https://cbu01.alicdn.com/img/ibank/O1CN01E9k8Sl1JfhChRb5BB_!!3900301056-0-cib.jpg")).isTrue();
+        assertThat(BulkProductRules
+                .isProductPhoto("https://cbu01.alicdn.com/img/ibank/O1CN01E9k8Sl1JfhChRb5BB_!!3900301056-0-cib.jpg"))
+                .isTrue();
     }
 
     @Test
@@ -365,8 +353,8 @@ class BulkProductRulesTest {
         // Llegaba SIEMPRE en la última posición, detrás de las fotos buenas: por eso el producto se
         // veía bien hasta que alguien pasaba la galería hasta el final.
         BulkProductDtoIn r = row();
-        r.setImageUrls(List.of("https://cdn/a.jpg",
-                "https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png"));
+        r.setImageUrls(
+                List.of("https://cdn/a.jpg", "https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png"));
 
         assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/a.jpg");
     }
@@ -399,10 +387,8 @@ class BulkProductRulesTest {
         r.setExternalId("1688-123456789");
         r.setImageUrls(List.of("https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png"));
 
-        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no tiene imágenes")
-                .hasMessageContaining("1688-123456789");
+        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj")).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no tiene imágenes").hasMessageContaining("1688-123456789");
     }
 
     @Test
@@ -416,15 +402,14 @@ class BulkProductRulesTest {
         // quedarse con el marketing del proveedor y sin las fotos del producto.
         BulkProductDtoIn r = new BulkProductDtoIn();
         r.setImageUrls(List.of("https://cdn.test/a.jpg"));
-        r.setDetailImageUrls(java.util.Arrays.asList(
-                "https://cdn.test/a.jpg",     // también en la galería: SE QUEDA
-                "https://cdn.test/b.jpg",     // solo en la descripción
-                "https://cdn.test/b.jpg",     // repetida: una sola vez
-                "   ",                        // en blanco
+        r.setDetailImageUrls(java.util.Arrays.asList("https://cdn.test/a.jpg", // también en la galería: SE QUEDA
+                "https://cdn.test/b.jpg", // solo en la descripción
+                "https://cdn.test/b.jpg", // repetida: una sola vez
+                "   ", // en blanco
                 null));
 
-        assertThat(BulkProductRules.detailImageUrlsOf(r))
-                .containsExactly("https://cdn.test/a.jpg", "https://cdn.test/b.jpg");
+        assertThat(BulkProductRules.detailImageUrlsOf(r)).containsExactly("https://cdn.test/a.jpg",
+                "https://cdn.test/b.jpg");
     }
 
     @Test

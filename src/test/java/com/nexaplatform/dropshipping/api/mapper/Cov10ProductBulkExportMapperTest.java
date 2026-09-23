@@ -92,8 +92,7 @@ class Cov10ProductBulkExportMapperTest {
 
     @Test
     void categoriaProveedorYEstadoSalenPlanosParaPoderReimportarse() {
-        ProductEntity p = ProductEntity.builder().externalId("1688-1").brand("Acme")
-                .status(ProductStatus.ACTIVE)
+        ProductEntity p = ProductEntity.builder().externalId("1688-1").brand("Acme").status(ProductStatus.ACTIVE)
                 .category(CategoryEntity.builder().slug("moda-muj-01").externalId("cat-1688").build())
                 .supplier(SupplierEntity.builder().externalId("sup-1688").name("Fábrica X").build()).build();
 
@@ -221,10 +220,11 @@ class Cov10ProductBulkExportMapperTest {
     @Test
     void cadaVarianteConservaSuPrecioStockPesoYMedidas() {
         ProductEntity p = ProductEntity.builder().externalId("1688-1").build();
-        p.getVariants().add(ProductVariantEntity.builder().sku("SKU-1")
-                .options(Map.of("Color", "Blanco")).price(new BigDecimal("12.50")).stock(7)
-                .imageSourceUrl("https://origen/blanco.jpg").supplierSkuId("sku-1688")
-                .weightGrams(300).packageWeightGrams(420).lengthMm(30).widthMm(20).heightMm(5).build());
+        p.getVariants()
+                .add(ProductVariantEntity.builder().sku("SKU-1").options(Map.of("Color", "Blanco"))
+                        .price(new BigDecimal("12.50")).stock(7).imageSourceUrl("https://origen/blanco.jpg")
+                        .supplierSkuId("sku-1688").weightGrams(300).packageWeightGrams(420).lengthMm(30).widthMm(20)
+                        .heightMm(5).build());
 
         BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
 
@@ -278,8 +278,8 @@ class Cov10ProductBulkExportMapperTest {
     void lasEtiquetasDeUnaResenaSeParteanPorComasYSeLimpian() {
         ProductEntity p = ProductEntity.builder().externalId("1688-1").build();
         ProductReviewEntity con = ProductReviewEntity.builder().authorName("Ana").authorCountry("ES").rating((short) 5)
-                .title("Genial").body("Muy buena").language("es").verifiedPurchase(true)
-                .tags(" calidad , , envío ").build();
+                .title("Genial").body("Muy buena").language("es").verifiedPurchase(true).tags(" calidad , , envío ")
+                .build();
         ProductReviewEntity sin = ProductReviewEntity.builder().authorName("Bob").rating((short) 4).tags("  ").build();
 
         BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of(con, sin));
@@ -297,8 +297,8 @@ class Cov10ProductBulkExportMapperTest {
         ProductEntity p = ProductEntity.builder().externalId("1688-1").basePrice(new BigDecimal("20.00"))
                 .shippingCny(new BigDecimal("10.00")).ivaCny(new BigDecimal("2.60")).moq(2).monthlySales(500)
                 .rating(new BigDecimal("4.8")).weightGrams(300).packageWeightGrams(420).lengthMm(30).widthMm(20)
-                .heightMm(5).countryOfOrigin("CN").hsCode("6104.43").certifications(List.of("CE"))
-                .shipFrom("CN").leadTimeDays(3).videoUrl("https://v/1.mp4").videoUrls(List.of("https://v/2.mp4"))
+                .heightMm(5).countryOfOrigin("CN").hsCode("6104.43").certifications(List.of("CE")).shipFrom("CN")
+                .leadTimeDays(3).videoUrl("https://v/1.mp4").videoUrls(List.of("https://v/2.mp4"))
                 .salesRegions(List.of("EU")).ratingBreakdown(Map.of("5", 120))
                 .crossBorderSupport(Map.of("boxMark", true)).dropshipShipped30d(900)
                 .dropshipPickupRate48h(new BigDecimal("98.5")).build();
@@ -339,8 +339,8 @@ class Cov10ProductBulkExportMapperTest {
     }
 
     private static VariantOptionEntity eje(int position, String name, String nameZh) {
-        return VariantOptionEntity.builder().position(position).name(name).nameZh(nameZh)
-                .values(new ArrayList<>()).build();
+        return VariantOptionEntity.builder().position(position).name(name).nameZh(nameZh).values(new ArrayList<>())
+                .build();
     }
 
     private static VariantValueEntity valor(int position, String value, String valueZh, String imageSourceUrl) {
@@ -355,8 +355,8 @@ class Cov10ProductBulkExportMapperTest {
         // ficha afinada a mano volvía al valor genérico. Y desde que la aduana agrupa por terna, eso
         // cambia CON QUIÉN comparte línea de declaración, es decir, cuántos derechos de 3 EUR se pagan.
         // La batería decide el canal del transportista, y sourceUrl es por dónde se compra al proveedor.
-        ProductEntity p = ProductEntity.builder().externalId("1688-1")
-                .customsMaterial("100% cotton").customsUsage("Casual wear").batteryType("BUILT_IN")
+        ProductEntity p = ProductEntity.builder().externalId("1688-1").customsMaterial("100% cotton")
+                .customsUsage("Casual wear").batteryType("BUILT_IN")
                 .sourceUrl("https://detail.1688.com/offer/otra-cosa.html").build();
 
         BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
@@ -372,8 +372,7 @@ class Cov10ProductBulkExportMapperTest {
         // El slug solo sirve si el destino YA tiene esa categoría. El par (id, nombre) de 1688 es el
         // respaldo con el que el import puede resolverla en un entorno recién montado.
         ProductEntity p = ProductEntity.builder().externalId("1688-1")
-                .category(CategoryEntity.builder().slug("moda-vestidos").externalId("126546700")
-                        .nameZh("连衣裙").build())
+                .category(CategoryEntity.builder().slug("moda-vestidos").externalId("126546700").nameZh("连衣裙").build())
                 .build();
 
         BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
@@ -396,14 +395,12 @@ class Cov10ProductBulkExportMapperTest {
 
         BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
 
-        assertThat(d.getImageUrls())
-                .containsExactly("https://origen/portada.jpg", "https://origen/galeria.jpg");
-        assertThat(d.getDetailImageUrls())
-                .containsExactly("https://origen/detalle-a.jpg", "https://origen/detalle-b.jpg");
+        assertThat(d.getImageUrls()).containsExactly("https://origen/portada.jpg", "https://origen/galeria.jpg");
+        assertThat(d.getDetailImageUrls()).containsExactly("https://origen/detalle-a.jpg",
+                "https://origen/detalle-b.jpg");
     }
 
     private static ProductImageEntity imagenConRol(int position, String sourceUrl, String cdnUrl, String role) {
-        return ProductImageEntity.builder().position(position).sourceUrl(sourceUrl).cdnUrl(cdnUrl)
-                .role(role).build();
+        return ProductImageEntity.builder().position(position).sourceUrl(sourceUrl).cdnUrl(cdnUrl).role(role).build();
     }
 }

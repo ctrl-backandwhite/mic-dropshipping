@@ -82,10 +82,10 @@ class Cov08FulfillmentPushTest {
     }
 
     private FulfillmentService build(FulfillmentProvider activeProvider) {
-        return new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(activeProvider), userRepository,
-                mock(NotificationsPublisher.class), orderEmailService, new ObjectMapper(), cipher, mock(OpsAlertService.class),
-                mock(NotificationUseCase.class), mock(OrderShipmentRepository.class), mock(OrderShipmentItemRepository.class),
-                mock(TrackingViewMapper.class), readyPurchases());
+        return new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(activeProvider),
+                userRepository, mock(NotificationsPublisher.class), orderEmailService, new ObjectMapper(), cipher,
+                mock(OpsAlertService.class), mock(NotificationUseCase.class), mock(OrderShipmentRepository.class),
+                mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), readyPurchases());
     }
 
     private void providerReturns(TrackingStep... steps) {
@@ -232,13 +232,13 @@ class Cov08FulfillmentPushTest {
         // intermedio y debe notificarse. Sin el fix, el push guardaba el paso pero no avisaba, y el
         // sondeo posterior lo veía ya guardado y tampoco avisaba: el cliente no recibía nada.
         when(orderRepository.findByTrackingNumber("YT-1")).thenReturn(Optional.of(order));
-        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of(
-                OrderTrackingEventEntity.builder().orderId(order.getId())
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId()))
+                .thenReturn(List.of(OrderTrackingEventEntity.builder().orderId(order.getId())
                         .status(OrderStatus.SHIPPED.name()).description("Recogido por el transportista").build()));
         UUID userId = UUID.randomUUID();
         order.setUserId(userId);
-        when(userRepository.getById(userId)).thenReturn(
-                User.builder().id(userId).email("comprador@x.com").language("es").build());
+        when(userRepository.getById(userId))
+                .thenReturn(User.builder().id(userId).email("comprador@x.com").language("es").build());
         providerReturns(step(OrderStatus.SHIPPED, "En tránsito hacia el destino"));
 
         service.applyYunExpressPush("{\"waybill_number\":\"YT-1\",\"track_events\":[{}]}");

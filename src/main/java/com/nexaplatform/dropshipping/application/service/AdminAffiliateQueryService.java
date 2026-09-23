@@ -68,7 +68,7 @@ public class AdminAffiliateQueryService {
     }
 
     private AdminAffiliateRow toRow(AffiliateEntity a, String currency) {
-        return mapper.toAdminRow(a, affiliates.listCodes(a.getId()),
-                affiliates.commissionsForAffiliate(a.getId()), currency);
+        return mapper.toAdminRow(a, affiliates.listCodes(a.getId()), affiliates.commissionsForAffiliate(a.getId()),
+                currency);
     }
 }

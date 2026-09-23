@@ -127,8 +127,8 @@ class AuthUseCaseImplTest {
 
         useCase.login(req, httpRequest, httpResponse);
 
-        ArgumentCaptor<UsernamePasswordAuthenticationToken> captor =
-                ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
+        ArgumentCaptor<UsernamePasswordAuthenticationToken> captor = ArgumentCaptor
+                .forClass(UsernamePasswordAuthenticationToken.class);
         verify(authenticationManager).authenticate(captor.capture());
         // El principal pasado al AuthenticationManager va normalizado.
         assertThat(captor.getValue().getName()).isEqualTo("user@example.com");
@@ -167,12 +167,10 @@ class AuthUseCaseImplTest {
         HttpServletRequest httpRequest = mock(HttpServletRequest.class);
         HttpServletResponse httpResponse = mock(HttpServletResponse.class);
         // El AuthenticationManager no revela si el usuario existe: mismo BadCredentials.
-        when(authenticationManager.authenticate(any()))
-                .thenThrow(new BadCredentialsException("Bad credentials"));
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
         assertThatThrownBy(() -> useCase.login(req, httpRequest, httpResponse))
-                .isInstanceOf(BadCredentialsException.class)
-                .hasMessage("Bad credentials");
+                .isInstanceOf(BadCredentialsException.class).hasMessage("Bad credentials");
 
         // No se filtra estado: no se carga usuario, ni se emiten tokens, ni se registra dispositivo.
         verify(userUseCase, never()).findById(any());
@@ -186,13 +184,11 @@ class AuthUseCaseImplTest {
         LoginDtoIn req = LoginDtoIn.builder().email("real@example.com").password("wrong").build();
         HttpServletRequest httpRequest = mock(HttpServletRequest.class);
         HttpServletResponse httpResponse = mock(HttpServletResponse.class);
-        when(authenticationManager.authenticate(any()))
-                .thenThrow(new BadCredentialsException("Bad credentials"));
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
         // Idéntico tipo y mensaje que el caso "usuario inexistente": indistinguible para el cliente.
         assertThatThrownBy(() -> useCase.login(req, httpRequest, httpResponse))
-                .isInstanceOf(BadCredentialsException.class)
-                .hasMessage("Bad credentials");
+                .isInstanceOf(BadCredentialsException.class).hasMessage("Bad credentials");
         verify(userTokenService, never()).issue(any(), any(), any(), anySet());
     }
 
@@ -305,8 +301,7 @@ class AuthUseCaseImplTest {
         when(authenticationManager.authenticate(any())).thenReturn(auth);
         when(userUseCase.findById(id)).thenReturn(user(id, "me@example.com"));
         when(httpRequest.getSession(false)).thenReturn(session);
-        when(session.getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL))
-                .thenReturn("ME@example.com"); // case-insensitive match
+        when(session.getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL)).thenReturn("ME@example.com"); // case-insensitive match
         when(userTokenService.issue(eq(id), any(), any(), anySet())).thenReturn(tokens());
         when(mapper.toMeDtoOut(any(User.class), anySet())).thenReturn(MeDtoOut.builder().build());
 
@@ -479,8 +474,7 @@ class AuthUseCaseImplTest {
         when(userUseCase.findById(id)).thenReturn(user);
         when(passwordEncoder.matches("wrong", "$2a$hash")).thenReturn(false);
 
-        assertThatThrownBy(() -> useCase.changePassword(auth, req))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> useCase.changePassword(auth, req)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Current password");
         verify(userUseCase, never()).changePassword(any(), any());
     }
@@ -490,8 +484,7 @@ class AuthUseCaseImplTest {
     void changePassword_notAuthenticated_rejected() {
         ChangePasswordDtoIn req = ChangePasswordDtoIn.builder().currentPassword("x").newPassword("y").build();
 
-        assertThatThrownBy(() -> useCase.changePassword(null, req))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> useCase.changePassword(null, req)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Not authenticated");
         verify(userUseCase, never()).findById(any());
     }

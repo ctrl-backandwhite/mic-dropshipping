@@ -168,18 +168,16 @@ class CatalogUseCaseImplTest {
         ProductEntity existing = ProductEntity.builder().source("1688").externalId("OFFER-V")
                 .status(ProductStatus.DRAFT).titleZh("Old").slug("old-offer-v").moq(1).build();
         existing.setId(UUID.randomUUID());
-        ProductVariantEntity v1 = ProductVariantEntity.builder().product(existing)
-                .externalId("V-1").sku("SKU-1").title("Rojo S").price(new BigDecimal("10.00"))
-                .stock(5).active(true).build();
-        ProductVariantEntity v2 = ProductVariantEntity.builder().product(existing)
-                .externalId("V-2").sku("SKU-2").title("Rojo M").price(new BigDecimal("11.00"))
-                .stock(7).active(true).build();
+        ProductVariantEntity v1 = ProductVariantEntity.builder().product(existing).externalId("V-1").sku("SKU-1")
+                .title("Rojo S").price(new BigDecimal("10.00")).stock(5).active(true).build();
+        ProductVariantEntity v2 = ProductVariantEntity.builder().product(existing).externalId("V-2").sku("SKU-2")
+                .title("Rojo M").price(new BigDecimal("11.00")).stock(7).active(true).build();
         existing.setVariants(new java.util.ArrayList<>(List.of(v1, v2)));
         when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-V")).thenReturn(Optional.of(existing));
         when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-V", "Título nuevo", null, null, null,
-                1, new BigDecimal("19.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-V", "Título nuevo", null, null, null, 1,
+                new BigDecimal("19.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
                 "https://detail.1688.com/offer/OFFER-V.html", null, null, List.of(), null,
                 List.of(new IngestVariant("V-1", "SKU-1", "Rojo S", new BigDecimal("9.50"), 8, null, null),
                         new IngestVariant("V-3", "SKU-3", "Azul M", new BigDecimal("12.00"), 3, null, null)),
@@ -190,14 +188,14 @@ class CatalogUseCaseImplTest {
         // V-1 se actualizó en su mismo registro (no se borró), V-2 se desactivó (no se
         // borró), V-3 es nueva.
         assertThat(saved.getVariants()).hasSize(3);
-        ProductVariantEntity v1Actualizado = saved.getVariants().stream()
-                .filter(v -> "V-1".equals(v.getExternalId())).findFirst().orElseThrow();
+        ProductVariantEntity v1Actualizado = saved.getVariants().stream().filter(v -> "V-1".equals(v.getExternalId()))
+                .findFirst().orElseThrow();
         assertThat(v1Actualizado.getPrice()).isEqualByComparingTo("9.50");
         assertThat(v1Actualizado.getStock()).isEqualTo(8);
         assertThat(v1Actualizado.isActive()).isTrue();
         assertThat(v1Actualizado.getId()).isEqualTo(v1.getId());
-        ProductVariantEntity v2Desactivado = saved.getVariants().stream()
-                .filter(v -> "V-2".equals(v.getExternalId())).findFirst().orElseThrow();
+        ProductVariantEntity v2Desactivado = saved.getVariants().stream().filter(v -> "V-2".equals(v.getExternalId()))
+                .findFirst().orElseThrow();
         assertThat(v2Desactivado.isActive()).isFalse();
         assertThat(v2Desactivado.getId()).isEqualTo(v2.getId());
         assertThat(saved.getVariants()).anyMatch(v -> "V-3".equals(v.getExternalId()) && v.isActive());
@@ -212,8 +210,8 @@ class CatalogUseCaseImplTest {
         when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-CJK")).thenReturn(Optional.empty());
         when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-CJK", "真皮复古经典德训鞋女款", null, null,
-                null, 1, new BigDecimal("42.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-CJK", "真皮复古经典德训鞋女款", null, null, null, 1,
+                new BigDecimal("42.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
                 "https://detail.1688.com/offer/OFFER-CJK.html", null, null, List.of(), null, null, null);
 
         ProductEntity saved = useCase.upsertProduct(req);
@@ -267,8 +265,8 @@ class CatalogUseCaseImplTest {
     /** Update masivo del recargo para TODO el catálogo: un único UPDATE sin filtro. */
     @Test
     void bulkUpdateSurcharge_sinFiltro_actualizaTodoElCatalogo() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
-                new BigDecimal("2.00"))).thenReturn(1234);
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", new BigDecimal("2.00")))
+                .thenReturn(1234);
 
         int n = useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
 
@@ -279,8 +277,7 @@ class CatalogUseCaseImplTest {
     @Test
     void bulkUpdateSurcharge_porCategoria_filtraPorCategoria() {
         UUID cat = UUID.randomUUID();
-        when(jdbcTemplate.update(
-                "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?",
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?",
                 new BigDecimal("5.00"), cat)).thenReturn(42);
 
         int n = useCase.bulkUpdateSurcharge(null, cat, new BigDecimal("5.00"));
@@ -293,8 +290,9 @@ class CatalogUseCaseImplTest {
     void bulkUpdateSurcharge_porProductos_filtraPorIds() {
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
-        when(jdbcTemplate.update(org.mockito.ArgumentMatchers.startsWith(
-                "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE id IN ("),
+        when(jdbcTemplate.update(
+                org.mockito.ArgumentMatchers
+                        .startsWith("UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE id IN ("),
                 org.mockito.ArgumentMatchers.<Object>any(), org.mockito.ArgumentMatchers.<Object>any(),
                 org.mockito.ArgumentMatchers.<Object>any())).thenReturn(2);
 
@@ -306,8 +304,8 @@ class CatalogUseCaseImplTest {
     /** Recargo null se trata como 0 (reset del recargo). */
     @Test
     void bulkUpdateSurcharge_nullSeTrataComoCero() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
-                BigDecimal.ZERO)).thenReturn(7);
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", BigDecimal.ZERO))
+                .thenReturn(7);
 
         int n = useCase.bulkUpdateSurcharge(null, null, null);
 
@@ -324,10 +322,10 @@ class CatalogUseCaseImplTest {
      */
     @Test
     void bulkUpdateSurcharge_dejaMarcadosLosCertificadosEnUnaSolaSentencia() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
-                new BigDecimal("2.00"))).thenReturn(3);
-        when(busCatalogo.getIfAvailable())
-                .thenReturn(mock(com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService.class));
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", new BigDecimal("2.00")))
+                .thenReturn(3);
+        when(busCatalogo.getIfAvailable()).thenReturn(
+                mock(com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService.class));
 
         int n = useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
 
@@ -340,8 +338,8 @@ class CatalogUseCaseImplTest {
     /** Sin bus configurado no se marca nada: la cola no debe llenarse en un entorno que no publica. */
     @Test
     void bulkUpdateSurcharge_sinBusNoMarcaNada() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
-                new BigDecimal("2.00"))).thenReturn(3);
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", new BigDecimal("2.00")))
+                .thenReturn(3);
         when(busCatalogo.getIfAvailable()).thenReturn(null);
 
         useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
@@ -355,13 +353,13 @@ class CatalogUseCaseImplTest {
      * y después el detalle.
      */
     private static ProductEntity conGaleriaYDetalle(UUID... ids) {
-        ProductEntity p = ProductEntity.builder().source("1688").externalId("OFFER-9")
-                .status(ProductStatus.DRAFT).slug("offer-9").moq(1).build();
+        ProductEntity p = ProductEntity.builder().source("1688").externalId("OFFER-9").status(ProductStatus.DRAFT)
+                .slug("offer-9").moq(1).build();
         p.setId(UUID.randomUUID());
-        String[] papeles = { "MAIN", "GALLERY", "DETAIL", "DETAIL", "DETAIL" };
+        String[] papeles = {"MAIN", "GALLERY", "DETAIL", "DETAIL", "DETAIL"};
         for (int i = 0; i < ids.length; i++) {
-            ProductImageEntity img = ProductImageEntity.builder()
-                    .product(p).position(i).role(papeles[i]).sourceUrl("https://x/" + i + ".jpg").build();
+            ProductImageEntity img = ProductImageEntity.builder().product(p).position(i).role(papeles[i])
+                    .sourceUrl("https://x/" + i + ".jpg").build();
             img.setId(ids[i]);
             p.getImages().add(img);
         }
@@ -428,8 +426,8 @@ class CatalogUseCaseImplTest {
         assertThat(porId(p, d1).getRole()).isEqualTo("DETAIL");
         assertThat(porId(p, d2).getRole()).isEqualTo("DETAIL");
         assertThat(porId(p, d3).getRole()).isEqualTo("DETAIL");
-        assertThat(List.of(porId(p, d1).getPosition(), porId(p, d2).getPosition(),
-                porId(p, d3).getPosition())).containsExactly(2, 3, 4);
+        assertThat(List.of(porId(p, d1).getPosition(), porId(p, d2).getPosition(), porId(p, d3).getPosition()))
+                .containsExactly(2, 3, 4);
     }
 
     /**
@@ -448,34 +446,34 @@ class CatalogUseCaseImplTest {
      */
     @Test
     void reimportar_conserva_el_espejado_de_las_imagenes_que_no_cambian() {
-        ProductEntity p = ProductEntity.builder().source("1688").externalId("OFFER-IMG")
-                .status(ProductStatus.DRAFT).slug("offer-img").moq(1).build();
+        ProductEntity p = ProductEntity.builder().source("1688").externalId("OFFER-IMG").status(ProductStatus.DRAFT)
+                .slug("offer-img").moq(1).build();
         p.setId(UUID.randomUUID());
         ProductImageEntity yaEspejada = ProductImageEntity.builder().product(p).position(0).role("MAIN")
-                .sourceUrl("https://cbu01.alicdn.com/img/ibank/O1CN01a.jpg")
-                .cdnUrl("https://cdn/media/ab/abc.webp").mirrorStatus(MirrorStatus.MIRRORED).build();
+                .sourceUrl("https://cbu01.alicdn.com/img/ibank/O1CN01a.jpg").cdnUrl("https://cdn/media/ab/abc.webp")
+                .mirrorStatus(MirrorStatus.MIRRORED).build();
         yaEspejada.setId(UUID.randomUUID());
         p.getImages().add(yaEspejada);
         when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-IMG")).thenReturn(Optional.of(p));
         when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         IngestProductRequest req = new IngestProductRequest("1688", "OFFER-IMG", "标题", null, null, null, 1,
-                new BigDecimal("10.00"), "CNY", 100, 0, null, null, 0,
-                "https://detail.1688.com/offer/OFFER-IMG.html", null, null,
+                new BigDecimal("10.00"), "CNY", 100, 0, null, null, 0, "https://detail.1688.com/offer/OFFER-IMG.html",
+                null, null,
                 List.of(new IngestImage("https://cbu01.alicdn.com/img/ibank/O1CN01a.jpg", 0, "MAIN"),
                         new IngestImage("https://cbu01.alicdn.com/img/ibank/O1CN01b.jpg", 1, "GALLERY")),
                 null, null, null);
 
         ProductEntity guardado = useCase.upsertProduct(req);
 
-        ProductImageEntity misma = guardado.getImages().stream()
-                .filter(i -> i.getSourceUrl().endsWith("O1CN01a.jpg")).findFirst().orElseThrow();
+        ProductImageEntity misma = guardado.getImages().stream().filter(i -> i.getSourceUrl().endsWith("O1CN01a.jpg"))
+                .findFirst().orElseThrow();
         assertThat(misma.getCdnUrl()).isEqualTo("https://cdn/media/ab/abc.webp");
         assertThat(misma.getMirrorStatus()).isEqualTo(MirrorStatus.MIRRORED);
 
         // La nueva sí entra pendiente: esa no se ha espejado nunca.
-        ProductImageEntity nueva = guardado.getImages().stream()
-                .filter(i -> i.getSourceUrl().endsWith("O1CN01b.jpg")).findFirst().orElseThrow();
+        ProductImageEntity nueva = guardado.getImages().stream().filter(i -> i.getSourceUrl().endsWith("O1CN01b.jpg"))
+                .findFirst().orElseThrow();
         assertThat(nueva.getMirrorStatus()).isEqualTo(MirrorStatus.PENDING);
         assertThat(nueva.getCdnUrl()).isNull();
     }

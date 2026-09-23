@@ -43,8 +43,8 @@ class Cov08LegalDocumentServiceTest {
     private LegalDocumentService service;
 
     private static LegalDocumentEntity doc(String tipo, String lang, String titulo, String cuerpo) {
-        return LegalDocumentEntity.builder().docType(tipo).lang(lang).title(titulo).body(cuerpo)
-                .version("2026-08-15").published(true).build();
+        return LegalDocumentEntity.builder().docType(tipo).lang(lang).title(titulo).body(cuerpo).version("2026-08-15")
+                .published(true).build();
     }
 
     @Test

@@ -15,27 +15,26 @@ public enum CarrierErrorMessage {
 
     RULE_VERIFICATION("02039171",
             "El paquete no cumple las reglas del canal contratado (peso, valor declarado o datos de la "
-                    + "declaración). Revisa los límites del producto logístico o reparte el pedido."),
-    INVALID_REQUEST("02030002",
-            "El transportista ha rechazado los datos del envío por inválidos. Revisa dirección, "
-                    + "declaración aduanera y medidas del paquete."),
-    UNKNOWN_PRODUCT("02030008",
-            "El canal indicado no existe o no está contratado en la cuenta. Revisa el código de producto "
-                    + "logístico configurado."),
-    DUPLICATED("02030014",
-            "Ya existe un envío con ese número de pedido en el transportista. No se ha creado uno nuevo "
-                    + "para no duplicar la guía."),
-    TIMEOUT("02030012",
-            "El transportista no ha respondido a tiempo. Suele resolverse solo; se reintentará."),
-    ORDER_NOT_FOUND("02041002",
-            "El transportista todavía no reconoce esa guía. Es normal justo después de crearla: tarda "
-                    + "unos minutos en propagarse."),
-    NO_PRICE("02060012",
-            "El transportista no ofrece tarifa para ese destino y peso. Puede que el canal no cubra ese "
-                    + "país o que falte el acuerdo comercial."),
-    NO_PRICE_ALT("02060015",
-            "El transportista no ofrece tarifa para ese destino y peso. Puede que el canal no cubra ese "
-                    + "país o que falte el acuerdo comercial.");
+                    + "declaración). Revisa los límites del producto logístico o reparte el pedido."), INVALID_REQUEST(
+                            "02030002",
+                            "El transportista ha rechazado los datos del envío por inválidos. Revisa dirección, "
+                                    + "declaración aduanera y medidas del paquete."), UNKNOWN_PRODUCT(
+                                            "02030008",
+                                            "El canal indicado no existe o no está contratado en la cuenta. Revisa el código de producto "
+                                                    + "logístico configurado."), DUPLICATED(
+                                                            "02030014",
+                                                            "Ya existe un envío con ese número de pedido en el transportista. No se ha creado uno nuevo "
+                                                                    + "para no duplicar la guía."), TIMEOUT("02030012",
+                                                                            "El transportista no ha respondido a tiempo. Suele resolverse solo; se reintentará."), ORDER_NOT_FOUND(
+                                                                                    "02041002",
+                                                                                    "El transportista todavía no reconoce esa guía. Es normal justo después de crearla: tarda "
+                                                                                            + "unos minutos en propagarse."), NO_PRICE(
+                                                                                                    "02060012",
+                                                                                                    "El transportista no ofrece tarifa para ese destino y peso. Puede que el canal no cubra ese "
+                                                                                                            + "país o que falte el acuerdo comercial."), NO_PRICE_ALT(
+                                                                                                                    "02060015",
+                                                                                                                    "El transportista no ofrece tarifa para ese destino y peso. Puede que el canal no cubra ese "
+                                                                                                                            + "país o que falte el acuerdo comercial.");
 
     private final String code;
     private final String message;

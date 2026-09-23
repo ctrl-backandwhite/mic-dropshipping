@@ -34,7 +34,7 @@ public final class ParcelSplitter {
 
     /** Una unidad suelta a colocar: de qué línea viene, cuánto pesa y cuánto declara. */
     public record Unit(int lineIndex, int weightGrams, int valueCents, int lengthMm, int widthMm, int heightMm,
-                       boolean withBattery) {
+            boolean withBattery) {
     }
 
     /** Un bulto ya formado: sus unidades y el {@link ParcelSpec} con el que se cotiza y se despacha. */
@@ -87,9 +87,10 @@ public final class ParcelSplitter {
                 if (exceedsAlone(unit, limits)) {
                     // No se puede partir un artículo: viaja solo aunque no cumpla. Que quede constancia,
                     // porque significa que ese producto no encaja en el canal contratado.
-                    log.warn("::> [FULFILLMENT] Unidad de la línea {} excede por sí sola los límites del canal "
-                            + "(peso={} g, valor={} céntimos)", unit.lineIndex(), unit.weightGrams(),
-                            unit.valueCents());
+                    log.warn(
+                            "::> [FULFILLMENT] Unidad de la línea {} excede por sí sola los límites del canal "
+                                    + "(peso={} g, valor={} céntimos)",
+                            unit.lineIndex(), unit.weightGrams(), unit.valueCents());
                 }
             }
             target.add(unit);
@@ -102,12 +103,10 @@ public final class ParcelSplitter {
         if (limits.maxUnitsPerParcel() > 0 && bin.size() + 1 > limits.maxUnitsPerParcel()) {
             return false;
         }
-        if (limits.maxWeightGrams() > 0
-                && sum(bin, Unit::weightGrams) + unit.weightGrams() > limits.maxWeightGrams()) {
+        if (limits.maxWeightGrams() > 0 && sum(bin, Unit::weightGrams) + unit.weightGrams() > limits.maxWeightGrams()) {
             return false;
         }
-        return limits.maxValueCents() <= 0
-                || sum(bin, Unit::valueCents) + unit.valueCents() <= limits.maxValueCents();
+        return limits.maxValueCents() <= 0 || sum(bin, Unit::valueCents) + unit.valueCents() <= limits.maxValueCents();
     }
 
     /** ¿La unidad se pasa de los límites ella sola? Entonces ningún reparto la va a acomodar. */

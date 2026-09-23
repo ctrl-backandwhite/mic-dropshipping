@@ -43,8 +43,8 @@ public record PurchaseEconomics(
      * @param paidCnyCents  mercancía pagada al proveedor, o null
      * @param shippingCnyCents envío nacional pagado, o null
      */
-    public static PurchaseEconomics of(List<OrderItem> lines, List<Integer> quantities,
-                                       Long paidCnyCents, Long shippingCnyCents) {
+    public static PurchaseEconomics of(List<OrderItem> lines, List<Integer> quantities, Long paidCnyCents,
+            Long shippingCnyCents) {
         long expectedCny = 0L;
         long expectedInCurrency = 0L;
         long revenue = 0L;
@@ -74,20 +74,18 @@ public record PurchaseEconomics(
         if (paidCnyCents == null && shippingCnyCents == null) {
             return null;
         }
-        return (paidCnyCents == null ? 0L : paidCnyCents)
-                + (shippingCnyCents == null ? 0L : shippingCnyCents);
+        return (paidCnyCents == null ? 0L : paidCnyCents) + (shippingCnyCents == null ? 0L : shippingCnyCents);
     }
 
     /** Sin coste real o sin cambio derivable del pedido no hay margen real que enseñar. */
-    private static Long realMargin(long revenue, Long realCny, long expectedCny,
-                                   long expectedInCurrency) {
+    private static Long realMargin(long revenue, Long realCny, long expectedCny, long expectedInCurrency) {
         if (realCny == null || expectedCny <= 0L) {
             return null;
         }
-        BigDecimal rate = BigDecimal.valueOf(expectedInCurrency)
-                .divide(BigDecimal.valueOf(expectedCny), 10, RoundingMode.HALF_UP);
-        long realInCurrency = BigDecimal.valueOf(realCny).multiply(rate)
-                .setScale(0, RoundingMode.HALF_UP).longValueExact();
+        BigDecimal rate = BigDecimal.valueOf(expectedInCurrency).divide(BigDecimal.valueOf(expectedCny), 10,
+                RoundingMode.HALF_UP);
+        long realInCurrency = BigDecimal.valueOf(realCny).multiply(rate).setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
         return revenue - realInCurrency;
     }
 

@@ -75,9 +75,9 @@ class Cov01OrderRepositoryImplTest {
     }
 
     private static Order.OrderBuilder newOrderWithShipping() {
-        return Order.builder().shippingFullName("Ana Gómez").shippingPhone("+34600000000")
-                .shippingEmail("ana@test.com").shippingLine1("Calle Mayor 1").shippingCity("Madrid")
-                .shippingPostalCode("28001").shippingCountry("ES");
+        return Order.builder().shippingFullName("Ana Gómez").shippingPhone("+34600000000").shippingEmail("ana@test.com")
+                .shippingLine1("Calle Mayor 1").shippingCity("Madrid").shippingPostalCode("28001")
+                .shippingCountry("ES");
     }
 
     private CustomerOrderEntity capturedSaved() {
@@ -125,8 +125,7 @@ class Cov01OrderRepositoryImplTest {
         when(addressRepository.findById(ADDRESS_ID)).thenReturn(Optional.empty());
         Order order = Order.builder().shippingAddressId(ADDRESS_ID).build();
 
-        assertThatThrownBy(() -> repository.save(order))
-                .isInstanceOf(NotFoundException.class)
+        assertThatThrownBy(() -> repository.save(order)).isInstanceOf(NotFoundException.class)
                 .hasMessage("Address not found");
     }
 
@@ -135,8 +134,7 @@ class Cov01OrderRepositoryImplTest {
         when(addressRepository.findById(ADDRESS_ID)).thenReturn(Optional.empty());
         Order order = newOrderWithShipping().billingAddressId(ADDRESS_ID).build();
 
-        assertThatThrownBy(() -> repository.save(order))
-                .isInstanceOf(NotFoundException.class)
+        assertThatThrownBy(() -> repository.save(order)).isInstanceOf(NotFoundException.class)
                 .hasMessage("Address not found");
     }
 
@@ -193,8 +191,7 @@ class Cov01OrderRepositoryImplTest {
         when(productRepository.findById(PRODUCT_ID)).thenReturn(Optional.empty());
         Order order = newOrderWithShipping().items(List.of(OrderItem.builder().productId(PRODUCT_ID).build())).build();
 
-        assertThatThrownBy(() -> repository.save(order))
-                .isInstanceOf(NotFoundException.class)
+        assertThatThrownBy(() -> repository.save(order)).isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(PRODUCT_ID.toString());
     }
 
@@ -207,11 +204,10 @@ class Cov01OrderRepositoryImplTest {
         Order order = newOrderWithShipping()
                 .items(List.of(OrderItem.builder().productId(PRODUCT_ID).variantId(VARIANT_ID).build())).build();
 
-        assertThatThrownBy(() -> repository.save(order))
-                .isInstanceOfSatisfying(NotFoundException.class, ex -> {
-                    assertThat(ex.getCode()).isEqualTo("CART_ITEM_UNAVAILABLE");
-                    assertThat(ex.getDetail()).containsExactly(VARIANT_ID.toString());
-                });
+        assertThatThrownBy(() -> repository.save(order)).isInstanceOfSatisfying(NotFoundException.class, ex -> {
+            assertThat(ex.getCode()).isEqualTo("CART_ITEM_UNAVAILABLE");
+            assertThat(ex.getDetail()).containsExactly(VARIANT_ID.toString());
+        });
     }
 
     /* ============ actualización ============ */
@@ -233,8 +229,7 @@ class Cov01OrderRepositoryImplTest {
         when(orderJpaRepositoryAdapter.findById(ORDER_ID)).thenReturn(Optional.empty());
         Order order = Order.builder().id(ORDER_ID).build();
 
-        assertThatThrownBy(() -> repository.save(order))
-                .isInstanceOf(NotFoundException.class)
+        assertThatThrownBy(() -> repository.save(order)).isInstanceOf(NotFoundException.class)
                 .hasMessage("Order not found");
     }
 

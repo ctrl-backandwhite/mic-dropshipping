@@ -55,18 +55,11 @@ class CategoryIndexerTest {
     }
 
     private CategoryEntity category(UUID id, CategoryEntity parent) {
-        CategoryEntity c = CategoryEntity.builder()
-                .slug("electronics")
-                .active(true)
-                .position(3)
-                .icon("bolt")
-                .nameZh("电子")
-                .parent(parent)
-                .build();
+        CategoryEntity c = CategoryEntity.builder().slug("electronics").active(true).position(3).icon("bolt")
+                .nameZh("电子").parent(parent).build();
         c.setId(id); // BaseEntity id is not part of the @Builder.
 
-        CategoryTranslationEntity es = CategoryTranslationEntity.builder()
-                .language("es").name("Electrónica").build();
+        CategoryTranslationEntity es = CategoryTranslationEntity.builder().language("es").name("Electrónica").build();
         es.setCategory(c);
         c.getTranslations().add(es);
         return c;
@@ -92,16 +85,10 @@ class CategoryIndexerTest {
         assertThat(req.id()).isEqualTo(childId.toString());
 
         Map<String, Object> doc = req.document();
-        assertThat(doc).containsEntry("id", childId.toString())
-                .containsEntry("slug", "electronics")
-                .containsEntry("active", true)
-                .containsEntry("position", 3)
-                .containsEntry("icon", "bolt")
-                .containsEntry("nameZh", "电子")
-                .containsEntry("nameEs", "Electrónica")
-                .containsEntry("level", 1) // one parent → depth 1
-                .containsEntry("parentId", rootId.toString())
-                .containsEntry("parentSlug", "electronics");
+        assertThat(doc).containsEntry("id", childId.toString()).containsEntry("slug", "electronics")
+                .containsEntry("active", true).containsEntry("position", 3).containsEntry("icon", "bolt")
+                .containsEntry("nameZh", "电子").containsEntry("nameEs", "Electrónica").containsEntry("level", 1) // one parent → depth 1
+                .containsEntry("parentId", rootId.toString()).containsEntry("parentSlug", "electronics");
     }
 
     @Test
@@ -117,9 +104,7 @@ class CategoryIndexerTest {
         ArgumentCaptor<IndexRequest<Map<String, Object>>> captor = captor();
         verify(client).index(captor.capture());
         Map<String, Object> doc = captor.getValue().document();
-        assertThat(doc).containsEntry("level", 0)
-                .containsEntry("parentId", null)
-                .containsEntry("parentSlug", null);
+        assertThat(doc).containsEntry("level", 0).containsEntry("parentId", null).containsEntry("parentSlug", null);
     }
 
     @Test
@@ -150,8 +135,8 @@ class CategoryIndexerTest {
         indexer.deleteFromIndex(id);
 
         @SuppressWarnings({"unchecked", "rawtypes"})
-        ArgumentCaptor<java.util.function.Function<DeleteRequest.Builder, org.opensearch.client.util.ObjectBuilder<DeleteRequest>>> captor =
-                ArgumentCaptor.forClass((Class) java.util.function.Function.class);
+        ArgumentCaptor<java.util.function.Function<DeleteRequest.Builder, org.opensearch.client.util.ObjectBuilder<DeleteRequest>>> captor = ArgumentCaptor
+                .forClass((Class) java.util.function.Function.class);
         verify(client).delete(captor.capture());
         DeleteRequest req = captor.getValue().apply(new DeleteRequest.Builder()).build();
         assertThat(req.index()).isEqualTo(INDEX);
@@ -193,9 +178,8 @@ class CategoryIndexerTest {
     @Test
     void warmUpOnStartup_skipsReindexWhenIndexAlreadyPopulated() {
         when(categorySearchService.listFromIndex(null))
-                .thenReturn(Optional.of(List.of(
-                        new CategorySearchService.IndexedCategory(UUID.randomUUID(), "s", null, "es", null, null,
-                                null, 0, true, null))));
+                .thenReturn(Optional.of(List.of(new CategorySearchService.IndexedCategory(UUID.randomUUID(), "s", null,
+                        "es", null, null, null, 0, true, null))));
 
         indexer.warmUpOnStartup();
 

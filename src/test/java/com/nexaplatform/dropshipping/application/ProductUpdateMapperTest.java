@@ -27,21 +27,15 @@ class ProductUpdateMapperTest {
     void updateFromModel_copiesEditableFieldsAndPreservesIdentityAndAudit() {
         UUID id = UUID.randomUUID();
         Instant createdAt = Instant.parse("2020-01-01T00:00:00Z");
-        Product target = Product.builder()
-                .id(id).source("OTRO").externalId("EXT-1").slug("the-slug")
-                .titleZh("旧标题").brand("OldBrand").basePrice(new BigDecimal("10.00"))
-                .inventoryCount(5).status(ProductStatus.ACTIVE)
-                .certifications(new ArrayList<>(List.of("CE")))
-                .createdAt(createdAt).createdBy("creator").updatedBy("editor1")
-                .build();
+        Product target = Product.builder().id(id).source("OTRO").externalId("EXT-1").slug("the-slug").titleZh("旧标题")
+                .brand("OldBrand").basePrice(new BigDecimal("10.00")).inventoryCount(5).status(ProductStatus.ACTIVE)
+                .certifications(new ArrayList<>(List.of("CE"))).createdAt(createdAt).createdBy("creator")
+                .updatedBy("editor1").build();
 
-        Product source = Product.builder()
-                .id(UUID.randomUUID()).source("EVIL").externalId("EXT-EVIL").slug("evil-slug")
-                .titleZh("新标题").brand("NewBrand").basePrice(new BigDecimal("99.99"))
-                .inventoryCount(42).status(ProductStatus.DRAFT)
-                .certifications(new ArrayList<>(List.of("FCC", "RoHS")))
-                .createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2")
-                .build();
+        Product source = Product.builder().id(UUID.randomUUID()).source("EVIL").externalId("EXT-EVIL").slug("evil-slug")
+                .titleZh("新标题").brand("NewBrand").basePrice(new BigDecimal("99.99")).inventoryCount(42)
+                .status(ProductStatus.DRAFT).certifications(new ArrayList<>(List.of("FCC", "RoHS")))
+                .createdAt(Instant.parse("2099-01-01T00:00:00Z")).createdBy("attacker").updatedBy("editor2").build();
 
         mapper.updateFromModel(source, target);
 

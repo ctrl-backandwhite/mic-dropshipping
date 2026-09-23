@@ -128,8 +128,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
      * «al céntimo» pasaría a depender del binario en coma flotante, que no es lo que se quiere medir.
      */
     private static final ObjectMapper JSON = JsonMapper.builder()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-            .build();
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     /** El transportista, sustituido: ver la nota de la clase. */
     @MockitoBean
@@ -173,9 +172,9 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         when(fulfillment.readyToShip(any())).thenReturn(true);
         when(fulfillment.quote(anyString(), any())).thenReturn(new ShippingQuote(true, PAIS, PORTE_BARATO,
                 "Standard Shipping", "Standard Shipping", 5, 8, "EU", CANALES_COTIZADOS));
-        when(fulfillment.createShipments(any())).thenReturn(List.of(new FulfillmentResult(TRANSPORTISTA,
-                GUIA, REFERENCIA_GUIA, 12, 1, 1000, SUBTOTAL_CENTS, CANAL_ELEGIDO,
-                List.of(new ParcelContent(0, UNIDADES)), null)));
+        when(fulfillment.createShipments(any()))
+                .thenReturn(List.of(new FulfillmentResult(TRANSPORTISTA, GUIA, REFERENCIA_GUIA, 12, 1, 1000,
+                        SUBTOTAL_CENTS, CANAL_ELEGIDO, List.of(new ParcelContent(0, UNIDADES)), null)));
         devolverTrazabilidad(registrado());
     }
 
@@ -226,8 +225,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
                 .as("sin la columna, la guía saldría por un canal distinto del cotizado y del cobrado")
                 .isEqualTo(CANAL_ELEGIDO);
         assertThat(saldoAntes - saldoDelCliente())
-                .as("del monedero sale EXACTAMENTE el total del pedido, ni un céntimo más")
-                .isEqualTo(TOTAL_CENTS);
+                .as("del monedero sale EXACTAMENTE el total del pedido, ni un céntimo más").isEqualTo(TOTAL_CENTS);
         assertThat(asuntosDeCorreosDelCliente())
                 .as("el pago con saldo cobra en el acto: su primer correo ya es la factura")
                 .contains("Factura " + pedido.get("orderNumber").asText());
@@ -250,8 +248,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         sincronizarSeguimiento(pedidoId);
         verify(fulfillment, never()).createShipments(any());
         assertThat(guiaDelPedido(pedidoId))
-                .as("emitir aquí la guía es pagarla y arrancar el seguimiento sobre un paquete que no existe")
-                .isNull();
+                .as("emitir aquí la guía es pagarla y arrancar el seguimiento sobre un paquete que no existe").isNull();
 
         // 7 · El proveedor la despacha y el almacén chino la recibe.
         assertThat(registrarEnvioDelProveedor(compraId).get("status").asText()).isEqualTo("IN_TRANSIT");
@@ -282,8 +279,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         sincronizarSeguimiento(pedidoId);
         assertThat(estadoDelPedido(pedidoId)).isEqualTo(OrderStatus.SHIPPED.name());
         assertThat(asuntosDeCorreosDelCliente()).contains("Tu pedido va en camino");
-        assertThat(avisosDeSeguimiento())
-                .as("la llegada al país de destino es novedad para el comprador y se le avisa")
+        assertThat(avisosDeSeguimiento()).as("la llegada al país de destino es novedad para el comprador y se le avisa")
                 .isEqualTo(1);
 
         // 12 · Y se entrega, con un paso intermedio más («En reparto») por el camino.
@@ -291,8 +287,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         sincronizarSeguimiento(pedidoId);
         assertThat(estadoDelPedido(pedidoId)).isEqualTo(OrderStatus.DELIVERED.name());
         assertThat(asuntosDeCorreosDelCliente()).contains("Tu pedido ha sido entregado");
-        assertThat(avisosDeSeguimiento())
-                .as("un aviso por paso intermedio nuevo, y ni uno repetido de los ya avisados")
+        assertThat(avisosDeSeguimiento()).as("un aviso por paso intermedio nuevo, y ni uno repetido de los ya avisados")
                 .isEqualTo(2);
 
         // 13 · Sondear otra vez lo mismo no puede volver a contarlo: el transportista reenvía sus eventos
@@ -301,8 +296,8 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         int correosAlEntregar = asuntosDeCorreosDelCliente().size();
         sincronizarSeguimiento(pedidoId);
         assertThat(asuntosDeCorreosDelCliente()).hasSize(correosAlEntregar);
-        assertThat(descripcionesDe(miSeguimiento(pedidoId)))
-                .as("ni un paso repetido en el timeline").doesNotHaveDuplicates();
+        assertThat(descripcionesDe(miSeguimiento(pedidoId))).as("ni un paso repetido en el timeline")
+                .doesNotHaveDuplicates();
 
         // 14 · La guía quedó archivada con el canal por el que se cotizó y se cobró.
         assertThat(jdbcTemplate.queryForObject("SELECT product_code FROM order_shipment WHERE order_id = ?",
@@ -314,14 +309,12 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         assertThat(fichaFinal.get("trackingNumber").asText()).isEqualTo(GUIA);
         assertThat(fichaFinal.get("trackingCarrier").asText()).isEqualTo(TRANSPORTISTA);
         assertThat(centimos(fichaFinal, "total"))
-                .as("el total de la ficha sigue siendo el que se cobró el día de la compra")
-                .isEqualTo(TOTAL_CENTS);
+                .as("el total de la ficha sigue siendo el que se cobró el día de la compra").isEqualTo(TOTAL_CENTS);
 
         JsonNode seguimiento = miSeguimiento(pedidoId);
         assertThat(seguimiento.get("status").asText()).isEqualTo(OrderStatus.DELIVERED.name());
         assertThat(seguimiento.get("trackingNumber").asText()).isEqualTo(GUIA);
-        assertThat(descripcionesDe(seguimiento))
-                .as("el cliente ve el camino entero, no solo el desenlace")
+        assertThat(descripcionesDe(seguimiento)).as("el cliente ve el camino entero, no solo el desenlace")
                 .contains(PASO_ALTA, PASO_RECOGIDA, PASO_LLEGADA, PASO_REPARTO, PASO_ENTREGA);
     }
 
@@ -371,32 +364,31 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
 
     /** Guía dada de alta: el paquete existe en el sistema del transportista pero no se ha movido. */
     private static TrackingSnapshot registrado() {
-        return new TrackingSnapshot(OrderStatus.FORWARDED, List.of(
-                paso(OrderStatus.FORWARDED, PASO_ALTA, "Dongguan, CN", 0)));
+        return new TrackingSnapshot(OrderStatus.FORWARDED,
+                List.of(paso(OrderStatus.FORWARDED, PASO_ALTA, "Dongguan, CN", 0)));
     }
 
     /** El transportista ya lo lleva encima y el paquete ha llegado al país de destino. */
     private static TrackingSnapshot enCamino() {
-        return new TrackingSnapshot(OrderStatus.SHIPPED, List.of(
-                paso(OrderStatus.FORWARDED, PASO_ALTA, "Dongguan, CN", 0),
-                paso(OrderStatus.SHIPPED, PASO_RECOGIDA, "Dongguan, CN", 2),
-                paso(OrderStatus.SHIPPED, PASO_LLEGADA, "Madrid, ES", 6)));
+        return new TrackingSnapshot(OrderStatus.SHIPPED,
+                List.of(paso(OrderStatus.FORWARDED, PASO_ALTA, "Dongguan, CN", 0),
+                        paso(OrderStatus.SHIPPED, PASO_RECOGIDA, "Dongguan, CN", 2),
+                        paso(OrderStatus.SHIPPED, PASO_LLEGADA, "Madrid, ES", 6)));
     }
 
     /** Entregado al destinatario, con el intento de reparto por el camino. */
     private static TrackingSnapshot entregado() {
-        return new TrackingSnapshot(OrderStatus.DELIVERED, List.of(
-                paso(OrderStatus.FORWARDED, PASO_ALTA, "Dongguan, CN", 0),
-                paso(OrderStatus.SHIPPED, PASO_RECOGIDA, "Dongguan, CN", 2),
-                paso(OrderStatus.SHIPPED, PASO_LLEGADA, "Madrid, ES", 6),
-                paso(OrderStatus.SHIPPED, PASO_REPARTO, "Madrid, ES", 8),
-                paso(OrderStatus.DELIVERED, PASO_ENTREGA, "Madrid, ES", 9)));
+        return new TrackingSnapshot(OrderStatus.DELIVERED,
+                List.of(paso(OrderStatus.FORWARDED, PASO_ALTA, "Dongguan, CN", 0),
+                        paso(OrderStatus.SHIPPED, PASO_RECOGIDA, "Dongguan, CN", 2),
+                        paso(OrderStatus.SHIPPED, PASO_LLEGADA, "Madrid, ES", 6),
+                        paso(OrderStatus.SHIPPED, PASO_REPARTO, "Madrid, ES", 8),
+                        paso(OrderStatus.DELIVERED, PASO_ENTREGA, "Madrid, ES", 9)));
     }
 
     /** Un paso ocurrido hace {@code hace} horas, para que el timeline salga en orden cronológico. */
     private static TrackingStep paso(OrderStatus estado, String descripcion, String lugar, int hace) {
-        return new TrackingStep(estado, descripcion, lugar,
-                Instant.now().minus(24L - hace, ChronoUnit.HOURS));
+        return new TrackingStep(estado, descripcion, lugar, Instant.now().minus(24L - hace, ChronoUnit.HOURS));
     }
 
     private void devolverTrazabilidad(TrackingSnapshot instantanea) {
@@ -413,8 +405,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
                  "items":[{"productId":"%s","quantity":%d}]}
                 """.formatted(PAIS, canal == null ? "null" : "\"" + canal + "\"", productoId, UNIDADES);
         return cuerpo(client.post().uri(COTIZAR).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isOk());
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isOk());
     }
 
     private JsonNode pagarConMonedero(String canal) {
@@ -425,14 +416,13 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         return cuerpo(client.post().uri(CHECKOUT).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
                 // La clave de idempotencia es OBLIGATORIA en todo lo que mueve dinero: sin ella el
                 // servidor responde 400. Un arnés de prueba es un cliente más y tiene que mandarla.
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+                .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(cuerpo).exchange().expectStatus().isCreated());
     }
 
     private JsonNode miPedido(UUID pedidoId) {
-        return cuerpo(client.get().uri(MIS_PEDIDOS + pedidoId)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente)).exchange().expectStatus().isOk());
+        return cuerpo(client.get().uri(MIS_PEDIDOS + pedidoId).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
+                .exchange().expectStatus().isOk());
     }
 
     private JsonNode miSeguimiento(UUID pedidoId) {
@@ -445,8 +435,8 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
      * ================================================================================== */
 
     private JsonNode colaDeCompras() {
-        return cuerpo(client.get().uri(COMPRAS_ADMIN).header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin))
-                .exchange().expectStatus().isOk());
+        return cuerpo(client.get().uri(COMPRAS_ADMIN).header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin)).exchange()
+                .expectStatus().isOk());
     }
 
     private JsonNode registrarCompra(UUID compraId) {
@@ -469,8 +459,8 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
 
     private int despachar(UUID pedidoId) {
         return client.post().uri(PEDIDOS_ADMIN + pedidoId + "/forward")
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin)).exchange()
-                .returnResult(Void.class).getStatus().value();
+                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin)).exchange().returnResult(Void.class).getStatus()
+                .value();
     }
 
     private void sincronizarSeguimiento(UUID pedidoId) {
@@ -479,8 +469,8 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
     }
 
     private JsonNode postAdmin(String uri, String cuerpoJson) {
-        WebTestClient.RequestBodySpec peticion = client.post().uri(uri)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenAdmin));
+        WebTestClient.RequestBodySpec peticion = client.post().uri(uri).header(HttpHeaders.AUTHORIZATION,
+                bearer(tokenAdmin));
         WebTestClient.ResponseSpec respuesta = cuerpoJson == null
                 ? peticion.exchange()
                 : peticion.contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpoJson).exchange();
@@ -492,19 +482,18 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
      * ================================================================================== */
 
     private long saldoDelCliente() {
-        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?",
-                Long.class, clienteId);
+        Long saldo = jdbcTemplate.queryForObject("SELECT balance_usd_cents FROM wallet WHERE user_id = ?", Long.class,
+                clienteId);
         return saldo == null ? 0L : saldo;
     }
 
     private String estadoDelPedido(UUID pedidoId) {
-        return jdbcTemplate.queryForObject("SELECT status FROM customer_order WHERE id = ?", String.class,
-                pedidoId);
+        return jdbcTemplate.queryForObject("SELECT status FROM customer_order WHERE id = ?", String.class, pedidoId);
     }
 
     private String guiaDelPedido(UUID pedidoId) {
-        return jdbcTemplate.queryForObject("SELECT tracking_number FROM customer_order WHERE id = ?",
-                String.class, pedidoId);
+        return jdbcTemplate.queryForObject("SELECT tracking_number FROM customer_order WHERE id = ?", String.class,
+                pedidoId);
     }
 
     private String canalGuardado(UUID pedidoId) {
@@ -513,8 +502,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
     }
 
     private String estadoDeLaCompra(UUID compraId) {
-        return jdbcTemplate.queryForObject("SELECT status FROM supplier_purchase WHERE id = ?", String.class,
-                compraId);
+        return jdbcTemplate.queryForObject("SELECT status FROM supplier_purchase WHERE id = ?", String.class, compraId);
     }
 
     private int enteroDe(String sql, UUID id) {
@@ -524,8 +512,9 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
 
     /** Asuntos de los correos encolados para el cliente, en orden. */
     private List<String> asuntosDeCorreosDelCliente() {
-        return jdbcTemplate.queryForList("SELECT subject FROM outbound_email WHERE to_address = ?"
-                + " ORDER BY created_at ASC", String.class, correoDelCliente());
+        return jdbcTemplate.queryForList(
+                "SELECT subject FROM outbound_email WHERE to_address = ?" + " ORDER BY created_at ASC", String.class,
+                correoDelCliente());
     }
 
     /** Cuántos avisos de paso intermedio del envío («Actualización de tu envío») ha recibido el cliente. */
@@ -571,8 +560,9 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
      */
     private UUID insertarProductoDeclarable() {
         UUID proveedorId = UUID.randomUUID();
-        jdbcTemplate.update("INSERT INTO supplier (id, external_id, source, name, created_at, updated_at)"
-                + " VALUES (?, ?, '1688', 'Proveedor de prueba', now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO supplier (id, external_id, source, name, created_at, updated_at)"
+                        + " VALUES (?, ?, '1688', 'Proveedor de prueba', now(), now())",
                 proveedorId, "sup-" + proveedorId);
 
         UUID id = UUID.randomUUID();
@@ -580,8 +570,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, supplier_id, title_zh,"
                 + " status, moq, base_price, currency, hs_code, weight_grams, created_at, updated_at)"
                 + " VALUES (?, ?, ?, '1688', ?, '棉质T恤', 'ACTIVE', 1, ?::numeric, 'USD', '610910', 500,"
-                + " now(), now())",
-                id, "producto-" + sufijo, "ext-" + sufijo, proveedorId, PRECIO_BASE);
+                + " now(), now())", id, "producto-" + sufijo, "ext-" + sufijo, proveedorId, PRECIO_BASE);
 
         insertarTraduccion(id, "es", "Camiseta de algodón");
         insertarTraduccion(id, "en", "Cotton T-Shirt");
@@ -591,13 +580,13 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
 
     private void insertarTraduccion(UUID productoId, String idioma, String titulo) {
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
-                + " updated_at) VALUES (gen_random_uuid(), ?, ?, ?, now(), now())",
-                productoId, idioma, titulo);
+                + " updated_at) VALUES (gen_random_uuid(), ?, ?, ?, now(), now())", productoId, idioma, titulo);
     }
 
     private void insertarIva(String pais, int rateBps) {
-        jdbcTemplate.update("INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
-                + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
+        jdbcTemplate.update(
+                "INSERT INTO country_tax_rate (id, country_code, label, rate_bps, active,"
+                        + " created_at, updated_at) VALUES (gen_random_uuid(), ?, 'IVA', ?, true, now(), now())",
                 pais, rateBps);
     }
 
@@ -613,8 +602,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
                 + " de_minimis_currency, over_threshold_policy, per_article_fee_amount,"
                 + " per_article_fee_currency, active, created_at, updated_at)"
                 + " VALUES (gen_random_uuid(), ?, 'DDP', 0, 'USD', 'SURCHARGE', ?::numeric, 'USD', true,"
-                + " now(), now())",
-                pais, BigDecimal.valueOf(derechoUsdCents, 2).toPlainString());
+                + " now(), now())", pais, BigDecimal.valueOf(derechoUsdCents, 2).toPlainString());
     }
 
     private UUID crearDireccion() {
@@ -622,10 +610,8 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
                 {"fullName":"Comprador de prueba","phone":"+34600000000","line1":"Gran Via 1",
                  "city":"Madrid","state":"M","postalCode":"28013","country":"%s","isDefault":true}
                 """.formatted(PAIS);
-        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES)
-                .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
-                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
-                .expectStatus().isCreated());
+        JsonNode creada = cuerpo(client.post().uri(DIRECCIONES).header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange().expectStatus().isCreated());
         return UUID.fromString(creada.get("id").asText());
     }
 

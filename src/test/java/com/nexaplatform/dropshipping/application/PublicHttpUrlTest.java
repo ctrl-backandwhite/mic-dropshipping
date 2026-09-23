@@ -24,39 +24,32 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PublicHttpUrlTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {
-        "http://169.254.169.254/latest/meta-data/",  // metadatos de la nube: credenciales de la instancia
-        "http://127.0.0.1:18082/api/admin/orders",   // la propia API, saltándose la autenticación de red
-        "http://localhost:5432/",                    // la base de datos
-        "http://10.0.0.5/interno",                   // red privada
-        "http://192.168.1.10/router",                // red doméstica
-        "http://172.16.0.1/",                        // red privada
-        "http://100.64.0.1/",                        // CGNAT, que isSiteLocalAddress no cubre
-        "http://[::1]:8080/",                        // bucle local en IPv6
+    @ValueSource(strings = {"http://169.254.169.254/latest/meta-data/", // metadatos de la nube: credenciales de la instancia
+            "http://127.0.0.1:18082/api/admin/orders", // la propia API, saltándose la autenticación de red
+            "http://localhost:5432/", // la base de datos
+            "http://10.0.0.5/interno", // red privada
+            "http://192.168.1.10/router", // red doméstica
+            "http://172.16.0.1/", // red privada
+            "http://100.64.0.1/", // CGNAT, que isSiteLocalAddress no cubre
+            "http://[::1]:8080/", // bucle local en IPv6
     })
     void seRechazaCualquierDireccionQueNoSalgaDeLaRed(String url) {
-        assertThatThrownBy(() -> PublicHttpUrl.assertPublic(URI.create(url)))
-                .isInstanceOf(SecurityException.class);
+        assertThatThrownBy(() -> PublicHttpUrl.assertPublic(URI.create(url))).isInstanceOf(SecurityException.class);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-        "file:///etc/passwd",       // leer ficheros del servidor
-        "ftp://interno/backup",
-        "gopher://127.0.0.1:6379/", // el clásico para hablar con Redis
-        "jar:file:///tmp/x.jar!/",
-    })
+    @ValueSource(strings = {"file:///etc/passwd", // leer ficheros del servidor
+            "ftp://interno/backup", "gopher://127.0.0.1:6379/", // el clásico para hablar con Redis
+            "jar:file:///tmp/x.jar!/",})
     void seRechazaTodoLoQueNoSeaHttpOHttps(String url) {
-        assertThatThrownBy(() -> PublicHttpUrl.assertPublic(URI.create(url)))
-                .isInstanceOf(SecurityException.class)
+        assertThatThrownBy(() -> PublicHttpUrl.assertPublic(URI.create(url))).isInstanceOf(SecurityException.class)
                 .hasMessageContaining("Esquema");
     }
 
     @Test
     void seRechazaUnaUrlSinHost() {
         assertThatThrownBy(() -> PublicHttpUrl.assertPublic(URI.create("http:///sin-host")))
-                .isInstanceOf(SecurityException.class)
-                .hasMessageContaining("sin host");
+                .isInstanceOf(SecurityException.class).hasMessageContaining("sin host");
     }
 
     @Test

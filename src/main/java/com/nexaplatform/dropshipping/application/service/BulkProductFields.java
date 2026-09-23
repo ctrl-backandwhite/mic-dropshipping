@@ -174,6 +174,51 @@ public final class BulkProductFields {
         }
     }
 
+    /**
+     * El recargo fijo del producto, que SOBREVIVE a una reimportación.
+     *
+     * <p>Antes era {@code r.getSurchargeCny() != null ? ... : ZERO}, y eso devolvía el recargo a
+     * cero en cada pasada. El catálogo se reimporta constantemente —al escribir esto había 10.157
+     * productos en cola para recargarse— así que el trabajo del panel duraba hasta la siguiente
+     * extracción, sin ningún error: sólo un precio que vuelve a ser el de antes.
+     *
+     * <p>Es la misma regla que el cambio del 23-sep-2026 declara para los tramos: <b>nulo NO es
+     * cero</b>. Un bulk que no habla del recargo no está pidiendo que se borre; uno que manda un
+     * cero explícito sí, porque el cero es un importe que alguien ha decidido escribir.
+     *
+     * <p>Cero para el producto nuevo: la columna es NOT NULL desde la v157 y dejarla a nulo tumba
+     * el alta entera con un 23502.
+     */
+    public static void applySurcharge(ProductEntity p, BulkProductDtoIn r) {
+        if (r.getSurchargeCny() != null) {
+            p.setSurchargeCny(r.getSurchargeCny());
+            return;
+        }
+        if (p.getSurchargeCny() == null) {
+            p.setSurchargeCny(BigDecimal.ZERO);
+        }
+    }
+
+    /**
+     * El recargo que le toca a un tramo al recrearlo en una reimportación.
+     *
+     * <p>{@code replacePriceTiers} borra y recrea los tramos en cada pasada. El scraper no manda
+     * recargo de tramo —y hace bien, lo fija el panel— así que el valor llegaba nulo y el tramo
+     * renacía sin él. Es peor que el del producto, porque nadie revisa los tramos uno a uno.
+     *
+     * <p>Aquí nulo SÍ es el valor correcto para lo que no existía, al revés que en el producto: la
+     * columna del tramo es NULLABLE a propósito y nulo significa «usa el del producto». Ponerlo a
+     * cero le daría a cada tramo nuevo un recargo de cero que nadie decidió.
+     *
+     * @param anteriores recargos que tenían los tramos de este producto, por {@code minQty}
+     */
+    public static BigDecimal tierSurcharge(Map<Integer, BigDecimal> anteriores, int minQty, BigDecimal delBulk) {
+        if (delBulk != null) {
+            return delBulk;
+        }
+        return anteriores != null ? anteriores.get(minQty) : null;
+    }
+
     /** Índice SKU → variante de la fila. Una variante sin SKU no se puede emparejar, así que se descarta. */
     private static Map<String, BulkProductDtoIn.BulkVariant> variantsBySku(BulkProductDtoIn r) {
         if (r.getVariants() == null) {
@@ -207,6 +252,11 @@ public final class BulkProductFields {
         }
         if (v.getHeightMm() != null) {
             pv.setHeightMm(v.getHeightMm());
+        }
+        // El cero SÍ se guarda: un proveedor con envío gratis declara 0, y tratarlo como ausencia
+        // dejaría puesto el importe anterior y cobraría un flete que nadie paga.
+        if (v.getShippingCny() != null) {
+            pv.setShippingCny(v.getShippingCny());
         }
     }
 
@@ -281,11 +331,11 @@ public final class BulkProductFields {
                 p.getTranslations().add(existing);
             }
             existing.setTitle(tr.getTitle().trim());
-            String shortDesc = Texts
-                    .firstNonBlankOr(tr.getTitle(), tr.getShortDescription(), tr.getDescription()).trim();
-            existing.setShortDescription(
-                    shortDesc.length() > MAX_SHORT_DESCRIPTION ? shortDesc.substring(0, MAX_SHORT_DESCRIPTION)
-                            : shortDesc);
+            String shortDesc = Texts.firstNonBlankOr(tr.getTitle(), tr.getShortDescription(), tr.getDescription())
+                    .trim();
+            existing.setShortDescription(shortDesc.length() > MAX_SHORT_DESCRIPTION
+                    ? shortDesc.substring(0, MAX_SHORT_DESCRIPTION)
+                    : shortDesc);
             existing.setDescription(tr.getDescription() != null ? tr.getDescription().trim() : shortDesc);
         }
     }

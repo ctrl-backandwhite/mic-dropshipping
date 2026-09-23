@@ -59,8 +59,7 @@ public class FulfillmentRouter {
      * zona— porque es lo que el resto del checkout ya usaba cuando solo había uno; lo nuevo son las
      * {@code options}, que es de donde el cliente elige.
      */
-    public ShippingQuote cotizar(String pais, FulfillmentProvider.ParcelSpec bulto,
-            List<ProductEntity> productos) {
+    public ShippingQuote cotizar(String pais, FulfillmentProvider.ParcelSpec bulto, List<ProductEntity> productos) {
         List<ShippingOption> todas = new ArrayList<>();
         ShippingQuote cabecera = null;
         for (FulfillmentProvider transportista : transportistas) {
@@ -68,8 +67,7 @@ public class FulfillmentRouter {
             if (suya == null) {
                 continue;
             }
-            if (cabecera == null || (suya.amountUsdCents() > 0
-                    && suya.amountUsdCents() < cabecera.amountUsdCents())) {
+            if (cabecera == null || (suya.amountUsdCents() > 0 && suya.amountUsdCents() < cabecera.amountUsdCents())) {
                 cabecera = suya;
             }
             todas.addAll(suya.options());
@@ -78,9 +76,8 @@ public class FulfillmentRouter {
         if (cabecera == null) {
             return new ShippingQuote(false, pais, 0, null, null, 0, 0, null, ofrecibles);
         }
-        return new ShippingQuote(cabecera.supported(), pais, cabecera.amountUsdCents(),
-                cabecera.carrier(), cabecera.serviceName(), cabecera.etaMinDays(), cabecera.etaMaxDays(),
-                cabecera.zone(), ofrecibles);
+        return new ShippingQuote(cabecera.supported(), pais, cabecera.amountUsdCents(), cabecera.carrier(),
+                cabecera.serviceName(), cabecera.etaMinDays(), cabecera.etaMaxDays(), cabecera.zone(), ofrecibles);
     }
 
     /**
@@ -108,12 +105,10 @@ public class FulfillmentRouter {
                     admitidas.add(opcion.con(transportista.nombre()));
                 }
             }
-            return new ShippingQuote(suya.supported(), suya.countryCode(), suya.amountUsdCents(),
-                    suya.carrier(), suya.serviceName(), suya.etaMinDays(), suya.etaMaxDays(),
-                    suya.zone(), admitidas);
+            return new ShippingQuote(suya.supported(), suya.countryCode(), suya.amountUsdCents(), suya.carrier(),
+                    suya.serviceName(), suya.etaMinDays(), suya.etaMaxDays(), suya.zone(), admitidas);
         } catch (RuntimeException e) {
-            log.warn("El transportista {} no pudo cotizar a {}: {}",
-                    transportista.nombre(), pais, e.getMessage());
+            log.warn("El transportista {} no pudo cotizar a {}: {}", transportista.nombre(), pais, e.getMessage());
             return null;
         }
     }
@@ -155,8 +150,7 @@ public class FulfillmentRouter {
     private static List<ShippingOption> ordenar(List<ShippingOption> opciones) {
         List<ShippingOption> ordenadas = new ArrayList<>(opciones);
         ordenadas.sort(Comparator.comparingInt(ShippingOption::amountUsdCents)
-                .thenComparingInt(ShippingOption::etaMaxDays)
-                .thenComparingInt(ShippingOption::etaMinDays));
+                .thenComparingInt(ShippingOption::etaMaxDays).thenComparingInt(ShippingOption::etaMinDays));
         return ordenadas;
     }
 

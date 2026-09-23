@@ -115,7 +115,7 @@ public class SupplierIndexer {
      */
     private int doReindexAll() {
         Map<UUID, Long> counts = productCountBySupplier();
-        int[] n = { 0 };
+        int[] n = {0};
         supplierRepository.findAll().forEach(s -> {
             indexEntity(s, counts.getOrDefault(s.getId(), 0L));
             n[0]++;

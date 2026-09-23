@@ -106,8 +106,8 @@ public class TrendScoreService {
                    AND o.created_at >= now() - (? || ' days')::interval
                 """, Integer.class, DIAS);
         int n = conVentas == null ? 0 : conVentas;
-        log.info("::> [TREND] puntuación recalculada sobre ventas reales de {} días — {} productos con ventas",
-                DIAS, n);
+        log.info("::> [TREND] puntuación recalculada sobre ventas reales de {} días — {} productos con ventas", DIAS,
+                n);
         // El índice de búsqueda guarda su propia copia de la puntuación y la usa para desempatar los
         // resultados. Sin reindexar, la base y el índice divergen desde la primera pasada: medido, un
         // producto con 0,9898 en base seguía valiendo 0,794 para el buscador. Va en segundo plano y

@@ -39,12 +39,8 @@ public class PublicInvoiceVerifyController {
                     .body(InvoiceVerifyDtoOut.builder().valid(false).orderNumber(orderNumber).build());
         }
         Order o = found.get();
-        return ResponseEntity.ok(InvoiceVerifyDtoOut.builder()
-                .valid(true)
-                .orderNumber(o.getOrderNumber())
+        return ResponseEntity.ok(InvoiceVerifyDtoOut.builder().valid(true).orderNumber(o.getOrderNumber())
                 .status(o.getStatus() != null ? o.getStatus().name() : null)
-                .issuedAt(o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt())
-                .issuer("NX036")
-                .build());
+                .issuedAt(o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt()).issuer("NX036").build());
     }
 }

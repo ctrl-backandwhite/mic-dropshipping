@@ -81,15 +81,15 @@ class Cov10CategoryUseCaseImplTest {
         UUID conProductos = UUID.randomUUID();
         UUID vacia = UUID.randomUUID();
         stubConteoAgrupado(conProductos, 7L);
-        when(categorySearchService.listFromIndex(null)).thenReturn(Optional.of(List.of(
-                indexada(conProductos, "moda"), indexada(vacia, "hogar"))));
+        when(categorySearchService.listFromIndex(null))
+                .thenReturn(Optional.of(List.of(indexada(conProductos, "moda"), indexada(vacia, "hogar"))));
 
         List<Category> all = useCase.findAll();
 
         // El índice no guarda el número de productos: si no se resolviera aquí, el panel mostraría 0.
         assertThat(all).extracting(Category::getProductCount).containsExactly(7L, 0L);
-        assertThat(all.get(0).getNames()).containsEntry("es", "Moda").containsEntry("en", "Fashion")
-                .containsEntry("pt", "Moda pt");
+        assertThat(all.get(0).getNames()).containsEntry("es", "Moda").containsEntry("en", "Fashion").containsEntry("pt",
+                "Moda pt");
         verify(categoryRepository, never()).findAll();
     }
 
@@ -139,7 +139,7 @@ class Cov10CategoryUseCaseImplTest {
         UUID llena1 = UUID.randomUUID();
         UUID llena2 = UUID.randomUUID();
         UUID vacia = UUID.randomUUID();
-        stubConteoAgrupado(List.of(new Object[] {llena1, 5L}, new Object[] {llena2, 9L}));
+        stubConteoAgrupado(List.of(new Object[]{llena1, 5L}, new Object[]{llena2, 9L}));
         when(categoryRepository.search(eq(null), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(Category.builder().id(llena1).build(),
                         Category.builder().id(vacia).build(), Category.builder().id(llena2).build())));
@@ -156,9 +156,8 @@ class Cov10CategoryUseCaseImplTest {
         UUID llena = UUID.randomUUID();
         UUID vacia = UUID.randomUUID();
         stubConteoAgrupado(llena, 5L);
-        when(categoryRepository.search(eq(null), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(Category.builder().id(llena).build(),
-                        Category.builder().id(vacia).build())));
+        when(categoryRepository.search(eq(null), any(Pageable.class))).thenReturn(
+                new PageImpl<>(List.of(Category.builder().id(llena).build(), Category.builder().id(vacia).build())));
 
         Page<Category> result = useCase.findAllPaged(null, false, PageRequest.of(0, 10));
 
@@ -226,8 +225,7 @@ class Cov10CategoryUseCaseImplTest {
         when(categoryRepository.getById(id)).thenReturn(Category.builder().id(id).slug("moda").build());
         stubConteoSimple(id, 12L);
 
-        assertThatThrownBy(() -> useCase.delete(id)).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("12");
+        assertThatThrownBy(() -> useCase.delete(id)).isInstanceOf(BusinessException.class).hasMessageContaining("12");
         verify(categoryRepository, never()).delete(id);
     }
 
@@ -237,8 +235,7 @@ class Cov10CategoryUseCaseImplTest {
         when(categoryRepository.getById(id)).thenReturn(Category.builder().id(id).slug("moda").build());
         stubConteoSimple(id, 0L, 3L);
 
-        assertThatThrownBy(() -> useCase.delete(id)).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("3");
+        assertThatThrownBy(() -> useCase.delete(id)).isInstanceOf(BusinessException.class).hasMessageContaining("3");
         verify(categoryRepository, never()).delete(id);
     }
 
@@ -333,7 +330,7 @@ class Cov10CategoryUseCaseImplTest {
 
     /** Stub del GROUP BY que resuelve el número de productos por categoría. */
     private void stubConteoAgrupado(UUID id, long count) {
-        stubConteoAgrupado(List.<Object[]>of(new Object[] {id, count}));
+        stubConteoAgrupado(List.<Object[]>of(new Object[]{id, count}));
     }
 
     private void stubConteoAgrupado(List<Object[]> rows) {

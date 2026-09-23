@@ -81,8 +81,7 @@ class EmailOrderContentIT extends EmailITSupport {
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         String html = cuerpoHtml(correo);
         assertThat(asuntoDe(correo)).isEqualTo(OrderEmailLabel.PLACED_TITLE.of("es"));
-        assertThat(html).contains(pedido.getOrderNumber())
-                .contains(OrderEmailLabel.CTA_VIEW_ORDER.of("es"))
+        assertThat(html).contains(pedido.getOrderNumber()).contains(OrderEmailLabel.CTA_VIEW_ORDER.of("es"))
                 .contains("http://localhost:3003/orders/" + pedido.getId())
                 .contains(OrderEmailLabel.AUTO_NOTE.of("es"));
     }
@@ -113,13 +112,11 @@ class EmailOrderContentIT extends EmailITSupport {
         assertThat(asuntoDe(correo)).isEqualTo("Factura " + pedido.getOrderNumber());
         assertThat(html).contains(pedido.getOrderNumber())
                 // líneas
-                .contains("Vestido de lino").contains("SKU-LIN-1").contains("Azul / M")
-                .contains("$19.99").contains("$39.98")
-                .contains("Cinturón de piel").contains("SKU-CIN-9")
-                .contains("$5.50").contains("$16.50")
+                .contains("Vestido de lino").contains("SKU-LIN-1").contains("Azul / M").contains("$19.99")
+                .contains("$39.98").contains("Cinturón de piel").contains("SKU-CIN-9").contains("$5.50")
+                .contains("$16.50")
                 // totales
-                .contains("$56.48").contains("$4.99").contains("$12.90").contains("$74.37")
-                .contains("IVA (21%)")
+                .contains("$56.48").contains("$4.99").contains("$12.90").contains("$74.37").contains("IVA (21%)")
                 // método de pago traducido, no el código crudo
                 .contains("Tarjeta").doesNotContain(">CARD<");
         assertThat(html).contains(InvoiceLabel.PAID.of("es"));
@@ -271,8 +268,7 @@ class EmailOrderContentIT extends EmailITSupport {
 
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         String html = cuerpoHtml(correo);
-        assertThat(html).contains("Producto sin foto").contains("$10.00")
-                .doesNotContain("cid:invitem-")
+        assertThat(html).contains("Producto sin foto").contains("$10.00").doesNotContain("cid:invitem-")
                 .doesNotContain("src=\"\"");
         assertThat(parteConCid(correo, "invitem-0")).isNull();
     }
@@ -311,11 +307,8 @@ class EmailOrderContentIT extends EmailITSupport {
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         String html = cuerpoHtml(correo);
         assertThat(asuntoDe(correo)).isEqualTo(OrderEmailLabel.SHIPPED_TITLE.of("es"));
-        assertThat(html).contains(pedido.getOrderNumber())
-                .contains(OrderEmailLabel.TRACKING_NUMBER.of("es"))
-                .contains("YT2612345678901234")
-                .contains("YunExpress")
-                .contains(OrderEmailLabel.CTA_TRACK.of("es"));
+        assertThat(html).contains(pedido.getOrderNumber()).contains(OrderEmailLabel.TRACKING_NUMBER.of("es"))
+                .contains("YT2612345678901234").contains("YunExpress").contains(OrderEmailLabel.CTA_TRACK.of("es"));
     }
 
     @Test
@@ -330,9 +323,7 @@ class EmailOrderContentIT extends EmailITSupport {
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         String html = cuerpoHtml(correo);
         assertThat(asuntoDe(correo)).isEqualTo(OrderEmailLabel.TRACK_TITLE.of("en"));
-        assertThat(html).contains("In international transit")
-                .contains("Shenzhen, China")
-                .contains("YT2699999999999999")
+        assertThat(html).contains("In international transit").contains("Shenzhen, China").contains("YT2699999999999999")
                 .doesNotContain("En tránsito internacional");
     }
 
@@ -346,8 +337,7 @@ class EmailOrderContentIT extends EmailITSupport {
         despacharCola();
 
         String html = cuerpoHtml(unicoCorreoPara(CLIENTE));
-        assertThat(html).contains(pedido.getOrderNumber())
-                .doesNotContain(OrderEmailLabel.TRACKING_NUMBER.of("es"))
+        assertThat(html).contains(pedido.getOrderNumber()).doesNotContain(OrderEmailLabel.TRACKING_NUMBER.of("es"))
                 .doesNotContain("null");
     }
 
@@ -382,13 +372,10 @@ class EmailOrderContentIT extends EmailITSupport {
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         String html = cuerpoHtml(correo);
         assertThat(asuntoDe(correo)).isEqualTo(OrderEmailLabel.REFUNDED_TITLE.of("es"));
-        assertThat(html).contains(pedido.getOrderNumber())
-                .contains(OrderEmailLabel.REFUND_L_AMOUNT.of("es"))
+        assertThat(html).contains(pedido.getOrderNumber()).contains(OrderEmailLabel.REFUND_L_AMOUNT.of("es"))
                 // Se devuelve EXACTAMENTE lo cobrado: el total de la factura, al céntimo.
-                .contains("$74.37")
-                .contains(OrderEmailLabel.REFUND_L_ITEMS.of("es"))
-                .contains(OrderEmailLabel.REFUND_L_DEST.of("es"))
-                .contains(OrderEmailLabel.REFUND_DEST_CARD.of("es"));
+                .contains("$74.37").contains(OrderEmailLabel.REFUND_L_ITEMS.of("es"))
+                .contains(OrderEmailLabel.REFUND_L_DEST.of("es")).contains(OrderEmailLabel.REFUND_DEST_CARD.of("es"));
     }
 
     /**
@@ -407,10 +394,8 @@ class EmailOrderContentIT extends EmailITSupport {
         despacharCola();
 
         String html = cuerpoHtml(unicoCorreoPara(CLIENTE));
-        assertThat(html).contains(pedido.getOrderNumber())
-                .contains(OrderEmailLabel.REFUND_DEST_WALLET.of("es"))
-                .contains(OrderEmailLabel.REFUND_L_DATE.of("es"))
-                .contains(invoiceService.formatDate(cancelado));
+        assertThat(html).contains(pedido.getOrderNumber()).contains(OrderEmailLabel.REFUND_DEST_WALLET.of("es"))
+                .contains(OrderEmailLabel.REFUND_L_DATE.of("es")).contains(invoiceService.formatDate(cancelado));
     }
 
     /* ==================================================================================
@@ -429,10 +414,8 @@ class EmailOrderContentIT extends EmailITSupport {
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         String html = cuerpoHtml(correo);
         assertThat(asuntoDe(correo)).isEqualTo(InvoiceLabel.INVOICE.of(idioma) + " " + pedido.getOrderNumber());
-        assertThat(html).contains(InvoiceLabel.TITLE_PAID.of(idioma))
-                .contains(InvoiceLabel.DESCRIPTION.of(idioma))
-                .contains(InvoiceLabel.TOTAL.of(idioma))
-                .contains(comoSeVeEnElHtml(InvoiceLabel.CTA_VIEW.of(idioma)));
+        assertThat(html).contains(InvoiceLabel.TITLE_PAID.of(idioma)).contains(InvoiceLabel.DESCRIPTION.of(idioma))
+                .contains(InvoiceLabel.TOTAL.of(idioma)).contains(comoSeVeEnElHtml(InvoiceLabel.CTA_VIEW.of(idioma)));
         assertThat(html).doesNotContain("${").doesNotContain("th:text");
         assertThat(html.matches("(?s).*\\b(email|order|invoice)\\.[a-z]+\\.[a-z.]+\\b.*"))
                 .as("el cuerpo no puede llevar claves de traducción sin resolver").isFalse();
@@ -460,10 +443,10 @@ class EmailOrderContentIT extends EmailITSupport {
     @DisplayName("el correo del plan lleva la factura ADJUNTA en PDF, con su nombre y su tipo")
     void elCorreoDelPlanLlevaLaFacturaAdjuntaEnPdf() {
         String email = "plan-" + UUID.randomUUID() + "@example.com";
-        User usuario = userUseCase.register(
-                User.builder().email(email).language("es").displayName("Cliente Plan").build(), "Segura123!");
-        byte[] pdf = invoiceService.renderPlanInvoicePdf(new PlanInvoiceData("NX-PLAN-0001", "EUR", 2500L, 525L,
-                3025L, "Plan Starter", null, null, null, "Cliente Plan", email, true, null), "es");
+        User usuario = userUseCase
+                .register(User.builder().email(email).language("es").displayName("Cliente Plan").build(), "Segura123!");
+        byte[] pdf = invoiceService.renderPlanInvoicePdf(new PlanInvoiceData("NX-PLAN-0001", "EUR", 2500L, 525L, 3025L,
+                "Plan Starter", null, null, null, "Cliente Plan", email, true, null), "es");
 
         subscriptionNotifications.planActivated(usuario.getId(), "starter", Instant.now(), false, pdf,
                 "factura-NX-PLAN-0001.pdf");
@@ -503,8 +486,7 @@ class EmailOrderContentIT extends EmailITSupport {
 
         MimeMessage correo = unicoCorreoPara(CLIENTE);
         assertThat(ficherosAdjuntos(correo)).isEmpty();
-        assertThat(cuerpoHtml(correo))
-                .contains(InvoiceLabel.INVOICE.of("es"))
+        assertThat(cuerpoHtml(correo)).contains(InvoiceLabel.INVOICE.of("es"))
                 .contains(comoSeVeEnElHtml(InvoiceLabel.CTA_VIEW.of("es")))
                 .contains("http://localhost:3003/orders/" + pedido.getId());
     }
@@ -538,8 +520,8 @@ class EmailOrderContentIT extends EmailITSupport {
     @Test
     @DisplayName("si el SMTP falla, el correo del pedido no se pierde: queda pendiente y no revienta el flujo")
     void unFalloDeSmtpNoInterrumpeElFlujoDelPedido() {
-        doThrow(new MailSendException("451 4.7.1 Ratelimit exceeded, try again later"))
-                .when(mailSender).send(any(MimeMessage.class));
+        doThrow(new MailSendException("451 4.7.1 Ratelimit exceeded, try again later")).when(mailSender)
+                .send(any(MimeMessage.class));
         Order pedido = pedidoDeUnaLinea();
 
         // No puede propagar: el pago ya está cobrado y el pedido no puede quedarse a medias por un correo.
@@ -576,16 +558,11 @@ class EmailOrderContentIT extends EmailITSupport {
         for (OrderItem linea : lineas) {
             subtotal += linea.getLineTotalCents();
         }
-        return Order.builder().id(UUID.randomUUID())
-                .orderNumber("NX-" + NUMERADOR.incrementAndGet())
-                .status(OrderStatus.PAID).currency("USD")
-                .items(new ArrayList<>(List.of(lineas)))
-                .subtotalCents(subtotal).shippingCents(0).taxCents(0).discountCents(0)
-                .totalCents(subtotal)
-                .placedAt(Instant.parse("2026-08-14T08:00:00Z"))
-                .shippingFullName("Ana López").shippingEmail(CLIENTE)
-                .shippingLine1("Calle Mayor 1").shippingCity("Madrid").shippingPostalCode("28001")
-                .shippingCountry("ES")
+        return Order.builder().id(UUID.randomUUID()).orderNumber("NX-" + NUMERADOR.incrementAndGet())
+                .status(OrderStatus.PAID).currency("USD").items(new ArrayList<>(List.of(lineas)))
+                .subtotalCents(subtotal).shippingCents(0).taxCents(0).discountCents(0).totalCents(subtotal)
+                .placedAt(Instant.parse("2026-08-14T08:00:00Z")).shippingFullName("Ana López").shippingEmail(CLIENTE)
+                .shippingLine1("Calle Mayor 1").shippingCity("Madrid").shippingPostalCode("28001").shippingCountry("ES")
                 .build();
     }
 
@@ -595,9 +572,10 @@ class EmailOrderContentIT extends EmailITSupport {
      * SUCCEEDED con su importe liquidado.
      */
     private void registrarCobro(UUID pedidoId, String divisa, String importeLiquidado) {
-        UUID pagador = userUseCase.register(
-                User.builder().email("pagador-" + UUID.randomUUID() + "@example.com").language("es").build(),
-                "Segura123!").getId();
+        UUID pagador = userUseCase
+                .register(User.builder().email("pagador-" + UUID.randomUUID() + "@example.com").language("es").build(),
+                        "Segura123!")
+                .getId();
         jdbcTemplate.update("INSERT INTO payment (id, user_id, order_id, purpose, method, status,"
                 + " amount_usd_cents, settlement_currency, settlement_amount, created_at, updated_at)"
                 + " VALUES (?, ?, ?, 'ORDER_PAYMENT', 'CARD', 'SUCCEEDED', ?, ?, CAST(? AS NUMERIC), now(), now())",
@@ -605,9 +583,8 @@ class EmailOrderContentIT extends EmailITSupport {
     }
 
     private static OrderItem item(String titulo, String sku, String variante, int precioUnitario, int cantidad) {
-        return OrderItem.builder().id(UUID.randomUUID()).titleSnapshot(titulo).skuSnapshot(sku)
-                .variantName(variante).unitPriceCents(precioUnitario).quantity(cantidad)
-                .lineTotalCents(precioUnitario * cantidad).build();
+        return OrderItem.builder().id(UUID.randomUUID()).titleSnapshot(titulo).skuSnapshot(sku).variantName(variante)
+                .unitPriceCents(precioUnitario).quantity(cantidad).lineTotalCents(precioUnitario * cantidad).build();
     }
 
     private static int vecesQueAparece(String texto, String fragmento) {
@@ -622,14 +599,14 @@ class EmailOrderContentIT extends EmailITSupport {
 
     private String estadoDelCorreo(String email) {
         return jdbcTemplate.queryForObject(
-                "SELECT status FROM outbound_email WHERE to_address = ? ORDER BY created_at DESC LIMIT 1",
-                String.class, email);
+                "SELECT status FROM outbound_email WHERE to_address = ? ORDER BY created_at DESC LIMIT 1", String.class,
+                email);
     }
 
     private boolean proximoIntentoPendiente(String email) {
         Integer n = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM outbound_email WHERE to_address = ? AND next_attempt_at > now()",
-                Integer.class, email);
+                "SELECT count(*) FROM outbound_email WHERE to_address = ? AND next_attempt_at > now()", Integer.class,
+                email);
         return n != null && n > 0;
     }
 

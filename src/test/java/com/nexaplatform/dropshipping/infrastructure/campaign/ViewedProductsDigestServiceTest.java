@@ -84,8 +84,8 @@ class ViewedProductsDigestServiceTest {
 
     private static ProductSummaryView producto(String titulo, String imagen, String slug) {
         return new ProductSummaryView(UUID.randomUUID(), slug, titulo, imagen, BigDecimal.ONE, "CNY",
-                BigDecimal.valueOf(4.5), 0, 10, BigDecimal.ONE, "ACTIVE", BigDecimal.TEN, BigDecimal.TEN, "EUR",
-                "€", "10,00 €", 5, 5, true);
+                BigDecimal.valueOf(4.5), 0, 10, BigDecimal.ONE, "ACTIVE", BigDecimal.TEN, BigDecimal.TEN, "EUR", "€",
+                "10,00 €", 5, 5, true);
     }
 
     private static UserEntity usuario(UUID id, String email, String idioma) {
@@ -158,8 +158,7 @@ class ViewedProductsDigestServiceTest {
         when(viewRepository.findUserIdsWithViewsSince(any(Instant.class))).thenReturn(List.of(userId));
         when(userRepository.findById(userId)).thenReturn(Optional.of(usuario(userId, "yo@test", "es")));
         // Todo lo que tenía es más viejo que la ventana: la consulta acotada no devuelve nada.
-        when(viewRepository.findProductIdsByUserIdSince(eq(userId), any(Instant.class), any()))
-                .thenReturn(List.of());
+        when(viewRepository.findProductIdsByUserIdSince(eq(userId), any(Instant.class), any())).thenReturn(List.of());
 
         assertThat(service.sendDigests()).isZero();
 
@@ -176,8 +175,8 @@ class ViewedProductsDigestServiceTest {
     @DisplayName("quien ya lo recibió hace menos de tres días no lo recibe otra vez")
     void noSeRepiteDentroDeLaVentana() {
         escenarioConUnaVisita();
-        when(outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
-                eq("yo@test"), eq(TEMPLATE), any(Instant.class))).thenReturn(true);
+        when(outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(eq("yo@test"),
+                eq(TEMPLATE), any(Instant.class))).thenReturn(true);
 
         assertThat(service.sendDigests()).isZero();
 
@@ -269,8 +268,7 @@ class ViewedProductsDigestServiceTest {
         List<?> filas = (List<?>) vars.getValue().get("rows");
         @SuppressWarnings("unchecked")
         Map<String, Object> celda = ((List<Map<String, Object>>) filas.get(0)).get(0);
-        assertThat(celda).containsEntry("image", "cid:vp0")
-                .containsEntry("url", TIENDA + "/catalog/camiseta")
+        assertThat(celda).containsEntry("image", "cid:vp0").containsEntry("url", TIENDA + "/catalog/camiseta")
                 .containsEntry("price", "10,00 €");
     }
 
@@ -280,8 +278,8 @@ class ViewedProductsDigestServiceTest {
     void laCuadriculaSeParteEnFilasDeTres() {
         escenarioConUnaVisita();
         List<ProductSummaryView> siete = List.of(producto("a", "i", "a"), producto("b", "i", "b"),
-                producto("c", "i", "c"), producto("d", "i", "d"), producto("e", "i", "e"),
-                producto("f", "i", "f"), producto("g", "i", "g"));
+                producto("c", "i", "c"), producto("d", "i", "d"), producto("e", "i", "e"), producto("f", "i", "f"),
+                producto("g", "i", "g"));
         when(storefrontRead.favorites(anyList(), anyInt(), anyInt(), anyString()))
                 .thenReturn(new PageResponse<>(siete, 0, 9, 7, 1));
 
@@ -311,8 +309,7 @@ class ViewedProductsDigestServiceTest {
         assertThat(service.sendDigests()).isEqualTo(2);
 
         ArgumentCaptor<String> asuntos = ArgumentCaptor.forClass(String.class);
-        verify(emailQueue, times(2)).enqueue(anyString(), eq(null), asuntos.capture(), eq(TEMPLATE), any(),
-                any());
+        verify(emailQueue, times(2)).enqueue(anyString(), eq(null), asuntos.capture(), eq(TEMPLATE), any(), any());
         assertThat(asuntos.getAllValues().get(0)).isEqualTo("What you've been looking at on NX036");
         assertThat(asuntos.getAllValues().get(1)).isEqualTo("Lo que has estado mirando en NX036");
     }

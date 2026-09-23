@@ -67,8 +67,8 @@ class Cov09CategoryRepositoryImplTest {
         c.setId(id);
         c.setTranslations(new ArrayList<>());
         for (int i = 0; i < idiomasYNombres.length; i += 2) {
-            CategoryTranslationEntity tr = CategoryTranslationEntity.builder().category(c)
-                    .language(idiomasYNombres[i]).name(idiomasYNombres[i + 1]).build();
+            CategoryTranslationEntity tr = CategoryTranslationEntity.builder().category(c).language(idiomasYNombres[i])
+                    .name(idiomasYNombres[i + 1]).build();
             c.getTranslations().add(tr);
         }
         return c;
