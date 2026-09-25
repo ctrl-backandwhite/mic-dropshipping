@@ -39,6 +39,7 @@ import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
+import com.nexaplatform.dropshipping.application.service.TextoTraducido;
 import com.nexaplatform.dropshipping.application.service.SupplierSourceUrl;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -1694,7 +1695,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         VariantValueEntity v = variantValueRepository.findById(valueId)
                 .orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
         String lang = language.trim().toLowerCase();
-        String val = value != null ? value.trim() : null;
+        String val = TextoTraducido.normaliza(value, lang);
         v.getTranslations().removeIf(tt -> lang.equalsIgnoreCase(tt.getLanguage()));
         if (val != null && !val.isEmpty()) {
             v.getTranslations()

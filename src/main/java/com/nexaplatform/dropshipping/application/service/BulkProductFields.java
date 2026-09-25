@@ -299,8 +299,11 @@ public final class BulkProductFields {
         vv.getTranslations().clear();
         for (Map.Entry<String, String> e : trMap.entrySet()) {
             if (has(e.getKey()) && has(e.getValue())) {
+                String idioma = e.getKey().trim().toLowerCase();
+                // Normalizado al entrar, no al pintar: si se arreglara en la vista, el buscador, el
+                // export y el bus seguirían viendo «17.3 cm» en español.
                 vv.getTranslations().add(VariantValueTranslationEntity.builder().variantValue(vv)
-                        .language(e.getKey().trim().toLowerCase()).value(e.getValue().trim()).build());
+                        .language(idioma).value(TextoTraducido.normaliza(e.getValue(), idioma)).build());
             }
         }
     }
