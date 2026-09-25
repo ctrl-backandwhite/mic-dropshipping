@@ -8,12 +8,11 @@ import java.util.regex.Pattern;
 /**
  * La etiqueta de una talla, escrita igual siempre y en cada idioma.
  *
- * <p><b>Qué problema resuelve (25-sep-2026).</b> El chino de origen es UNIFORME —{@code 26码内长16.7},
- * {@code 27码内长17.3}, siempre el mismo término {@code 内长}— y aun así el traductor devolvía el mismo
- * concepto de treinta formas distintas por idioma: «Talla 28 largo 17,9 cm», «Talla 31: 19,8 cm»,
- * «Talla 34 plantilla 21 cm», «Größe # Einlegesohle # cm». Apiladas en la lista de tallas de una ficha
- * parecen datos distintos, y algunas eran directamente erróneas: {@code 内长} es el largo interior, no
- * la plantilla ni la entrepierna.
+ * <p><b>Qué problema resuelve (25-sep-2026).</b> El chino de origen dice lo mismo de tres maneras
+ * —{@code 15内长12.3}, {@code 27码：17cm}, {@code 32码：内长19.6cm}— y el traductor multiplicaba esa
+ * variedad: «Talla 28 largo 17,9 cm», «Talla 31: 19,8 cm», «Talla 34 plantilla 21 cm», «Größe #
+ * Einlegesohle # cm». Apiladas en la lista de tallas de una ficha parecen datos distintos, y algunas
+ * eran directamente erróneas: {@code 内长} es el largo interior, no la plantilla ni la entrepierna.
  *
  * <p>No es un maquillaje: se traduce DESDE EL CHINO, que es la fuente, y por eso puede corregir lo que
  * el traductor se inventó. Lo que no encaja en un patrón conocido se deja como venga —ahí el traductor
@@ -27,9 +26,30 @@ public final class TallaCanonica {
     private TallaCanonica() {
     }
 
-    /** Talla con largo interior: {@code 26码内长16.7cm}. El {@code 码} y la unidad pueden faltar. */
-    private static final Pattern LARGO_INTERIOR = Pattern
-            .compile("^(\\d+)码?内长(约)?([\\d.]+?)\\.?\\s*(?:cm|CM|厘米)?$");
+    /**
+     * Talla con su medida, en las formas que usa el proveedor: {@code 15内长12.3}, {@code 27码：17cm},
+     * {@code 32码：内长19.6cm}, {@code 31码/内长19cm}, {@code 32码/鞋内长19.5厘米},
+     * {@code 29码鞋内长约/18.0厘米}, {@code 21码子13.5厘米}, {@code 26鞋内长16厘米} y
+     * {@code 24-内长15.0cm}. Son quince maneras de escribir el mismo dato.
+     *
+     * <p>El {@code 码} («talla»), los dos puntos —chinos o latinos—, el {@code 内长} («largo interior»),
+     * el {@code 约} («aproximadamente») y la unidad son todos opcionales, pero <b>alguno</b> tiene que
+     * separar el número de talla de la medida: eso es lo que exige la mirada inicial. Sin ella un valor
+     * como {@code 27} casaría partiéndose en talla «2» y medida «7».
+     *
+     * <p>El {@code 鞋} es «zapato» ({@code 鞋内长}, «largo interior del zapato»): el mismo dato con una
+     * palabra más. El {@code [.,，]?} está para el chino malformado tipo {@code 26码内长16.},
+     * {@code 32码内长20,} y {@code 22码：14.2cm，}, que llegan con el separador colgando: se lo come el
+     * patrón en vez de arrastrarlo al texto traducido.
+     *
+     * <p>La unidad admite {@code c}, {@code C}, {@code m} y {@code 厘} sueltas porque el proveedor
+     * TRUNCA el «cm» y el «厘米» ({@code 28码内长约17.0c}, {@code 23码：15.1m}, {@code 29码/内长17.8厘}).
+     * No son unidades distintas: un pie de 15 metros no existe y las tallas vecinas de esas mismas
+     * fichas vienen en centímetros.
+     */
+    private static final Pattern TALLA_CON_MEDIDA = Pattern.compile("^[,，\\s]*(?=\\d+(?:码|[：:/-]|内长|鞋))(\\d{1,3})"
+            + "码?子?[：:/-]?\\s*鞋?(内长)?(?:内长)*(约)?[/：:]?\\s*(\\d{1,3}(?:[.,]\\d+)?)[.,，]?\\s*"
+            + "(?:厘米|厘|cm|CM|[cCm])?[，,]?\\s*$");
 
     /**
      * Talla por letra con el peso recomendado: {@code 欧码XS(建议90-110斤)}, {@code 2XL【150-170斤】}.
@@ -55,21 +75,38 @@ public final class TallaCanonica {
     private static final Pattern CODIGO_COMPUESTO = Pattern.compile("^[^0-9]{0,4}[（(\\[【]?[^）)\\]】]*/");
 
     /** A cuántos kilos equivale cada unidad que usa el proveedor. */
-    private static final Map<String, Double> A_KILOS = Map.of("斤", 0.5, "公斤", 1.0, "千克", 1.0, "kg", 1.0, "KG",
-            1.0, "克", 0.001, "g", 0.001);
+    private static final Map<String, Double> A_KILOS = Map.of("斤", 0.5, "公斤", 1.0, "千克", 1.0, "kg", 1.0, "KG", 1.0, "克",
+            0.001, "g", 0.001);
 
-    /** Lote por rango de tallas: {@code 22-26一手拍5双}. */
-    private static final Pattern LOTE_DE_PARES = Pattern.compile("^(\\d+)-(\\d+)一手拍(\\d+)双$");
+    /**
+     * Un lote de pares al por mayor: {@code 一手拍5双} («un lote de 5 pares»), normalmente precedido de
+     * un rango de tallas, {@code 27-31码一手拍5双}.
+     *
+     * <p>Se busca en cualquier posición, no de principio a fin, porque el proveedor lo escribe de al
+     * menos dieciséis formas: con {@code 码} y sin él, con el rango delante o detrás, y a veces con
+     * texto suelto alrededor.
+     */
+    private static final Pattern LOTE_DE_PARES = Pattern.compile("一手拍\\d+双");
 
-    /** Las palabras de cada idioma: talla, largo interior, «aproximadamente» y pares. */
-    private static final Map<String, String[]> PALABRAS = Map.of(
-            "es", new String[] {"Talla", "largo interior", "aprox.", "pares"},
-            "en", new String[] {"Size", "inner length", "approx.", "pairs"},
-            "pt", new String[] {"Tamanho", "comprimento interno", "aprox.", "pares"},
-            "fr", new String[] {"Taille", "longueur intérieure", "env.", "paires"},
-            "de", new String[] {"Größe", "Innenlänge", "ca.", "Paare"},
-            "it", new String[] {"Taglia", "lunghezza interna", "circa", "paia"},
-            "nl", new String[] {"Maat", "binnenlengte", "ca.", "paar"});
+    /** Las palabras de cada idioma: talla, largo interior y «aproximadamente». */
+    private static final Map<String, String[]> PALABRAS = Map.of("es",
+            new String[]{"Talla", "largo interior", "aprox."}, "en", new String[]{"Size", "inner length", "approx."},
+            "pt", new String[]{"Tamanho", "comprimento interno", "aprox."}, "fr",
+            new String[]{"Taille", "longueur intérieure", "env."}, "de", new String[]{"Größe", "Innenlänge", "ca."},
+            "it", new String[]{"Taglia", "lunghezza interna", "circa"}, "nl",
+            new String[]{"Maat", "binnenlengte", "ca."});
+
+    /**
+     * Si ese original chino es un lote de pares al por mayor, y por tanto NO es una talla.
+     *
+     * <p><b>Por qué se descarta en vez de traducirse (25-sep-2026).</b> «27-31码一手拍5双» es una
+     * condición de compra —cinco pares surtidos del 27 al 31—, no un número de calzado. Puesto en el
+     * selector de talla junto al 27, al 28 y al 29, el comprador elige «tallas 27-31, lote de 5 pares»
+     * creyendo que compra un par. Antes se traducía; ahora el valor no llega a existir.
+     */
+    public static boolean esLoteDePares(String valorZh) {
+        return valorZh != null && LOTE_DE_PARES.matcher(valorZh).find();
+    }
 
     /**
      * La etiqueta canónica para ese original chino en ese idioma, si el original es un patrón conocido.
@@ -87,11 +124,19 @@ public final class TallaCanonica {
         }
         String zh = valorZh.trim();
 
-        Matcher largo = LARGO_INTERIOR.matcher(zh);
-        if (largo.matches()) {
-            String medida = decimal(largo.group(3), idioma);
-            String aprox = largo.group(2) != null ? p[2] + " " : "";
-            return Optional.of(p[0] + " " + largo.group(1) + ", " + p[1] + " " + aprox + medida + " cm");
+        // TALLA CON MEDIDA, con el formato que fijó el titular el 25-sep-2026: «Talla 15 : largo
+        // interior 12,3 cm». El separador es DOS PUNTOS y no una coma porque lo que va detrás es una
+        // aclaración de la talla, no otro dato de la misma lista; con coma se leían como dos columnas.
+        //
+        // «largo interior» se escribe SOLO cuando el chino trae 内长. Cuando el proveedor se limita a
+        // «27码：17cm» queda «Talla 27 : 17 cm»: la medida es la misma cosa, pero afirmarlo por él
+        // sería añadir un dato que su ficha no da.
+        Matcher medida = TALLA_CON_MEDIDA.matcher(zh);
+        if (medida.matches()) {
+            String concepto = medida.group(2) != null ? p[1] + " " : "";
+            String aprox = medida.group(3) != null ? p[2] + " " : "";
+            return Optional.of(
+                    p[0] + " " + medida.group(1) + " : " + concepto + aprox + decimal(medida.group(4), idioma) + " cm");
         }
 
         // TALLA POR PESO, con el formato que pidió el titular el 25-sep-2026: «XS - (45 - 55 KG)».
@@ -111,11 +156,6 @@ public final class TallaCanonica {
                         + kilos(peso.group(3), factor) + " KG)");
             }
         }
-
-        Matcher lote = LOTE_DE_PARES.matcher(zh);
-        if (lote.matches()) {
-            return Optional.of(lote.group(1) + "-" + lote.group(2) + ", " + lote.group(3) + " " + p[3]);
-        }
         return Optional.empty();
     }
 
@@ -134,14 +174,18 @@ public final class TallaCanonica {
     }
 
     /**
-     * La medida con el separador decimal del idioma y sin un separador colgando.
+     * La medida con el separador decimal del idioma —coma en todos menos en inglés— y sin ceros que
+     * sobren.
      *
-     * <p>Lo de «sin separador colgando» no es teórico: el chino trae medidas como {@code 内长16.} y la
-     * primera versión de esto las convirtió en «largo interior 16, cm», con la coma suelta delante de
-     * la unidad. Se coló en 14 filas de preproducción.
+     * <p>El proveedor escribe {@code 24码：15.0cm}, y publicar «15,0 cm» promete una precisión de
+     * milímetro que su ficha no da. «15 cm» dice exactamente lo que él dijo. El cero solo se quita
+     * cuando hay parte decimal: en «20» el cero es el número.
      */
     private static String decimal(String medida, String idioma) {
-        String limpia = medida.endsWith(".") ? medida.substring(0, medida.length() - 1) : medida;
+        String limpia = medida.replace(',', '.');
+        if (limpia.indexOf('.') >= 0) {
+            limpia = limpia.replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
         return "en".equalsIgnoreCase(idioma) ? limpia : limpia.replace('.', ',');
     }
 }

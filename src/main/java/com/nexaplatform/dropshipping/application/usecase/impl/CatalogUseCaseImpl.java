@@ -39,8 +39,9 @@ import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
-import com.nexaplatform.dropshipping.application.service.TextoTraducido;
 import com.nexaplatform.dropshipping.application.service.SupplierSourceUrl;
+import com.nexaplatform.dropshipping.application.service.TallaCanonica;
+import com.nexaplatform.dropshipping.application.service.TextoTraducido;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
@@ -462,6 +463,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     .position(optReq.position()).build();
             if (optReq.values() != null) {
                 for (IngestVariantValue v : optReq.values()) {
+                    // Un lote al por mayor no es una talla: no entra en el selector (ver TallaCanonica).
+                    if (TallaCanonica.esLoteDePares(v.valueZh())) {
+                        continue;
+                    }
                     opt.getValues()
                             .add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh()).position(v.position())
                                     .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl)
@@ -501,6 +506,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         Set<String> vistos = new HashSet<>();
         if (req.variants() != null) {
             for (IngestVariant v : req.variants()) {
+                // La variante de un lote al por mayor tampoco se vende: al no entrar aquí, el bucle de
+                // abajo la DESACTIVA si ya existía, en vez de borrarla y romper un pedido histórico.
+                if (esLote(v.options())) {
+                    continue;
+                }
                 ProductVariantEntity ent;
                 if (v.externalId() != null && existentes.containsKey(v.externalId())) {
                     ent = existentes.get(v.externalId());
@@ -530,6 +540,19 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         product.getVariants().clear();
         product.getVariants().addAll(resultado);
+    }
+
+    /** Si alguno de los valores que identifican a la variante es un lote al por mayor. */
+    private boolean esLote(Map<String, String> opciones) {
+        if (opciones == null) {
+            return false;
+        }
+        for (String valor : opciones.values()) {
+            if (TallaCanonica.esLoteDePares(valor)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
