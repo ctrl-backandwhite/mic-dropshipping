@@ -5,6 +5,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.SetBucketPolicyArgs;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -106,6 +107,33 @@ public class ObjectStorageService {
             throw new ObjectStorageException("No se pudo subir el objeto " + key, e);
         }
         return baseUrl() + "/" + key;
+    }
+
+    /**
+     * Borra el objeto de esa URL pública. Silencioso si no es nuestro o ya no está.
+     *
+     * <p>Lo usa la compresión: cuando nace el {@code .webp}, el original deja de tener dueño —ninguna
+     * fila lo apunta ya— y quedarse en el cubo es pagar dos veces por la misma foto. Con 121.825
+     * imágenes eso eran decenas de GB de ficheros que nadie sirve.
+     *
+     * <p>No lanza: que no se pueda borrar un objeto huérfano no puede tumbar la compresión, que es lo
+     * que sí aporta. Se anota y se sigue.
+     */
+    public void deleteByPublicUrl(String url) {
+        if (client == null || url == null || url.isBlank() || publicUrl == null || publicUrl.isBlank()) {
+            return;
+        }
+        String base = baseUrl() + "/";
+        if (!url.startsWith(base)) {
+            return; // externa (alicdn) o de otro host: no es nuestra, no se toca
+        }
+        String key = url.substring(base.length());
+        try {
+            client.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(key).build());
+            log.debug("Objeto borrado del cubo: {}", key);
+        } catch (Exception e) {
+            log.debug("No se pudo borrar el objeto {}: {}", key, e.getMessage());
+        }
     }
 
     /** Descarga los bytes de un objeto por su clave (usa el endpoint INTERNO, alcanzable por el backend). */

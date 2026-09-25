@@ -780,7 +780,19 @@ public class ImageMirrorService {
                 String hash = sha256(lista.datos());
                 String key = "media/" + hash.substring(0, 2) + "/" + hash + "." + lista.tipo();
                 String url = storage.upload(key, lista.datos(), lista.contentType());
+                String anterior = img.getCdnUrl();
                 imageRepository.marcaComprimida(img.getId(), url, (long) lista.datos().length, hash, Instant.now());
+                // SOLO VIVE LA COMPRIMIDA (regla del titular, 25-sep-2026). En cuanto la fila apunta al
+                // .webp, el original se queda sin dueño: ninguna otra fila lo referencia, porque la clave
+                // es el hash de SU contenido y ese hash acaba de cambiar. Dejarlo en el cubo es guardar
+                // dos copias de la misma foto y pagar dos veces por servir una.
+                //
+                // Se borra DESPUÉS de haber apuntado la fila al nuevo, nunca antes: si se borrara primero
+                // y fallara la escritura, la fila seguiría apuntando a un objeto que ya no existe y la
+                // imagen desaparecería del escaparate sin dar ningún error.
+                if (anterior != null && !anterior.equals(url)) {
+                    storage.deleteByPublicUrl(anterior);
+                }
                 bytesAntes += original.length;
                 bytesDespues += lista.datos().length;
                 aligeradas++;
