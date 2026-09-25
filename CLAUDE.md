@@ -95,6 +95,24 @@ hilos compartiendo JVM aparecerían fallos intermitentes imposibles de reproduci
 
 Ojo también con `-T1C`: este proyecto es **de un solo módulo**, así que esa bandera no hace nada.
 
+## NORMA OBLIGATORIA: todo cambio actualiza la documentación y la memoria
+
+Un cambio **no está terminado** hasta que la documentación que lo describe dice la verdad. Va en el
+**mismo commit**, no en uno posterior «de documentación»: si van separados, el segundo no llega.
+
+- ¿Tocaste una ruta, un campo o una cabecera de la API? → `docs/api/INTEGRATION.md`
+- ¿El despliegue, las ramas o los entornos? → `docs/DEPLOY.md`
+- ¿Colores, tipografía o un componente visual? → `docs/design-tokens.md`
+- ¿Una norma, una versión o una cifra de este repositorio? → este mismo fichero
+- ¿Cómo se arranca o se prueba? → el `README.md`
+- ¿Una decisión, o algo que te hizo perder tiempo y volverá a pasar? → una **memoria** del proyecto
+
+**Si una frase deja de ser cierta, se corrige o se borra**; no se añade otra debajo dejando la vieja,
+porque entonces hay dos versiones y ninguna fiable. Y **las cifras se cuentan antes de escribirlas**.
+
+Lo que cuesta no hacerlo, medido el 25-sep-2026: el contrato de la API documentaba un campo de pago
+que no existe en el código, y cualquiera que integrara siguiéndolo no encontraba nada.
+
 ## Otras normas del repositorio
 
 - **Imports, no nombres completos en línea.** Se importa la clase; no se escribe el paquete entero
