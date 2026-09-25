@@ -137,13 +137,14 @@ public class ProductMapper {
         String currency = admin ? p.getCurrency() : null;
         // Desglose base/IVA/envío/recargo: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
         String baseFormatted = admin ? priced.baseFormatted() : null;
-        String ivaFormatted = admin ? priced.ivaFormatted() : null;
+        String margenInternoFormatted = admin ? priced.margenInternoFormatted() : null;
         String shippingFormatted = admin ? priced.shippingFormatted() : null;
         // Recargo fijo por producto (30-ago-2026): el valor crudo en CNY (lo que edita el admin) y el
         // formateado. SOLO admin; el cliente solo ve displayFormatted (que ya lo incluye en el total).
         // El IVA crudo en CNY, para poder editarlo desde la ficha (23-sep-2026). Mismo par que el
         // recargo: valor tecleado + valor ya convertido a la moneda de la peticion.
-        BigDecimal ivaCny = admin ? p.getIvaCny() : null;
+        // El porcentaje crudo es dato interno: solo viaja para quien administra, igual que el recargo.
+        BigDecimal margenInternoPct = admin ? p.getMargenInternoPct() : null;
         BigDecimal surchargeCny = admin ? p.getSurchargeCny() : null;
         // Las bolsas de subvención son SOLO admin: el cliente ve su efecto en el desglose del checkout,
         // nunca el importe que se les ha asignado.
@@ -165,7 +166,8 @@ public class ProductMapper {
                 p.getVariants().stream().map(v -> toVariantView(p, v, language)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(x -> toPriceTierView(x, tiers)).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(), priced.displaySymbol(),
-                priced.displayFormatted(), appliedMarginPercent, baseFormatted, ivaFormatted, shippingFormatted, ivaCny,
+                priced.displayFormatted(), appliedMarginPercent, baseFormatted, margenInternoFormatted, shippingFormatted,
+                margenInternoPct,
                 surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny, shippingUserFormatted,
                 dutyUserFormatted, tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()), videoUrlOf(p), Boolean.TRUE.equals(p.getHasVideo()),

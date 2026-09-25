@@ -201,7 +201,7 @@ class AdminJourneyIT extends BaseIntegration {
             // y el porte del proveedor —1,00 y 2,00 sin margen— llevan el mismo factor 2,5 que el
             // coste desde el 25-ago-2026, y las tres cifras suman los 32,50 que se cobran.
             assertThat(detalle.cuerpo().get("baseFormatted").asText()).isEqualTo("$25.00");
-            assertThat(detalle.cuerpo().get("ivaFormatted").asText()).isEqualTo("$2.50");
+            assertThat(detalle.cuerpo().get("margenInternoFormatted").asText()).isEqualTo("$2.50");
             assertThat(detalle.cuerpo().get("shippingFormatted").asText()).isEqualTo("$5.00");
         }),
 

@@ -336,7 +336,7 @@ class PartnerApiIT extends BaseIntegration {
         assertThat(ficha.get("retailUsd").isNull()).isTrue();
         assertThat(ficha.get("appliedMarginPercent").isNull()).as("el margen es información interna").isTrue();
         assertThat(ficha.get("baseFormatted").isNull()).isTrue();
-        assertThat(ficha.get("ivaFormatted").isNull()).isTrue();
+        assertThat(ficha.get("margenInternoFormatted").isNull()).isTrue();
         assertThat(ficha.get("shippingFormatted").isNull()).isTrue();
         // `basePrice` es el importe que se paga al proveedor en CNY y `currency` la etiqueta que lo delata:
         // el integrador tarifica con `displayFormatted`, no con nuestro coste.

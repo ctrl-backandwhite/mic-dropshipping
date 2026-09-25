@@ -495,7 +495,7 @@ class Cov01CatalogBulkImportTest {
     }
 
     @Test
-    void unaFilaSinEnvioOSinIvaNoEntraEnElCatalogo() {
+    void unaFilaSinEnvioOSinMargenNoEntraEnElCatalogo() {
         // El total es base×margen + IVA + envío: sin ellos el producto se vendería por debajo de coste.
         BulkProductDtoIn sinEnvio = validRow();
         sinEnvio.setShippingCny(null);
@@ -506,7 +506,7 @@ class Cov01CatalogBulkImportTest {
 
         assertThat(result.getFailed()).isEqualTo(2);
         assertThat(result.getErrors().get(0)).contains("envío");
-        assertThat(result.getErrors().get(1)).contains("IVA");
+        assertThat(result.getErrors().get(1)).contains("margen interno");
     }
 
     @Test
@@ -976,7 +976,10 @@ class Cov01CatalogBulkImportTest {
         useCase.createProductManual(validRow());
 
         assertThat(managed.getShippingCny()).isEqualByComparingTo("10");
-        assertThat(managed.getIvaCny()).isEqualByComparingTo("2");
+        // La ficha trae el campo VIEJO (2 CNY sobre un precio de 12,50) y el importador lo convierte
+        // a porcentaje: 16 %. Es la compatibilidad que sostiene los JSON ya guardados y los eventos
+        // que siguen en el bus.
+        assertThat(managed.getMargenInternoPct()).isEqualByComparingTo("16.000");
         // DROP-158: el recargo fijo también se aplica al importar (viaja en el export del bus).
         assertThat(managed.getSurchargeCny()).isEqualByComparingTo("3");
         verify(customsProfileService).applyDefaults(managed, CATEGORY_SLUG);

@@ -35,7 +35,16 @@ public final class EventoBus {
      * entiende debe rechazarla y avisar, nunca adivinar: el catálogo mal
      * interpretado se traduce en productos mal publicados en la tienda.
      */
-    public static final int VERSION = 1;
+    /**
+     * Versión del contrato. 2 desde el 25-sep-2026: la ficha dejó de llevar {@code ivaCny} (importe) y
+     * pasa a llevar {@code margenInternoPct} (porcentaje).
+     *
+     * <p>El consumidor NO la mira, y es a propósito: aplica la ficha con el importador de la carga
+     * masiva, que entiende los dos campos. Así los eventos de la versión 1 que siguen en el tema —30
+     * días de retención— se consumen sin tocar nada. La versión está para que quede escrito cuándo
+     * cambió la forma, no para rechazar nada.
+     */
+    public static final int VERSION = 2;
 
     private EventoBus() {
     }

@@ -40,6 +40,8 @@ public class PricingService {
     /** Solo para saber si el destino del comprador cobra derecho por artículo. */
     private final CustomsValuationService customsValuation;
 
+    private static final BigDecimal CIEN = new BigDecimal("100");
+
     /**
      * El precio de una CANTIDAD concreta: aplica el tramo por cantidad que le toca (23-sep-2026).
      *
@@ -269,8 +271,24 @@ public class PricingService {
         // Lo que se le debe al PROVEEDOR, sin margen. Se conserva porque son dos cosas distintas de las que
         // dependen cálculos distintos: la subvención por porte repetido devuelve el porte que de verdad no
         // se gasta (estos 16 CNY), mientras que el cliente paga ese porte ya con margen.
-        BigDecimal supplierIvaUsd = product.getIvaCny() != null
-                ? currencyService.toUsd(product.getIvaCny(), sourceCurrency)
+        // MARGEN INTERNO (25-sep-2026): lo que antes viajaba como «IVA chino» y nunca lo fue.
+        //
+        // Valía siempre el 50 % exacto de la base —el IVA de China es el 13 %—, o sea que era margen
+        // nuestro con el nombre de otra cosa, y guardado como importe fijo en yuanes: al cambiar el
+        // coste del proveedor había que rehacerlo a mano o se quedaba desfasado en silencio. Ahora es
+        // un PORCENTAJE sobre el coste, así que sigue al coste sin que nadie lo toque.
+        //
+        // Se calcula sobre `costUsd`, que es el importe que se está tarificando: con la tabla de
+        // cantidades, eso significa que el margen baja con el tramo en la misma proporción que el
+        // coste, que es justo lo que se espera de un porcentaje.
+        //
+        // Nulo aporta CERO, exactamente igual que aportaba el importe nulo de antes. No se inventa un
+        // porcentaje por defecto: eso encarecería en silencio cualquier producto al que le falte el
+        // dato, y la regla de este cambio es que renombrar un concepto no mueva el precio de nadie. La
+        // carga masiva exige el campo, así que un producto real siempre lo trae.
+        BigDecimal margenPct = product.getMargenInternoPct();
+        BigDecimal margenInternoBaseUsd = costUsd != null && margenPct != null && margenPct.signum() != 0
+                ? costUsd.multiply(margenPct).divide(CIEN, 10, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         // El envío de la VARIANTE manda sobre el del producto (23-sep-2026).
         //
@@ -320,7 +338,7 @@ public class PricingService {
                         ? currencyService.toUsd(product.getDutyUserCny(), sourceCurrency)
                         : BigDecimal.ZERO;
         BigDecimal marginFactor = marginFactor(costUsd, retailBaseUsd);
-        BigDecimal ivaUsd = supplierIvaUsd.multiply(marginFactor);
+        BigDecimal margenInternoUsd = margenInternoBaseUsd.multiply(marginFactor);
         BigDecimal shippingUsd = supplierShippingUsd.multiply(marginFactor);
         String displayCode = CurrencyHolder.get();
         // Sin precio base (producto sin precio) → todo null (no se puede tarificar); no forzar 0.
@@ -330,7 +348,7 @@ public class PricingService {
         // (30 CNY → ¥30.00). El TOTAL = suma de los componentes YA redondeados en la moneda mostrada, de
         // modo que el desglose SIEMPRE cuadra (base+IVA+envío+recargo = total) en cualquier divisa.
         BigDecimal displayBase = currencyService.usdToDisplay(baseUsd);
-        BigDecimal displayIva = currencyService.usdToDisplay(ivaUsd);
+        BigDecimal displayIva = currencyService.usdToDisplay(margenInternoUsd);
         BigDecimal displayShip = currencyService.usdToDisplay(shippingUsd);
         BigDecimal displaySurcharge = currencyService.usdToDisplay(surchargeUsd);
         BigDecimal displayShippingUser = currencyService.usdToDisplay(shippingUserUsd);
@@ -339,7 +357,7 @@ public class PricingService {
         // cifra que guarda el pedido y con la que se cobra.
         BigDecimal retailUsd = baseUsd == null
                 ? null
-                : baseUsd.setScale(2, RoundingMode.HALF_UP).add(ivaUsd.setScale(2, RoundingMode.HALF_UP))
+                : baseUsd.setScale(2, RoundingMode.HALF_UP).add(margenInternoUsd.setScale(2, RoundingMode.HALF_UP))
                         .add(shippingUsd.setScale(2, RoundingMode.HALF_UP))
                         .add(surchargeUsd.setScale(2, RoundingMode.HALF_UP))
                         .add(shippingUserUsd.setScale(2, RoundingMode.HALF_UP))
@@ -411,14 +429,14 @@ public class PricingService {
         // El string formateado lo produce el BACKEND (locale de la moneda en BD); el frontend solo pinta.
         String displayFormatted = currencyService.formatDisplay(displayTotal, displayCode);
         String baseFormatted = currencyService.formatDisplay(baseR, displayCode);
-        String ivaFormatted = currencyService.formatDisplay(ivaR, displayCode);
+        String margenInternoFormatted = currencyService.formatDisplay(ivaR, displayCode);
         String shippingFormatted = currencyService.formatDisplay(shipR, displayCode);
         String surchargeFormatted = currencyService.formatDisplay(surchargeR, displayCode);
         String shippingUserFormatted = currencyService.formatDisplay(shippingUserR, displayCode);
         String dutyUserFormatted = currencyService.formatDisplay(dutyUserR, displayCode);
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
-                withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
+                withMargin.appliedPercentage(), baseUsd, margenInternoUsd, shippingUsd, baseFormatted, margenInternoFormatted,
                 shippingFormatted, surchargeUsd, surchargeFormatted, shippingUserFormatted, dutyUserFormatted,
                 originalFormatted, discountPercent, promotionName, originalRetailUsd, supplierShippingUsd);
     }
@@ -515,8 +533,8 @@ public class PricingService {
             String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
             BigDecimal appliedMarginPercent,
             // Desglose (solo informativo, para el admin): base con margen + IVA + envío + recargo = total.
-            BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd, String baseFormatted,
-            String ivaFormatted, String shippingFormatted,
+            BigDecimal baseRetailUsd, BigDecimal margenInternoUsd, BigDecimal shippingUsd, String baseFormatted,
+            String margenInternoFormatted, String shippingFormatted,
             /**
              * Recargo fijo por producto (surcharge_cny, 30-ago-2026). Va en USD ya convertido y con su
              * versión formateada para el admin. NO lleva margen: lo fija el admin por producto/categoría/
@@ -556,11 +574,11 @@ public class PricingService {
          */
         public PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount, String displayCurrency,
                 String displaySymbol, String displayFormatted, UUID appliedRuleId, BigDecimal appliedMarginPercent,
-                BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd, String baseFormatted,
-                String ivaFormatted, String shippingFormatted) {
+                BigDecimal baseRetailUsd, BigDecimal margenInternoUsd, BigDecimal shippingUsd, String baseFormatted,
+                String margenInternoFormatted, String shippingFormatted) {
             // Sin promoción ni recargo: los constructores heredados (tests/llamadas previas) no los usan.
             this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted, appliedRuleId,
-                    appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
+                    appliedMarginPercent, baseRetailUsd, margenInternoUsd, shippingUsd, baseFormatted, margenInternoFormatted,
                     shippingFormatted, null, null, null, null, null, null, null, null, shippingUsd);
         }
 

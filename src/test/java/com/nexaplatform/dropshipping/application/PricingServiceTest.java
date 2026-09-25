@@ -283,13 +283,13 @@ class PricingServiceTest {
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
-                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+                .margenInternoPct(new BigDecimal("13")).shippingCny(new BigDecimal("16.00")).build();
 
         PricedAmount priced = service.priceFor(p);
 
         // 10 USD de base × 2,5 = 25; el IVA (1,30) y el porte (1,60) llevan el MISMO factor.
         assertThat(priced.baseRetailUsd()).isEqualByComparingTo("25.00");
-        assertThat(priced.ivaUsd()).isEqualByComparingTo("3.25");
+        assertThat(priced.margenInternoUsd()).isEqualByComparingTo("3.25");
         assertThat(priced.shippingUsd()).isEqualByComparingTo("4.00");
         assertThat(priced.retailUsd()).isEqualByComparingTo("32.25");
     }
@@ -311,7 +311,7 @@ class PricingServiceTest {
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
-                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+                .margenInternoPct(new BigDecimal("13")).shippingCny(new BigDecimal("16.00")).build();
 
         PricedAmount priced = service.priceFor(p);
 
@@ -324,7 +324,7 @@ class PricingServiceTest {
      * una división por cero.
      */
     @Test
-    void sinCosteElIvaYElPorteNoLlevanMargen() {
+    void sinCosteNoHayMargenInternoYElPorteNoLlevaMargen() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
         when(marginService.apply(any(), any(), any()))
@@ -333,11 +333,15 @@ class PricingServiceTest {
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
         ProductEntity p = ProductEntity.builder().basePrice(BigDecimal.ZERO).currency("CNY")
-                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+                .margenInternoPct(new BigDecimal("13")).shippingCny(new BigDecimal("16.00")).build();
 
         PricedAmount priced = service.priceFor(p);
 
-        assertThat(priced.ivaUsd()).isEqualByComparingTo("1.30");
+        // El margen interno es un PORCENTAJE sobre el coste, así que con el coste a cero no hay nada
+        // que ganar: cero. Antes daba 1,30 porque viajaba como importe fijo y se cobraba aunque el
+        // producto no costara nada — justo el disparate que el porcentaje evita.
+        assertThat(priced.margenInternoUsd()).isEqualByComparingTo("0");
+        // El porte sí sigue ahí, y sin margen encima: eso no cambia.
         assertThat(priced.shippingUsd()).isEqualByComparingTo("1.60");
     }
 
@@ -456,13 +460,13 @@ class PricingServiceTest {
         PricingCountryHolder.set("ES");
         when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(325);
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("28.00")).currency("CNY")
-                .ivaCny(new BigDecimal("3.64")).shippingCny(new BigDecimal("16.00"))
+                .margenInternoPct(new BigDecimal("13")).shippingCny(new BigDecimal("16.00"))
                 .surchargeCny(new BigDecimal("2.50")).shippingUserCny(new BigDecimal("16.00"))
                 .dutyUserCny(new BigDecimal("8.00")).build();
 
         PricedAmount priced = service.priceFor(p);
 
-        BigDecimal suma = new BigDecimal(priced.baseFormatted()).add(new BigDecimal(priced.ivaFormatted()))
+        BigDecimal suma = new BigDecimal(priced.baseFormatted()).add(new BigDecimal(priced.margenInternoFormatted()))
                 .add(new BigDecimal(priced.shippingFormatted())).add(new BigDecimal(priced.surchargeFormatted()))
                 .add(new BigDecimal(priced.shippingUserFormatted())).add(new BigDecimal(priced.dutyUserFormatted()));
 

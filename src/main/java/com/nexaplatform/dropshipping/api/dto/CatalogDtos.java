@@ -262,11 +262,12 @@ public final class CatalogDtos {
             String displaySymbol, String displayFormatted, BigDecimal appliedMarginPercent,
             // Desglose del total (base×margen + IVA + envío + recargo). SOLO ADMIN (null para usuario
             // final); el displayFormatted ya es el TOTAL que ve todo el mundo.
-            String baseFormatted, String ivaFormatted, String shippingFormatted,
+            String baseFormatted, String margenInternoFormatted, String shippingFormatted,
             // IVA chino en CNY, el valor CRUDO que teclea el admin (23-sep-2026). Venia solo formateado,
             // y sin el crudo no se podia ofrecer para editar: el 13 % es lo habitual, no una ley, y
             // corregirlo obligaba a reenviar la ficha entera por el importador. SOLO ADMIN.
-            BigDecimal ivaCny,
+            /** Margen interno en % sobre el coste. Solo viaja para quien administra. */
+            BigDecimal margenInternoPct,
             // Recargo fijo por producto (surcharge_cny, 30-ago-2026). surchargeCny = valor crudo en CNY
             // (el que edita el admin); surchargeFormatted = ya convertido a la moneda de la petición.
             // SOLO ADMIN (null para usuario final).
@@ -309,8 +310,8 @@ public final class CatalogDtos {
                     description, titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating,
                     reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt, lastSyncedAt,
                     images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice, displayCurrency,
-                    displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, ivaFormatted,
-                    shippingFormatted, ivaCny, surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny,
+                    displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, margenInternoFormatted,
+                    shippingFormatted, margenInternoPct, surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny,
                     shippingUserFormatted, dutyUserFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
                     originalFormatted, discountPercent, promotionName, compliance, extraDutyCents, extraDutyFormatted,
                     dutyGroupId, dutyCovered, shippingCovered);
@@ -394,13 +395,13 @@ public final class CatalogDtos {
                 List<ProductImageView> images, List<VariantOptionView> variantOptions, List<VariantView> variants,
                 List<PriceTierView> priceTiers, BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice,
                 String displayCurrency, String displaySymbol, String displayFormatted, BigDecimal appliedMarginPercent,
-                String baseFormatted, String ivaFormatted, String shippingFormatted, String metaTitle,
+                String baseFormatted, String margenInternoFormatted, String shippingFormatted, String metaTitle,
                 String metaDescription, boolean verified, String videoUrl, boolean hasVideo) {
             this(id, slug, source, externalId, supplier, categoryId, title, shortDescription, description, titleZh,
                     shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating, reviewCount,
                     monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt, lastSyncedAt, images,
                     variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice, displayCurrency,
-                    displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, ivaFormatted,
+                    displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, margenInternoFormatted,
                     shippingFormatted, null, null, null, null, null, null, null, metaTitle, metaDescription, verified,
                     videoUrl, hasVideo, null, null, null, null, null, null, null, false, false);
         }

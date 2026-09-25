@@ -470,7 +470,7 @@ class CatalogFlowIT extends BaseIntegration {
         assertThat(paraUsuario.get("retailUsd").isNull()).isTrue();
         assertThat(paraUsuario.get("appliedMarginPercent").isNull()).isTrue();
         assertThat(paraUsuario.get("baseFormatted").isNull()).isTrue();
-        assertThat(paraUsuario.get("ivaFormatted").isNull()).isTrue();
+        assertThat(paraUsuario.get("margenInternoFormatted").isNull()).isTrue();
         assertThat(paraUsuario.get("shippingFormatted").isNull()).isTrue();
         // Y sí ve el precio de venta, que es lo único que necesita para comprar.
         assertThat(paraUsuario.get("displayFormatted").asText()).isNotBlank();

@@ -232,7 +232,7 @@ class Cov05ProductMapperTest {
         assertThat(view.retailUsd()).isNull();
         assertThat(view.appliedMarginPercent()).isNull();
         assertThat(view.baseFormatted()).isNull();
-        assertThat(view.ivaFormatted()).isNull();
+        assertThat(view.margenInternoFormatted()).isNull();
         assertThat(view.shippingFormatted()).isNull();
         // El precio de venta sí lo ve todo el mundo.
         assertThat(view.displayFormatted()).isEqualTo("23,10 €");
@@ -249,7 +249,7 @@ class Cov05ProductMapperTest {
         assertThat(view.retailUsd()).isEqualByComparingTo("25.00");
         assertThat(view.appliedMarginPercent()).isEqualByComparingTo("150");
         assertThat(view.baseFormatted()).isEqualTo("18,50 €");
-        assertThat(view.ivaFormatted()).isEqualTo("1,85 €");
+        assertThat(view.margenInternoFormatted()).isEqualTo("1,85 €");
         assertThat(view.shippingFormatted()).isEqualTo("2,75 €");
     }
 

@@ -97,10 +97,13 @@ class RebajaSoloSobrePrecioUnitarioTest {
 
         PricingService.PricedAmount precio = pricingService.priceFor(p, p.getVariants().get(0), 100, escalera);
 
-        // Proporción 8/10 sobre la variante de 10,00 = 8,00, más los 4,00 de IVA del proveedor.
-        // Con la campaña encima saldrían 10,80: un 10 % regalado sobre un precio que ya es el de coste
-        // por volumen.
-        assertThat(precio.displayAmount()).isEqualByComparingTo("12.00");
+        // Proporción 8/10 sobre la variante de 10,00 = 8,00, más el margen interno del 40 % sobre ese
+        // coste = 3,20. Total 11,20.
+        //
+        // Antes del 25-sep-2026 salían 12,00: el margen viajaba como importe FIJO de 4,00 y no bajaba
+        // con el tramo, así que al comprar por volumen se cobraba el mismo margen absoluto sobre un
+        // coste menor. En porcentaje baja con el coste, que es lo que se espera de un porcentaje.
+        assertThat(precio.displayAmount()).isEqualByComparingTo("11.20");
         assertThat(precio.discounted()).isFalse();
         assertThat(precio.discountPercent()).isNull();
         assertThat(precio.promotionName()).isNull();
@@ -175,7 +178,7 @@ class RebajaSoloSobrePrecioUnitarioTest {
 
     private static ProductEntity producto() {
         ProductEntity p = ProductEntity.builder().source("1688").externalId("X").basePrice(new BigDecimal("10.00"))
-                .currency("CNY").surchargeCny(BigDecimal.ZERO).ivaCny(new BigDecimal("4.00")).build();
+                .currency("CNY").surchargeCny(BigDecimal.ZERO).margenInternoPct(new BigDecimal("40")).build();
         ProductVariantEntity v = ProductVariantEntity.builder().product(p).sku("SKU-1").price(new BigDecimal("10.00"))
                 .stock(5).options(Map.of()).active(true).build();
         p.setVariants(List.of(v));

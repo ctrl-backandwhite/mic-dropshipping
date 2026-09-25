@@ -118,8 +118,11 @@ public final class BulkProductRules {
         if (r.getShippingCny() == null) {
             throw new BusinessException("Falta el envío (shippingCny) del producto: " + esTitle);
         }
-        if (r.getIvaCny() == null) {
-            throw new BusinessException("Falta el IVA (ivaCny) del producto: " + esTitle);
+        // Vale cualquiera de los dos: el porcentaje nuevo o el importe viejo, que el importador
+        // convierte. Exigir solo el nuevo rechazaría las fichas que siguen en el bus y los JSON ya
+        // guardados, que es justo lo que no puede pasar durante el cambio.
+        if (r.getMargenInternoPct() == null && r.getIvaCny() == null) {
+            throw new BusinessException("Falta el margen interno (margenInternoPct) del producto: " + esTitle);
         }
     }
 

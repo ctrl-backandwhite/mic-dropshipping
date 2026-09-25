@@ -74,6 +74,8 @@ class PriceTierMatchesChargedPriceTest {
     private static final BigDecimal COSTE_USD = new BigDecimal("0.7526");
     private static final BigDecimal CON_MARGEN_USD = new BigDecimal("1.9900");
     private static final BigDecimal IVA_CNY = new BigDecimal("2.00");
+    /** El mismo importe de siempre, ahora en porcentaje sobre el coste: 37.175 % de 5.38. */
+    private static final BigDecimal MARGEN_PCT = new BigDecimal("37.175");
     private static final BigDecimal IVA_USD = new BigDecimal("0.2798");
     private static final BigDecimal ENVIO_CNY = new BigDecimal("9.30");
     private static final BigDecimal ENVIO_USD = new BigDecimal("1.3010");
@@ -88,7 +90,7 @@ class PriceTierMatchesChargedPriceTest {
         product = new ProductEntity();
         product.setBasePrice(COSTE_CNY);
         product.setCurrency("CNY");
-        product.setIvaCny(IVA_CNY);
+        product.setMargenInternoPct(MARGEN_PCT);
         product.setShippingCny(ENVIO_CNY);
 
         when(currencyRateService.toUsd(COSTE_CNY, "CNY")).thenReturn(COSTE_USD);

@@ -1216,8 +1216,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (req.getShippingCny() != null) {
             p.setShippingCny(req.getShippingCny());
         }
-        if (req.getIvaCny() != null) {
-            p.setIvaCny(req.getIvaCny());
+        if (req.getMargenInternoPct() != null) {
+            p.setMargenInternoPct(req.getMargenInternoPct());
         }
         // Recargo fijo por producto (30-ago-2026): se edita por producto desde la ficha; el update
         // masivo (por categoría / todo el catálogo) va por su propio endpoint.
@@ -2492,11 +2492,36 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la
      * transacción del writer).
      */
+    /**
+     * El margen interno de la ficha que llega, en porcentaje.
+     *
+     * <p><b>Compatibilidad, y no es opcional.</b> Hasta el 25-sep-2026 esto viajaba como
+     * {@code ivaCny}, un importe absoluto. Siguen circulando fichas con el campo viejo por dos vías
+     * que no se pueden reescribir: los JSON de carga que ya están guardados, y los eventos que están
+     * AHORA MISMO en el bus —el tema retiene 30 días—. Si el importador dejara de entenderlo, esas
+     * fichas entrarían con el margen a nulo y se venderían con el porcentaje por defecto en vez del
+     * suyo, sin un solo error.
+     *
+     * <p>La conversión es la misma que hizo la migración: el importe dividido entre la base. Sin base
+     * no hay de qué sacar el porcentaje, y se deja a nulo para que el cálculo use el de por defecto.
+     */
+    private static BigDecimal margenInternoDe(BulkProductDtoIn r) {
+        if (r.getMargenInternoPct() != null) {
+            return r.getMargenInternoPct();
+        }
+        BigDecimal importeViejo = r.getIvaCny();
+        BigDecimal base = r.getPrice();
+        if (importeViejo == null || base == null || base.signum() <= 0) {
+            return null;
+        }
+        return importeViejo.multiply(BigDecimal.valueOf(100)).divide(base, 3, RoundingMode.HALF_UP);
+    }
+
     private void applyLogistics(ProductEntity p, BulkProductDtoIn r) {
         // Envío e IVA (CNY): obligatorios en la carga; se suman al total SIN margen
         // (ver PricingService).
         p.setShippingCny(r.getShippingCny());
-        p.setIvaCny(r.getIvaCny());
+        p.setMargenInternoPct(margenInternoDe(r));
         // Recargo fijo (CNY): opcional, default 0. Se aplica en la importación para que el recargo
         // llegue igual por el bus/reexport (si no, el destino lo dejaría a 0).
         //

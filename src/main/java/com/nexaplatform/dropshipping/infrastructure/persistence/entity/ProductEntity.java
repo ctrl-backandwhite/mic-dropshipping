@@ -92,9 +92,19 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "shipping_cny", precision = 12, scale = 4)
     private BigDecimal shippingCny;
 
-    /** IVA en CNY (valor fijo de carga, misma moneda que base_price). Se suma al total SIN margen. */
-    @Column(name = "iva_cny", precision = 12, scale = 4)
-    private BigDecimal ivaCny;
+    /**
+     * Margen interno en PORCENTAJE sobre el coste del proveedor (25-sep-2026).
+     *
+     * <p>Sustituye a la antigua columna {@code iva_cny}, que nunca fue el IVA de China —ese es el
+     * 13 %— sino exactamente el 50 % de la base en los 263 productos del catálogo: un margen interno
+     * con el nombre cambiado y guardado como importe absoluto, que había que recalcular a mano cada
+     * vez que se movía el coste del proveedor. En porcentaje se ajusta solo.
+     *
+     * <p>Nulo significa «el porcentaje por defecto», no «cero». La columna es nulable a propósito: un
+     * NOT NULL con DEFAULT no protege del nulo explícito que manda la carga masiva.
+     */
+    @Column(name = "margen_interno_pct", precision = 6, scale = 3)
+    private BigDecimal margenInternoPct;
 
     /**
      * Recargo fijo por producto en CNY (misma moneda que base_price). Default 0. Lo edita el admin

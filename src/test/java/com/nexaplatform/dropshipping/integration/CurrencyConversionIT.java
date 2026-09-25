@@ -340,7 +340,7 @@ class CurrencyConversionIT extends BaseIntegration {
         JsonNode paraAdmin = fichaAdmin(conExtras.id(), "EUR");
         assertThat(paraAdmin.get("retailUsd").decimalValue()).isEqualByComparingTo("24.00");
         assertThat(paraAdmin.get("baseFormatted").asText()).isEqualTo("18,40" + NBSP + "€");
-        assertThat(paraAdmin.get("ivaFormatted").asText()).isEqualTo("0,92" + NBSP + "€");
+        assertThat(paraAdmin.get("margenInternoFormatted").asText()).isEqualTo("0,92" + NBSP + "€");
         assertThat(paraAdmin.get("shippingFormatted").asText()).isEqualTo("2,76" + NBSP + "€");
     }
 

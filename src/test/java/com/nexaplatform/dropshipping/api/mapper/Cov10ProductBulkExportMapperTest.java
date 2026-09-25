@@ -295,7 +295,7 @@ class Cov10ProductBulkExportMapperTest {
     @Test
     void losCamposDeLogisticaYAduanaViajanEnElExport() {
         ProductEntity p = ProductEntity.builder().externalId("1688-1").basePrice(new BigDecimal("20.00"))
-                .shippingCny(new BigDecimal("10.00")).ivaCny(new BigDecimal("2.60")).moq(2).monthlySales(500)
+                .shippingCny(new BigDecimal("10.00")).margenInternoPct(new BigDecimal("13")).moq(2).monthlySales(500)
                 .rating(new BigDecimal("4.8")).weightGrams(300).packageWeightGrams(420).lengthMm(30).widthMm(20)
                 .heightMm(5).countryOfOrigin("CN").hsCode("6104.43").certifications(List.of("CE")).shipFrom("CN")
                 .leadTimeDays(3).videoUrl("https://v/1.mp4").videoUrls(List.of("https://v/2.mp4"))
@@ -307,7 +307,7 @@ class Cov10ProductBulkExportMapperTest {
 
         assertThat(d.getPrice()).isEqualByComparingTo("20.00");
         assertThat(d.getShippingCny()).isEqualByComparingTo("10.00");
-        assertThat(d.getIvaCny()).isEqualByComparingTo("2.60");
+        assertThat(d.getMargenInternoPct()).isEqualByComparingTo("13");
         assertThat(d.getMoq()).isEqualTo(2);
         assertThat(d.getMonthlySales()).isEqualTo(500);
         assertThat(d.getRating()).isEqualByComparingTo("4.8");

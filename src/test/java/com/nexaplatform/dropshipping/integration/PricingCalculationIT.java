@@ -110,7 +110,7 @@ class PricingCalculationIT extends BaseIntegration {
         assertThat(p.appliedMarginPercent()).isEqualByComparingTo("150.00");
         assertThat(p.baseRetailUsd()).isEqualByComparingTo("25.0000");
         // El IVA y el porte del proveedor llevan el MISMO factor de 2,5 que la base.
-        assertThat(p.ivaUsd()).isEqualByComparingTo("2.5000");
+        assertThat(p.margenInternoUsd()).isEqualByComparingTo("2.5000");
         assertThat(p.shippingUsd()).isEqualByComparingTo("5.0000");
         // Y lo que se le paga al proveedor por el porte sigue siendo 2,00: eso no lleva margen.
         assertThat(p.supplierShippingUsd()).isEqualByComparingTo("2.0000");
@@ -258,7 +258,7 @@ class PricingCalculationIT extends BaseIntegration {
 
         assertThat(p.baseRetailUsd()).isEqualByComparingTo("25.0000");
         // 0,0050 × 2,5 = 0,0125: el medio céntimo sigue siéndolo tras aplicarle el margen.
-        assertThat(p.ivaUsd()).isEqualByComparingTo("0.0125");
+        assertThat(p.margenInternoUsd()).isEqualByComparingTo("0.0125");
         assertThat(p.shippingUsd()).isEqualByComparingTo("5.0000");
         // Canónico: 25,00 + 0,01 (medio céntimo hacia arriba) + 5,00 = 30,01 $.
         assertThat(p.retailUsd()).isEqualByComparingTo("30.01");
@@ -270,7 +270,7 @@ class PricingCalculationIT extends BaseIntegration {
         // se quedaba en 0,00 € y el desglose sumaba un céntimo menos que el total; al multiplicarlo por
         // 2,5 cruza el umbral de redondeo y las dos cifras vuelven a coincidir.
         assertThat(normalizado(p.baseFormatted())).isEqualTo("23,00 €");
-        assertThat(normalizado(p.ivaFormatted())).isEqualTo("0,01 €");
+        assertThat(normalizado(p.margenInternoFormatted())).isEqualTo("0,01 €");
         assertThat(normalizado(p.shippingFormatted())).isEqualTo("4,60 €");
         assertThat(normalizado(p.displayFormatted())).isEqualTo("27,61 €");
     }
@@ -352,7 +352,7 @@ class PricingCalculationIT extends BaseIntegration {
                 .header("Authorization", bearer(jwt.userToken("USER"))).exchange().expectStatus().isOk().expectBody()
                 .jsonPath("$.costUsd").doesNotExist().jsonPath("$.retailUsd").doesNotExist()
                 .jsonPath("$.appliedMarginPercent").doesNotExist().jsonPath("$.baseFormatted").doesNotExist()
-                .jsonPath("$.ivaFormatted").doesNotExist().jsonPath("$.shippingFormatted").doesNotExist()
+                .jsonPath("$.margenInternoFormatted").doesNotExist().jsonPath("$.shippingFormatted").doesNotExist()
                 // Lo que sí ve: el precio de venta ya compuesto y formateado.
                 .jsonPath("$.displayFormatted").isEqualTo("$32.50").jsonPath("$.displayPrice")
                 .value(v -> importeJson(v, "32.50"));

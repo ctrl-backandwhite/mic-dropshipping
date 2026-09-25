@@ -37,7 +37,8 @@ public class AdminProductQuickEditDtoIn {
     private BigDecimal shippingCny;
 
     @Schema(description = "Import VAT in CNY")
-    private BigDecimal ivaCny;
+    /** Margen interno en PORCENTAJE sobre el coste (antes viajaba como importe, «ivaCny»). */
+    private BigDecimal margenInternoPct;
 
     @Schema(description = "Recargo fijo por producto en CNY (default 0). Se suma al precio final.")
     private BigDecimal surchargeCny;

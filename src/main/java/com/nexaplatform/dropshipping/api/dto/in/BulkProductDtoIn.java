@@ -80,6 +80,16 @@ public class BulkProductDtoIn {
      * OBLIGATORIO. Importe de IVA en CNY (misma moneda que {@code price}). Valor fijo que se ingresa en la
      * carga (la plataforma NO lo recalcula). Se suma al total SIN margen.
      */
+    /**
+     * Margen interno en PORCENTAJE sobre el coste.
+     *
+     * <p>Sustituye al antiguo {@code ivaCny}, que era un importe absoluto. Los JSON viejos siguen
+     * valiendo: si llega {@code ivaCny} y no este campo, se convierte a porcentaje con la base.
+     */
+    private BigDecimal margenInternoPct;
+
+    /** @deprecated importe absoluto; se convierte a {@link #margenInternoPct}. Solo para JSON viejos. */
+    @Deprecated(since = "2026-09-25")
     private BigDecimal ivaCny;
 
     /**

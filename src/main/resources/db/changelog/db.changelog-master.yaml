@@ -355,3 +355,5 @@ databaseChangeLog:
       file: db/changelog/schema-v172-recargo-por-tramo.sql
   - include:
       file: db/changelog/schema-v173-envio-nacional-por-variante.sql
+  - include:
+      file: db/changelog/schema-v174-margen-interno-por-producto.sql

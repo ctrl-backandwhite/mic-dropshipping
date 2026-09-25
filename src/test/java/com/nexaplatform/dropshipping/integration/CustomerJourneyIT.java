@@ -530,7 +530,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     Respuesta r = llamar(HttpMethod.GET, "/api/catalog/products/" + slugProducto + "?lang=es", null,
                             null);
                     for (String campoInterno : List.of("costUsd", "retailUsd", "appliedMarginPercent", "baseFormatted",
-                            "ivaFormatted", "shippingFormatted")) {
+                            "margenInternoFormatted", "shippingFormatted")) {
                         assertThat(r.cuerpo().get(campoInterno).isNull())
                                 .as("%s no puede salir al cliente", campoInterno).isTrue();
                     }

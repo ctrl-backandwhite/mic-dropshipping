@@ -135,12 +135,12 @@ class BulkProductRulesTest {
     }
 
     @Test
-    void sinIvaLaFilaSeRechaza() {
+    void sinMargenInternoLaFilaSeRechaza() {
         BulkProductDtoIn r = row();
         r.setIvaCny(null);
 
         assertThatThrownBy(() -> BulkProductRules.assertShippingAndVat(r, "Reloj"))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("ivaCny");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("margenInternoPct");
     }
 
     @Test
