@@ -172,13 +172,13 @@ public final class BulkProductFields {
         for (ProductVariantEntity pv : p.getVariants()) {
             BulkProductDtoIn.BulkVariant v = bySku.get(pv.getSku());
             if (v != null) {
-                copyVariantLogistics(pv, v);
+                copyVariantLogistics(pv, v, r.getSupplierShipping());
             }
         }
     }
 
     /**
-     * El recargo fijo del producto, que SOBREVIVE a una reimportación.
+     * El recargo del producto, que SOBREVIVE a una reimportación.
      *
      * <p>Antes era {@code r.getSurchargeCny() != null ? ... : ZERO}, y eso devolvía el recargo a
      * cero en cada pasada. El catálogo se reimporta constantemente —al escribir esto había 10.157
@@ -265,7 +265,8 @@ public final class BulkProductFields {
     }
 
     /** Copia campo a campo; cada uno sólo si la fila lo trae, porque un null es "no hablo de esto". */
-    private static void copyVariantLogistics(ProductVariantEntity pv, BulkProductDtoIn.BulkVariant v) {
+    private static void copyVariantLogistics(ProductVariantEntity pv, BulkProductDtoIn.BulkVariant v,
+            BulkProductDtoIn.BulkSupplierShipping delProducto) {
         if (has(v.getSupplierSkuId())) {
             pv.setSupplierSkuId(v.getSupplierSkuId());
         }
@@ -288,6 +289,33 @@ public final class BulkProductFields {
         // dejaría puesto el importe anterior y cobraría un flete que nadie paga.
         if (v.getShippingCny() != null) {
             pv.setShippingCny(v.getShippingCny());
+        }
+        // La del producto PRIMERO y la de la variante encima: la tarifa es del proveedor, así que
+        // la variante que no declara la suya hereda la de su producto, y la que la declara manda.
+        copySupplierRate(pv, delProducto);
+        copySupplierRate(pv, v.getSupplierShipping());
+    }
+
+    /**
+     * La tarifa del proveedor, si el bulk habla de ella.
+     *
+     * <p>Misma regla que el recargo y que los tramos: <b>nulo NO es cero</b>. Un crawler que no
+     * mande la tarifa no está pidiendo que se borre, y sólo el 67% de las fichas se puede sondar
+     * —los 7.649 productos cargados antes de que la sonda existiera no la traen—. Borrarla en cada
+     * pasada dejaría la tarifa medida viviendo hasta la siguiente reimportación.
+     *
+     * <p>El incremento CERO sí se guarda: hay proveedores con porte plano, y tratarlo como
+     * ausencia dejaría puesto el incremento anterior y cobraría de más en cada unidad extra.
+     */
+    private static void copySupplierRate(ProductVariantEntity pv, BulkProductDtoIn.BulkSupplierShipping t) {
+        if (t == null) {
+            return;
+        }
+        if (t.getFirstUnitCny() != null) {
+            pv.setSupplierShipFirstCny(t.getFirstUnitCny());
+        }
+        if (t.getExtraUnitCny() != null) {
+            pv.setSupplierShipExtraCny(t.getExtraUnitCny());
         }
     }
 

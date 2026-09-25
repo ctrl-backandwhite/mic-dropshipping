@@ -69,6 +69,38 @@ public class ProductVariantEntity extends BaseEntity {
     @Column(name = "shipping_cny", precision = 12, scale = 4)
     private BigDecimal shippingCny;
 
+    /**
+     * Lo que cobra el proveedor por la PRIMERA unidad, en CNY. Nulo = no se pudo medir su ficha.
+     *
+     * <p>{@code shippingCny} es el importe de una unidad y sirve para una unidad. El proveedor no
+     * cobra por peso: cobra una primera y un incremento por cada siguiente. Medido sobre diez
+     * puntos de una ficha real el 25-sep-2026: ¥8 + ¥3 por unidad, exacto.
+     */
+    @Column(name = "supplier_ship_first_cny", precision = 12, scale = 4)
+    private BigDecimal supplierShipFirstCny;
+
+    /** Lo que suma cada unidad a partir de la segunda, en CNY. Cero es un dato: hay portes planos. */
+    @Column(name = "supplier_ship_extra_cny", precision = 12, scale = 4)
+    private BigDecimal supplierShipExtraCny;
+
+    /**
+     * El porte del proveedor para {@code unidades}, o {@code null} si su ficha no se pudo medir.
+     *
+     * <p>Devolver nulo y no un cero es deliberado: cero significaría «envío gratis» y haría que un
+     * pedido se cotizara sin flete. Quien llame decide qué hacer sin tarifa —hoy, caer al importe
+     * por tramos de {@code shippingCny}—, pero esa decisión no se toma aquí.
+     */
+    public BigDecimal porteDe(int unidades) {
+        if (supplierShipFirstCny == null) {
+            return null;
+        }
+        if (unidades <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal siguiente = supplierShipExtraCny == null ? BigDecimal.ZERO : supplierShipExtraCny;
+        return supplierShipFirstCny.add(siguiente.multiply(BigDecimal.valueOf(unidades - 1L)));
+    }
+
     @Column(name = "length_mm")
     private Integer lengthMm;
 

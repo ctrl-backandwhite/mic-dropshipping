@@ -243,6 +243,12 @@ public class BulkProductDtoIn {
     private List<BulkAxis> variantAxes;
 
     /** Combinaciones concretas (SKU) con stock y precio por variante. */
+    /**
+     * La tarifa del proveedor para el producto entero. Las variantes que no declaren la suya la
+     * heredan: es del proveedor, no de la talla.
+     */
+    private BulkSupplierShipping supplierShipping;
+
     private List<BulkVariant> variants;
 
     /** Atributos taxonómicos para facetas: [{key:"material", value:"algodón"}]. */
@@ -344,9 +350,36 @@ public class BulkProductDtoIn {
          * las tallas, incluida la que pesa el doble.
          */
         private BigDecimal shippingCny;
+
+        /**
+         * Lo que el proveedor cobra DE VERDAD por el porte, medido en su ficha de 1688.
+         *
+         * <p>{@code shippingCny} de aquí arriba es el importe de UNA unidad. El proveedor no cobra
+         * por peso: cobra una primera unidad y un incremento por cada siguiente. Con sólo el
+         * importe de una, un pedido de cinco calculaba 5 × 8 = ¥40 donde el proveedor cobra
+         * 8 + 4 × 3 = ¥20 — el doble, y siempre en contra.
+         *
+         * <p>Nulo es lo normal y no es un error: sólo el 67% de las fichas se puede sondar, y los
+         * 7.649 productos cargados antes de que la sonda existiera no la traen.
+         */
+        private BulkSupplierShipping supplierShipping;
         private Integer lengthMm;
         private Integer widthMm;
         private Integer heightMm;
+    }
+
+    /**
+     * La tarifa del proveedor: una primera unidad y un incremento por cada siguiente.
+     *
+     * <p>Medido sobre diez puntos de una ficha real el 25-sep-2026: ¥8 la primera y ¥3 cada
+     * siguiente, exacto. Es una recta, así que con dos medidas queda determinada.
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkSupplierShipping {
+        private BigDecimal firstUnitCny;
+        private BigDecimal extraUnitCny;
     }
 
     /** Un atributo taxonómico (faceta). DROP-672: {@code locale} opcional para el valor traducido. */
