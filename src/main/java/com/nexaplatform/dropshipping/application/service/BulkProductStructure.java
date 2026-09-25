@@ -138,7 +138,7 @@ public final class BulkProductStructure {
         for (BulkTier t : r.getTieredPricing()) {
             tiers.add(new IngestPriceTier(t.getMinQty() != null ? t.getMinQty() : 1, t.getMaxQty(),
                     t.getUnitPrice() != null ? t.getUnitPrice() : fallbackPrice,
-                    t.getCurrency() != null ? t.getCurrency() : "CNY", t.getSurchargeCny()));
+                    t.getCurrency() != null ? t.getCurrency() : "CNY", t.getSurchargePct()));
         }
         return tiers;
     }

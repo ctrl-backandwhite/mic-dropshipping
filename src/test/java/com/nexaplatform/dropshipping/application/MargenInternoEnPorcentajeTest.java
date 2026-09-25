@@ -140,7 +140,7 @@ class MargenInternoEnPorcentajeTest {
 
     private static ProductEntity producto(BigDecimal margenPct) {
         ProductEntity p = ProductEntity.builder().source("1688").externalId("X").basePrice(new BigDecimal("18"))
-                .currency("CNY").surchargeCny(BigDecimal.ZERO).shippingCny(new BigDecimal("10"))
+                .currency("CNY").surchargePct(BigDecimal.ZERO).shippingCny(new BigDecimal("10"))
                 .margenInternoPct(margenPct).build();
         ProductVariantEntity v = ProductVariantEntity.builder().product(p).sku("SKU-1").price(new BigDecimal("18"))
                 .stock(5).options(Map.of()).active(true).build();

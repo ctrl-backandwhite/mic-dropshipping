@@ -93,10 +93,17 @@ public class BulkProductDtoIn {
     private BigDecimal ivaCny;
 
     /**
-     * Recargo fijo por producto en CNY (default 0). Lo fija el admin (por producto, categoría o en lote)
-     * y se suma al precio de venta SIN margen. Viaja en el export/import del bus para que el recargo sea
-     * el mismo en todos los entornos (PRE y PROD).
+     * Recargo por producto en PORCENTAJE sobre el coste. Lo fija el admin (por producto, categoría o en
+     * lote) y se suma al precio de venta SIN margen. Viaja en el export/import del bus para que el
+     * recargo sea el mismo en todos los entornos (PRE y PROD).
+     *
+     * <p>Sustituye al antiguo {@code surchargeCny}, que era un importe absoluto. Los JSON viejos siguen
+     * valiendo: si llega {@code surchargeCny} y no este campo, se convierte a porcentaje con la base.
      */
+    private BigDecimal surchargePct;
+
+    /** @deprecated importe absoluto; se convierte a {@link #surchargePct}. Solo para JSON viejos. */
+    @Deprecated(since = "25-sep-2026")
     private BigDecimal surchargeCny;
 
     /**
@@ -289,13 +296,13 @@ public class BulkProductDtoIn {
         private BigDecimal unitPrice;
         private String currency;
         /**
-         * El recargo fijo de ESTE tramo (23-sep-2026). Vacio = hereda el del producto.
+         * El recargo propio de ESTE tramo, en PORCENTAJE sobre el coste. Vacio = hereda el del producto.
          *
          * <p>Viaja en el bulk porque el bulk RECREA los tramos: sin este campo, reenviar la ficha
          * borraria en silencio los recargos por tramo que alguien acababa de fijar a mano, y el
          * export-import los perderia al cruzar de un entorno a otro.
          */
-        private BigDecimal surchargeCny;
+        private BigDecimal surchargePct;
     }
 
     /**

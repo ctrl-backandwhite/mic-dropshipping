@@ -36,15 +36,18 @@ public final class EventoBus {
      * interpretado se traduce en productos mal publicados en la tienda.
      */
     /**
-     * Versión del contrato. 2 desde el 25-sep-2026: la ficha dejó de llevar {@code ivaCny} (importe) y
-     * pasa a llevar {@code margenInternoPct} (porcentaje).
+     * Versión del contrato. 3 desde el 25-sep-2026: el recargo dejó de viajar como {@code surchargeCny}
+     * (importe en yuanes) y pasa a viajar como {@code surchargePct} (porcentaje sobre el coste), tanto
+     * el del producto como el de cada tramo. La 2 fue el mismo cambio para el margen interno, que dejó
+     * de ser {@code ivaCny}.
      *
      * <p>El consumidor NO la mira, y es a propósito: aplica la ficha con el importador de la carga
-     * masiva, que entiende los dos campos. Así los eventos de la versión 1 que siguen en el tema —30
-     * días de retención— se consumen sin tocar nada. La versión está para que quede escrito cuándo
-     * cambió la forma, no para rechazar nada.
+     * masiva, que entiende los campos viejos y los nuevos y convierte el importe a porcentaje contra el
+     * precio de la propia fila. Así los eventos de las versiones anteriores que siguen en el tema —30
+     * días de retención— se consumen sin tocar nada y sin mover ningún precio. La versión está para que
+     * quede escrito cuándo cambió la forma, no para rechazar nada.
      */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     private EventoBus() {
     }

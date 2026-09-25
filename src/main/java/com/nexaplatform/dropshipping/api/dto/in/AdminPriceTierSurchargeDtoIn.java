@@ -28,6 +28,6 @@ import java.math.BigDecimal;
 public class AdminPriceTierSurchargeDtoIn {
 
     @PositiveOrZero
-    @Schema(description = "Recargo del tramo en CNY. Vacío = el tramo hereda el recargo del producto")
-    private BigDecimal surchargeCny;
+    @Schema(description = "Recargo del tramo en % sobre el coste. Vacío = el tramo hereda el del producto")
+    private BigDecimal surchargePct;
 }

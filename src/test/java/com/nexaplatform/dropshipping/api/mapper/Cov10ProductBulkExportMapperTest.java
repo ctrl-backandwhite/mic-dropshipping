@@ -67,11 +67,11 @@ class Cov10ProductBulkExportMapperTest {
         // DROP-158: surcharge_cny es un componente del precio y tiene que viajar en el export
         // (el bus reimporta el producto en el otro entorno con el recargo igual).
         ProductEntity p = ProductEntity.builder().externalId("1688-1").build();
-        p.setSurchargeCny(new java.math.BigDecimal("2.50"));
+        p.setSurchargePct(new java.math.BigDecimal("2.50"));
 
         BulkProductDtoIn d = mapper.toBulk(p, null, null, null, null);
 
-        assertThat(d.getSurchargeCny()).isEqualByComparingTo("2.50");
+        assertThat(d.getSurchargePct()).isEqualByComparingTo("2.50");
     }
 
     @Test

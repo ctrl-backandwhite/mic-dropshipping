@@ -571,15 +571,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // duraba hasta la siguiente extracción, sin ningún error.
         Map<Integer, BigDecimal> recargosPrevios = new HashMap<>();
         for (ProductPriceTierEntity previo : previos) {
-            if (previo.getSurchargeCny() != null) {
-                recargosPrevios.put(previo.getMinQty(), previo.getSurchargeCny());
+            if (previo.getSurchargePct() != null) {
+                recargosPrevios.put(previo.getMinQty(), previo.getSurchargePct());
             }
         }
         previos.forEach(priceTierRepository::delete);
         for (IngestPriceTier t : req.priceTiers()) {
             priceTierRepository.save(ProductPriceTierEntity.builder().product(product).minQty(t.minQty())
                     .maxQty(t.maxQty()).unitPrice(t.unitPrice())
-                    .surchargeCny(BulkProductFields.tierSurcharge(recargosPrevios, t.minQty(), t.surchargeCny()))
+                    .surchargePct(BulkProductFields.tierSurcharge(recargosPrevios, t.minQty(), t.surchargePct()))
                     .currency(t.currency() != null ? t.currency() : "CNY").build());
         }
     }
@@ -1001,14 +1001,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
-    public ProductDetailView updatePriceTierSurcharge(UUID productId, int minQty, BigDecimal surchargeCny,
+    public ProductDetailView updatePriceTierSurcharge(UUID productId, int minQty, BigDecimal surchargePct,
             String lang) {
         ProductEntity p = productJpaRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + productId));
         ProductPriceTierEntity tramo = priceTierRepository.findByProductIdOrderByMinQtyAsc(productId).stream()
                 .filter(t -> t.getMinQty() == minQty).findFirst().orElseThrow(() -> new NotFoundException(
                         "Price tier not found: product " + productId + ", minQty " + minQty));
-        tramo.setSurchargeCny(surchargeCny);
+        tramo.setSurchargePct(surchargePct);
         priceTierRepository.save(tramo);
         // Se vuelve a leer la lista porque la que hay en memoria es la de ANTES de guardar, y lo que se
         // devuelve es justamente el precio recalculado del tramo que se acaba de tocar.
@@ -1034,14 +1034,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     /**
-     * Update en lote del recargo fijo por producto (surcharge_cny, 30-ago-2026).
+     * Update en lote del recargo por producto, en porcentaje sobre el coste (surcharge_pct).
      *
      * <p>El admin lo puede fijar por producto ({@code productIds}), por categoría ({@code categoryId}) o
      * para todo el catálogo (ambos vacíos). Se hace con UN update SQL en lugar de cargar y guardar cada
      * entidad: el catálogo tiene miles de productos y un update masivo por JPA tardaría minutos.
      *
      * <p>Se evictan las cachés de catálogo (detalle/summary/list) porque el recargo entra en el precio de
-     * venta. El índice de OpenSearch NO se toca: {@code surcharge_cny} no viaja al índice (no se busca por
+     * venta. El índice de OpenSearch NO se toca: {@code surcharge_pct} no viaja al índice (no se busca por
      * él) y el precio de escaparate se calcula en vivo contra la BD, no contra el índice.
      *
      * @return número de productos actualizados
@@ -1051,26 +1051,26 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
-    public int bulkUpdateSurcharge(List<UUID> productIds, UUID categoryId, BigDecimal surchargeCny) {
-        BigDecimal valor = surchargeCny != null ? surchargeCny : BigDecimal.ZERO;
+    public int bulkUpdateSurcharge(List<UUID> productIds, UUID categoryId, BigDecimal surchargePct) {
+        BigDecimal valor = surchargePct != null ? surchargePct : BigDecimal.ZERO;
         int actualizados;
         if (productIds != null && !productIds.isEmpty()) {
             // Recargo solo para los productos indicados.
             String in = String.join(",", java.util.Collections.nCopies(productIds.size(), "?"));
             actualizados = jdbcTemplate.update(
-                    "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE id IN (" + in + ")",
+                    "UPDATE product SET surcharge_pct = ?, updated_at = now() WHERE id IN (" + in + ")",
                     parametrosConValor(valor, productIds));
         } else if (categoryId != null) {
             // Recargo para toda una categoría.
             actualizados = jdbcTemplate.update(
-                    "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?", valor,
+                    "UPDATE product SET surcharge_pct = ?, updated_at = now() WHERE category_id = ?", valor,
                     categoryId);
         } else {
             // Sin filtro: todo el catálogo (update masivo global).
-            actualizados = jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", valor);
+            actualizados = jdbcTemplate.update("UPDATE product SET surcharge_pct = ?, updated_at = now()", valor);
         }
         // El recargo es un componente del precio: los productos certificados afectados se re-anuncian al
-        // bus para que el cambio llegue al destino (el export del bus lleva surcharge_cny).
+        // bus para que el cambio llegue al destino (el export del bus lleva surcharge_pct).
         marcarCertificadosParaElBus(productIds, categoryId);
         return actualizados;
     }
@@ -1243,10 +1243,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (req.getMargenInternoPct() != null) {
             p.setMargenInternoPct(req.getMargenInternoPct());
         }
-        // Recargo fijo por producto (30-ago-2026): se edita por producto desde la ficha; el update
-        // masivo (por categoría / todo el catálogo) va por su propio endpoint.
-        if (req.getSurchargeCny() != null) {
-            p.setSurchargeCny(req.getSurchargeCny());
+        // Recargo por producto, en porcentaje sobre el coste: se edita por producto desde la ficha; el
+        // update masivo (por categoría / todo el catálogo) va por su propio endpoint.
+        if (req.getSurchargePct() != null) {
+            p.setSurchargePct(req.getSurchargePct());
         }
         if (req.getShippingUserCny() != null) {
             p.setShippingUserCny(req.getShippingUserCny());

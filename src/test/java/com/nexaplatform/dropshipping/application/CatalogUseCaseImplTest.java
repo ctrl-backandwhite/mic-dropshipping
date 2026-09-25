@@ -265,7 +265,7 @@ class CatalogUseCaseImplTest {
     /** Update masivo del recargo para TODO el catálogo: un único UPDATE sin filtro. */
     @Test
     void bulkUpdateSurcharge_sinFiltro_actualizaTodoElCatalogo() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", new BigDecimal("2.00")))
+        when(jdbcTemplate.update("UPDATE product SET surcharge_pct = ?, updated_at = now()", new BigDecimal("2.00")))
                 .thenReturn(1234);
 
         int n = useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
@@ -277,7 +277,7 @@ class CatalogUseCaseImplTest {
     @Test
     void bulkUpdateSurcharge_porCategoria_filtraPorCategoria() {
         UUID cat = UUID.randomUUID();
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?",
+        when(jdbcTemplate.update("UPDATE product SET surcharge_pct = ?, updated_at = now() WHERE category_id = ?",
                 new BigDecimal("5.00"), cat)).thenReturn(42);
 
         int n = useCase.bulkUpdateSurcharge(null, cat, new BigDecimal("5.00"));
@@ -292,7 +292,7 @@ class CatalogUseCaseImplTest {
         UUID b = UUID.randomUUID();
         when(jdbcTemplate.update(
                 org.mockito.ArgumentMatchers
-                        .startsWith("UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE id IN ("),
+                        .startsWith("UPDATE product SET surcharge_pct = ?, updated_at = now() WHERE id IN ("),
                 org.mockito.ArgumentMatchers.<Object>any(), org.mockito.ArgumentMatchers.<Object>any(),
                 org.mockito.ArgumentMatchers.<Object>any())).thenReturn(2);
 
@@ -304,7 +304,7 @@ class CatalogUseCaseImplTest {
     /** Recargo null se trata como 0 (reset del recargo). */
     @Test
     void bulkUpdateSurcharge_nullSeTrataComoCero() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", BigDecimal.ZERO))
+        when(jdbcTemplate.update("UPDATE product SET surcharge_pct = ?, updated_at = now()", BigDecimal.ZERO))
                 .thenReturn(7);
 
         int n = useCase.bulkUpdateSurcharge(null, null, null);
@@ -322,7 +322,7 @@ class CatalogUseCaseImplTest {
      */
     @Test
     void bulkUpdateSurcharge_dejaMarcadosLosCertificadosEnUnaSolaSentencia() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", new BigDecimal("2.00")))
+        when(jdbcTemplate.update("UPDATE product SET surcharge_pct = ?, updated_at = now()", new BigDecimal("2.00")))
                 .thenReturn(3);
         when(busCatalogo.getIfAvailable()).thenReturn(
                 mock(com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService.class));
@@ -338,7 +338,7 @@ class CatalogUseCaseImplTest {
     /** Sin bus configurado no se marca nada: la cola no debe llenarse en un entorno que no publica. */
     @Test
     void bulkUpdateSurcharge_sinBusNoMarcaNada() {
-        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", new BigDecimal("2.00")))
+        when(jdbcTemplate.update("UPDATE product SET surcharge_pct = ?, updated_at = now()", new BigDecimal("2.00")))
                 .thenReturn(3);
         when(busCatalogo.getIfAvailable()).thenReturn(null);
 

@@ -220,7 +220,7 @@ class Cov01CatalogBulkImportTest {
         r.setPrice(new BigDecimal("12.50"));
         r.setShippingCny(new BigDecimal("10"));
         r.setIvaCny(new BigDecimal("2"));
-        r.setSurchargeCny(new BigDecimal("3"));
+        r.setSurchargePct(new BigDecimal("3"));
         r.setImageUrls(List.of("https://cbu01.alicdn.com/a.jpg"));
         r.setExternalId("OFFER-1");
         return r;
@@ -1014,7 +1014,7 @@ class Cov01CatalogBulkImportTest {
         // que siguen en el bus.
         assertThat(managed.getMargenInternoPct()).isEqualByComparingTo("16.000");
         // DROP-158: el recargo fijo también se aplica al importar (viaja en el export del bus).
-        assertThat(managed.getSurchargeCny()).isEqualByComparingTo("3");
+        assertThat(managed.getSurchargePct()).isEqualByComparingTo("3");
         verify(customsProfileService).applyDefaults(managed, CATEGORY_SLUG);
     }
 

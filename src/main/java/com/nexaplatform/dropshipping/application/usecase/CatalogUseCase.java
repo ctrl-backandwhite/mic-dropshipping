@@ -271,11 +271,14 @@ public interface CatalogUseCase {
     ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang);
 
     /**
-     * Update del recargo fijo por producto (surcharge_cny) en lote: por producto, por categoría o para
-     * todo el catálogo (30-ago-2026). Devuelve cuántos productos se actualizaron.
+     * Update del recargo por producto (surcharge_pct) en lote: por producto, por categoría o para todo
+     * el catálogo. Devuelve cuántos productos se actualizaron.
+     *
+     * <p>Desde el 25-sep-2026 el recargo es un PORCENTAJE sobre el coste, no un importe fijo: así sigue
+     * al coste del proveedor sin que nadie lo rehaga a mano.
      */
     int bulkUpdateSurcharge(java.util.List<java.util.UUID> productIds, java.util.UUID categoryId,
-            BigDecimal surchargeCny);
+            BigDecimal surchargePct);
 
     /**
      * Update en lote de las dos bolsas de subvención por producto: por producto, por categoría o para
@@ -294,11 +297,11 @@ public interface CatalogUseCase {
     /**
      * Fija el recargo de UN tramo y devuelve la ficha ya recalculada (23-sep-2026).
      *
-     * <p>{@code surchargeCny} nulo devuelve el tramo a heredar el recargo del producto; cero es un
+     * <p>{@code surchargePct} nulo devuelve el tramo a heredar el recargo del producto; cero es un
      * recargo de cero, que es otra cosa. El envio y el arancel no se tocan: siguen siendo uno por
      * producto porque esos si escalan con el bulto.
      */
-    ProductDetailView updatePriceTierSurcharge(UUID productId, int minQty, BigDecimal surchargeCny, String lang);
+    ProductDetailView updatePriceTierSurcharge(UUID productId, int minQty, BigDecimal surchargePct, String lang);
 
     ProductDetailView duplicateProduct(UUID id, String lang);
 

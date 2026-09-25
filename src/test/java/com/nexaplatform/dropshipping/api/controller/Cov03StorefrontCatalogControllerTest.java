@@ -965,7 +965,7 @@ class Cov03StorefrontCatalogControllerTest {
 
         assertThat(paraCualquiera.costUsd()).isNull();
         assertThat(paraCualquiera.appliedMarginPercent()).isNull();
-        assertThat(paraCualquiera.surchargeCny()).isNull();
+        assertThat(paraCualquiera.surchargePct()).isNull();
         assertThat(paraCualquiera.shippingUserCny()).isNull();
         assertThat(paraCualquiera.dutyUserCny()).isNull();
         assertThat(paraCualquiera.baseFormatted()).isNull();
@@ -1000,7 +1000,7 @@ class Cov03StorefrontCatalogControllerTest {
 
         assertThat(paraElAdmin.sourceUrl()).isEqualTo("https://detail.1688.com/offer/993114937459.html");
         assertThat(paraElAdmin.externalId()).isEqualTo("993114937459");
-        assertThat(paraElAdmin.surchargeCny()).isEqualByComparingTo("8.98");
+        assertThat(paraElAdmin.surchargePct()).isEqualByComparingTo("8.98");
     }
 
     /** Un OPERATOR es personal interno, pero no administra el catálogo: tampoco ve el origen. */
@@ -1048,7 +1048,7 @@ class Cov03StorefrontCatalogControllerTest {
 
         assertThat(paraElRevisor.costUsd()).isNull();
         assertThat(paraElRevisor.appliedMarginPercent()).isNull();
-        assertThat(paraElRevisor.surchargeCny()).isNull();
+        assertThat(paraElRevisor.surchargePct()).isNull();
         assertThat(paraElRevisor.baseFormatted()).isNull();
         assertThat(paraElRevisor.shippingUserCny()).isNull();
         assertThat(paraElRevisor.dutyUserCny()).isNull();

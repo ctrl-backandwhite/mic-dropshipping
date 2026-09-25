@@ -107,14 +107,23 @@ public class ProductEntity extends BaseEntity {
     private BigDecimal margenInternoPct;
 
     /**
-     * Recargo fijo por producto en CNY (misma moneda que base_price). Default 0. Lo edita el admin
-     * por producto, por categoría o masivamente para todo el catálogo, y se suma como componente del
-     * precio final (igual que IVA y envío). Es un cargo directo del precio de venta, no un coste de
-     * proveedor.
+     * Recargo del producto en PORCENTAJE sobre el coste del proveedor (25-sep-2026).
+     *
+     * <p>Lo edita el admin por producto, por categoría o masivamente para todo el catálogo, y se suma
+     * como componente del precio final SIN margen: es un cargo directo del precio de venta, no un coste
+     * de proveedor.
+     *
+     * <p>Sustituye al antiguo {@code surcharge_cny}, que era un importe fijo y por eso no seguía al
+     * coste: si el proveedor subía el precio, el recargo se quedaba donde estaba y había que rehacerlo
+     * a mano producto a producto, o se desfasaba en silencio. Mismo arreglo que se le hizo al margen
+     * interno en la v174. La columna vieja se queda en la base —es NOT NULL con DEFAULT 0, así que al
+     * no mapearla el INSERT usa su valor por omisión— pero ya no la lee nadie.
+     *
+     * <p>Nulable, y nulo aporta CERO. No se inventa un porcentaje por defecto: eso encarecería en
+     * silencio cualquier producto al que le falte el dato.
      */
-    @Column(name = "surcharge_cny", precision = 12, scale = 4)
-    @Builder.Default
-    private BigDecimal surchargeCny = BigDecimal.ZERO;
+    @Column(name = "surcharge_pct", precision = 6, scale = 3)
+    private BigDecimal surchargePct;
 
     /**
      * La categoría que 1688 declara para este producto, tal como viene.

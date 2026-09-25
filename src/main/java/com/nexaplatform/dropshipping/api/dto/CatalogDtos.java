@@ -39,7 +39,7 @@ public final class CatalogDtos {
     }
 
     public record IngestPriceTier(@Positive int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
-            BigDecimal surchargeCny) {
+            BigDecimal surchargePct) {
 
         /** Sin recargo propio: el tramo hereda el del producto, que es el caso de siempre. */
         public IngestPriceTier(int minQty, Integer maxQty, BigDecimal unitPrice, String currency) {
@@ -138,13 +138,14 @@ public final class CatalogDtos {
     /**
      * Un escalon de la tabla de cantidades, ya tarificado.
      *
-     * <p>{@code surchargeCny} es el recargo fijo de ESTE tramo, en la moneda del proveedor y tal como
-     * lo teclea quien administra (23-sep-2026). Nulo significa dos cosas distintas segun quien mire:
+     * <p>{@code surchargePct} es el recargo de ESTE tramo, en PORCENTAJE sobre el coste del proveedor
+     * y tal como lo teclea quien administra (25-sep-2026). Nulo significa dos cosas distintas segun
+     * quien mire:
      * para quien administra, que el tramo no tiene recargo propio y hereda el del producto; para
      * cualquier otro, que no se publica -es un importe interno, como el resto del desglose-.
      */
     public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
-            String unitPriceFormatted, BigDecimal surchargeCny) {
+            String unitPriceFormatted, BigDecimal surchargePct) {
 
         /** Sin el recargo: lo que ve quien no administra. */
         public PriceTierView sinRecargo() {
@@ -268,10 +269,10 @@ public final class CatalogDtos {
             // corregirlo obligaba a reenviar la ficha entera por el importador. SOLO ADMIN.
             /** Margen interno en % sobre el coste. Solo viaja para quien administra. */
             BigDecimal margenInternoPct,
-            // Recargo fijo por producto (surcharge_cny, 30-ago-2026). surchargeCny = valor crudo en CNY
-            // (el que edita el admin); surchargeFormatted = ya convertido a la moneda de la petición.
-            // SOLO ADMIN (null para usuario final).
-            BigDecimal surchargeCny, String surchargeFormatted,
+            // Recargo por producto, en PORCENTAJE sobre el coste (25-sep-2026). surchargePct = el valor
+            // crudo que edita el admin; surchargeFormatted = el importe que sale de ese porcentaje, ya
+            // convertido a la moneda de la petición. Mismo par que el margen interno. SOLO ADMIN.
+            BigDecimal surchargePct, String surchargeFormatted,
             // Bolsas de subvención por producto (1-sep-2026), en CNY y tal como las teclea el admin.
             // Cada una subvenciona una sola cosa: shippingUserCny el porte del pedido, dutyUserCny el
             // arancel. SOLO ADMIN: el cliente ve su efecto en el desglose del checkout, no el importe.
@@ -311,7 +312,7 @@ public final class CatalogDtos {
                     reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt, lastSyncedAt,
                     images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice, displayCurrency,
                     displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted, margenInternoFormatted,
-                    shippingFormatted, margenInternoPct, surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny,
+                    shippingFormatted, margenInternoPct, surchargePct, surchargeFormatted, shippingUserCny, dutyUserCny,
                     shippingUserFormatted, dutyUserFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
                     originalFormatted, discountPercent, promotionName, compliance, extraDutyCents, extraDutyFormatted,
                     dutyGroupId, dutyCovered, shippingCovered);

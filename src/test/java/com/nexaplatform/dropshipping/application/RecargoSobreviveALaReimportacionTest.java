@@ -28,23 +28,25 @@ class RecargoSobreviveALaReimportacionTest {
     @DisplayName("un bulk que no trae recargo no borra el que ya tenía el producto")
     void unBulkSinRecargoNoBorraElQueYaHabia() {
         ProductEntity p = new ProductEntity();
-        p.setSurchargeCny(new BigDecimal("5.00"));
+        p.setSurchargePct(new BigDecimal("50.000"));
 
         BulkProductFields.applySurcharge(p, filaSinRecargo());
 
-        assertThat(p.getSurchargeCny()).isEqualByComparingTo("5.00");
+        assertThat(p.getSurchargePct()).isEqualByComparingTo("50.000");
     }
 
     @Test
-    @DisplayName("un producto nuevo sin recargo en el bulk entra a cero, no a nulo")
-    void unProductoNuevoEntraACero() {
-        // La columna es NOT NULL desde la v157: dejarlo a nulo tumbaba el alta entera con un 23502
-        // y el producto no se creaba. Cero es el valor correcto para lo que no existía todavía.
+    @DisplayName("un producto nuevo sin recargo en el bulk se queda a nulo, que aporta cero")
+    void unProductoNuevoSeQuedaANulo() {
+        // Cambió con el paso a porcentaje (25-sep-2026) y es el comportamiento correcto ahora. La
+        // columna vieja era NOT NULL, así que dejarla a nulo tumbaba el alta con un 23502 y había que
+        // escribir un cero. La nueva es NULABLE y nulo ya significa «nadie ha fijado recargo aquí»,
+        // que aporta cero en el cálculo sin fingir que alguien decidió ese cero.
         ProductEntity p = new ProductEntity();
 
         BulkProductFields.applySurcharge(p, filaSinRecargo());
 
-        assertThat(p.getSurchargeCny()).isEqualByComparingTo("0");
+        assertThat(p.getSurchargePct()).isNull();
     }
 
     @Test
@@ -53,26 +55,78 @@ class RecargoSobreviveALaReimportacionTest {
         // EL control: sin él, «conservar lo que había» pasaría por arreglo y haría imposible
         // cambiar el recargo desde el bulk, que es una vía legítima.
         ProductEntity p = new ProductEntity();
-        p.setSurchargeCny(new BigDecimal("5.00"));
+        p.setSurchargePct(new BigDecimal("50.000"));
         BulkProductDtoIn fila = filaSinRecargo();
+        fila.setSurchargePct(new BigDecimal("20.000"));
+
+        BulkProductFields.applySurcharge(p, fila);
+
+        assertThat(p.getSurchargePct()).isEqualByComparingTo("20.000");
+    }
+
+    @Test
+    @DisplayName("un cero explícito en el bulk también manda: es un valor, no una ausencia")
+    void unCeroExplicitoBorraElRecargo() {
+        ProductEntity p = new ProductEntity();
+        p.setSurchargePct(new BigDecimal("50.000"));
+        BulkProductDtoIn fila = filaSinRecargo();
+        fila.setSurchargePct(BigDecimal.ZERO);
+
+        BulkProductFields.applySurcharge(p, fila);
+
+        assertThat(p.getSurchargePct()).isEqualByComparingTo("0");
+    }
+
+    /**
+     * Los JSON de carga viejos traen el recargo como IMPORTE en yuanes, y tienen que seguir valiendo.
+     *
+     * <p>Se convierte contra el precio del proveedor de la propia fila, que es la base sobre la que
+     * ahora se aplica el porcentaje: 2 CNY sobre una base de 8 son el 25 %, y el producto sale al mismo
+     * precio que salía. Sin esto, cada JSON anterior al 25-sep-2026 entraría sin recargo.
+     */
+    @Test
+    @DisplayName("un JSON viejo con el recargo en yuanes se convierte a porcentaje contra su base")
+    void elImporteViejoSeConvierte() {
+        ProductEntity p = new ProductEntity();
+        BulkProductDtoIn fila = filaSinRecargo();
+        fila.setPrice(new BigDecimal("8.00"));
         fila.setSurchargeCny(new BigDecimal("2.00"));
 
         BulkProductFields.applySurcharge(p, fila);
 
-        assertThat(p.getSurchargeCny()).isEqualByComparingTo("2.00");
+        assertThat(p.getSurchargePct()).isEqualByComparingTo("25.000");
     }
 
     @Test
-    @DisplayName("un cero explícito en el bulk también manda: es un importe, no una ausencia")
-    void unCeroExplicitoBorraElRecargo() {
+    @DisplayName("un cero en yuanes borra el recargo aunque la fila no traiga precio")
+    void elCeroViejoNoNecesitaLaBase() {
+        // El cero es el único importe que se puede convertir sin base: cero por ciento de cualquier
+        // coste es cero. Sin este atajo, un JSON viejo que borra el recargo mandando 0 no lo borraba,
+        // porque la conversión se rendía al no encontrar precio con el que dividir.
         ProductEntity p = new ProductEntity();
-        p.setSurchargeCny(new BigDecimal("5.00"));
+        p.setSurchargePct(new BigDecimal("50.000"));
         BulkProductDtoIn fila = filaSinRecargo();
         fila.setSurchargeCny(BigDecimal.ZERO);
 
         BulkProductFields.applySurcharge(p, fila);
 
-        assertThat(p.getSurchargeCny()).isEqualByComparingTo("0");
+        assertThat(p.getSurchargePct()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("el porcentaje manda sobre el importe viejo cuando llegan los dos")
+    void elPorcentajeMandaSobreElImporteViejo() {
+        // EL control de la conversión: un JSON de transición puede traer ambos, y el que vale es el
+        // nuevo. Si mandara el viejo, corregir el recargo desde el panel y reexportar lo desharía.
+        ProductEntity p = new ProductEntity();
+        BulkProductDtoIn fila = filaSinRecargo();
+        fila.setPrice(new BigDecimal("8.00"));
+        fila.setSurchargeCny(new BigDecimal("2.00"));
+        fila.setSurchargePct(new BigDecimal("10.000"));
+
+        BulkProductFields.applySurcharge(p, fila);
+
+        assertThat(p.getSurchargePct()).isEqualByComparingTo("10.000");
     }
 
     @Test

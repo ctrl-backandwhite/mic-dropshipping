@@ -251,7 +251,7 @@ public class ProductRepositoryImpl implements ProductRepository {
         priceTierRepository.findByProductIdOrderByMinQtyAsc(entity.getId()).forEach(priceTierRepository::delete);
         for (ProductPriceTier t : tiers) {
             priceTierRepository.save(ProductPriceTierEntity.builder().product(entity).minQty(t.getMinQty())
-                    .maxQty(t.getMaxQty()).unitPrice(t.getUnitPrice()).surchargeCny(t.getSurchargeCny())
+                    .maxQty(t.getMaxQty()).unitPrice(t.getUnitPrice()).surchargePct(t.getSurchargePct())
                     .currency(t.getCurrency() != null ? t.getCurrency() : "CNY").build());
         }
     }

@@ -127,7 +127,7 @@ public class AdminCatalogController implements AdminCatalogApi {
     public ResponseEntity<Map<String, Object>> bulkUpdateSurcharge(AdminSurchargeBulkDtoIn req) {
         // Recargo fijo por producto (30-ago-2026): por producto, por categoría o para todo el catálogo.
         int actualizados = catalogUseCase.bulkUpdateSurcharge(req.getProductIds(), req.getCategoryId(),
-                req.getSurchargeCny());
+                req.getSurchargePct());
         return ResponseEntity.ok(Map.of("updated", actualizados));
     }
 
@@ -287,7 +287,7 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ProductDetailView updatePriceTierSurcharge(UUID id, int minQty, AdminPriceTierSurchargeDtoIn req,
             String lang) {
-        return catalogUseCase.updatePriceTierSurcharge(id, minQty, req.getSurchargeCny(), lang);
+        return catalogUseCase.updatePriceTierSurcharge(id, minQty, req.getSurchargePct(), lang);
     }
 
     @Override

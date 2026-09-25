@@ -30,8 +30,8 @@ import java.util.UUID;
 public class AdminSurchargeBulkDtoIn {
 
     @NotNull
-    @Schema(description = "Recargo fijo en CNY a aplicar (0 = sin recargo)")
-    private BigDecimal surchargeCny;
+    @Schema(description = "Recargo en % sobre el coste a aplicar (0 = sin recargo)")
+    private BigDecimal surchargePct;
 
     @Schema(description = "Productos concretos a actualizar (opcional; si viene, manda sobre categoryId)")
     private List<UUID> productIds;

@@ -163,13 +163,14 @@ class PriceTierMatchesChargedPriceTest {
      */
     @Test
     void elRecargoDelTramoMandaSobreElDelProducto() {
-        product.setSurchargeCny(new BigDecimal("3.00"));
-        when(currencyRateService.toUsd(new BigDecimal("3.00"), "CNY")).thenReturn(new BigDecimal("0.4196"));
-        when(currencyRateService.toUsd(new BigDecimal("0.50"), "CNY")).thenReturn(new BigDecimal("0.0699"));
+        // Los mismos importes de siempre, ahora expresados sobre el coste de 0,7526 USD: el 55,753 %
+        // son los 0,42 del producto y el 9,288 % los 0,07 del tramo. El recargo ya no se convierte de
+        // moneda —sale del coste, que ya está en dólares— así que aquí no hay nada que simular.
+        product.setSurchargePct(new BigDecimal("55.753"));
 
         PricedAmount conElDelProducto = pricingService.priceForSupplierAmount(product, null, COSTE_CNY);
         PricedAmount conElDelTramo = pricingService.priceForSupplierAmount(product, null, COSTE_CNY,
-                new BigDecimal("0.50"));
+                new BigDecimal("9.288"));
 
         assertThat(conElDelTramo.displayAmount()).isLessThan(conElDelProducto.displayAmount());
         // 6,17 del resto + 0,07 del recargo propio, en vez de los 0,42 del producto.
@@ -182,8 +183,7 @@ class PriceTierMatchesChargedPriceTest {
      */
     @Test
     void unTramoSinRecargoPropioHeredaElDelProducto() {
-        product.setSurchargeCny(new BigDecimal("3.00"));
-        when(currencyRateService.toUsd(new BigDecimal("3.00"), "CNY")).thenReturn(new BigDecimal("0.4196"));
+        product.setSurchargePct(new BigDecimal("55.753"));
 
         PricedAmount heredado = pricingService.priceForSupplierAmount(product, null, COSTE_CNY, null);
         PricedAmount delProducto = pricingService.priceForSupplierAmount(product, null, COSTE_CNY);
@@ -197,8 +197,7 @@ class PriceTierMatchesChargedPriceTest {
      */
     @Test
     void unRecargoDeCeroEnElTramoAnulaElDelProducto() {
-        product.setSurchargeCny(new BigDecimal("3.00"));
-        when(currencyRateService.toUsd(new BigDecimal("3.00"), "CNY")).thenReturn(new BigDecimal("0.4196"));
+        product.setSurchargePct(new BigDecimal("55.753"));
 
         PricedAmount sinCargo = pricingService.priceForSupplierAmount(product, null, COSTE_CNY, BigDecimal.ZERO);
 

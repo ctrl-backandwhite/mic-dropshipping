@@ -64,15 +64,15 @@ class RecargoDelPrimerTramoTest {
     @DisplayName("el recargo propio del primer tramo se cobra, no el del producto")
     void elRecargoDelPrimerTramoSeCobra() {
         // Lo que se rompería: el administrador escribe 0,80 de recargo para 1-9 unidades, el valor
-        // se guarda en `product_price_tier.surcharge_cny` y el cobro sigue usando los 5,00 del
+        // se guarda en `product_price_tier.surcharge_pct` y el cobro sigue usando el 50 % del
         // producto. Ningún error, ninguna traza: sólo un precio que no es el que se fijó.
-        ProductEntity p = productoCon(new BigDecimal("5.00"));
-        List<ProductPriceTierEntity> escalera = List.of(tramo(p, 1, new BigDecimal("10.00"), new BigDecimal("0.80")),
+        ProductEntity p = productoCon(new BigDecimal("50.00"));
+        List<ProductPriceTierEntity> escalera = List.of(tramo(p, 1, new BigDecimal("10.00"), new BigDecimal("8.00")),
                 tramo(p, 100, new BigDecimal("8.00"), null));
 
         PricingService.PricedAmount precio = pricingService.priceFor(p, p.getVariants().get(0), 1, escalera);
 
-        // 10 de base + 0,80 del tramo = 10,80. Con el recargo del producto saldrían 15,00.
+        // 10 de base + 0,80 del tramo (el 8 % de 10) = 10,80. Con el 50 % del producto, 15,00.
         assertThat(precio.displayAmount()).isEqualByComparingTo("10.80");
     }
 
@@ -82,7 +82,7 @@ class RecargoDelPrimerTramoTest {
         // EL control: «nulo no es cero» también aquí. Sin esta prueba, hacer que el primer tramo
         // use siempre su columna pondría a cero el recargo de los 9.718 productos ya cargados, que
         // la tienen vacía.
-        ProductEntity p = productoCon(new BigDecimal("5.00"));
+        ProductEntity p = productoCon(new BigDecimal("50.00"));
         List<ProductPriceTierEntity> escalera = List.of(tramo(p, 1, new BigDecimal("10.00"), null),
                 tramo(p, 100, new BigDecimal("8.00"), null));
 
@@ -124,7 +124,7 @@ class RecargoDelPrimerTramoTest {
 
     private static ProductEntity productoCon(BigDecimal recargoDelProducto) {
         ProductEntity p = ProductEntity.builder().source("1688").externalId("X").basePrice(new BigDecimal("10.00"))
-                .currency("CNY").surchargeCny(recargoDelProducto).build();
+                .currency("CNY").surchargePct(recargoDelProducto).build();
         ProductVariantEntity v = ProductVariantEntity.builder().product(p).sku("SKU-1").price(new BigDecimal("10.00"))
                 .stock(5).options(Map.of()).active(true).build();
         p.setVariants(List.of(v));
@@ -133,7 +133,7 @@ class RecargoDelPrimerTramoTest {
 
     private static ProductPriceTierEntity tramo(ProductEntity p, int minQty, BigDecimal unitPrice,
             BigDecimal surcharge) {
-        return ProductPriceTierEntity.builder().product(p).minQty(minQty).unitPrice(unitPrice).surchargeCny(surcharge)
+        return ProductPriceTierEntity.builder().product(p).minQty(minQty).unitPrice(unitPrice).surchargePct(surcharge)
                 .build();
     }
 }

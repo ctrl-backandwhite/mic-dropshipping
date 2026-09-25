@@ -150,7 +150,8 @@ class RebajaSoloSobrePrecioUnitarioTest {
         // un tramo sin precio propio pero con su recargo sigue siendo una venta al por mayor.
         ProductEntity p = producto();
         ProductPriceTierEntity mayorista = tramo(p, 100, null);
-        mayorista.setSurchargeCny(new BigDecimal("1.00"));
+        // El 10 % de un coste de 10,00 son el mismo 1,00 de antes.
+        mayorista.setSurchargePct(new BigDecimal("10.00"));
         List<ProductPriceTierEntity> escalera = List.of(tramo(p, 1, new BigDecimal("10.00")), mayorista);
 
         PricingService.PricedAmount precio = pricingService.priceFor(p, p.getVariants().get(0), 100, escalera);
@@ -178,7 +179,7 @@ class RebajaSoloSobrePrecioUnitarioTest {
 
     private static ProductEntity producto() {
         ProductEntity p = ProductEntity.builder().source("1688").externalId("X").basePrice(new BigDecimal("10.00"))
-                .currency("CNY").surchargeCny(BigDecimal.ZERO).margenInternoPct(new BigDecimal("40")).build();
+                .currency("CNY").surchargePct(BigDecimal.ZERO).margenInternoPct(new BigDecimal("40")).build();
         ProductVariantEntity v = ProductVariantEntity.builder().product(p).sku("SKU-1").price(new BigDecimal("10.00"))
                 .stock(5).options(Map.of()).active(true).build();
         p.setVariants(List.of(v));

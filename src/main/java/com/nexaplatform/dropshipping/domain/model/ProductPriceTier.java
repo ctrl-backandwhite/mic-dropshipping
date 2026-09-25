@@ -23,5 +23,5 @@ public class ProductPriceTier {
     private BigDecimal unitPrice;
     private String currency;
     /** Recargo fijo de este tramo. Nulo = hereda el del producto. */
-    private BigDecimal surchargeCny;
+    private BigDecimal surchargePct;
 }

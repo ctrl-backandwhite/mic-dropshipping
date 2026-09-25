@@ -30,6 +30,9 @@ public final class BulkProductFields {
     /** Lo que admite la columna de descripción corta. */
     public static final int MAX_SHORT_DESCRIPTION = 2000;
 
+    /** Para pasar un importe a porcentaje. */
+    private static final BigDecimal CIEN = new BigDecimal("100");
+
     private BulkProductFields() {
     }
 
@@ -184,19 +187,47 @@ public final class BulkProductFields {
      *
      * <p>Es la misma regla que el cambio del 23-sep-2026 declara para los tramos: <b>nulo NO es
      * cero</b>. Un bulk que no habla del recargo no está pidiendo que se borre; uno que manda un
-     * cero explícito sí, porque el cero es un importe que alguien ha decidido escribir.
+     * cero explícito sí, porque el cero es un valor que alguien ha decidido escribir.
      *
-     * <p>Cero para el producto nuevo: la columna es NOT NULL desde la v157 y dejarla a nulo tumba
-     * el alta entera con un 23502.
+     * <p>Desde el 25-sep-2026 lo que se guarda es un PORCENTAJE sobre el coste. La columna nueva es
+     * nulable, así que ya no hace falta poner cero al producto nuevo para esquivar el 23502 de la
+     * vieja: nulo aporta cero en el cálculo y significa «nadie ha fijado recargo aquí».
      */
     public static void applySurcharge(ProductEntity p, BulkProductDtoIn r) {
-        if (r.getSurchargeCny() != null) {
-            p.setSurchargeCny(r.getSurchargeCny());
-            return;
+        BigDecimal pct = surchargePctDe(r);
+        if (pct != null) {
+            p.setSurchargePct(pct);
         }
-        if (p.getSurchargeCny() == null) {
-            p.setSurchargeCny(BigDecimal.ZERO);
+    }
+
+    /**
+     * El recargo de la fila en porcentaje, convirtiendo el importe viejo si es lo único que trae.
+     *
+     * <p>Los JSON de carga anteriores al 25-sep-2026 llevan {@code surchargeCny}, un importe absoluto en
+     * yuanes. Se convierte contra el precio del proveedor de esa misma fila, que es la base sobre la que
+     * ahora se aplica el porcentaje, para que el producto salga al mismo precio que salía.
+     *
+     * <p>Devuelve nulo cuando la fila no habla del recargo: entonces no se toca lo que hubiera. Ausente
+     * NO es cero — poner cero borraría en silencio el recargo que alguien fijó a mano en el panel.
+     */
+    private static BigDecimal surchargePctDe(BulkProductDtoIn r) {
+        if (r.getSurchargePct() != null) {
+            return r.getSurchargePct();
         }
+        BigDecimal importeViejo = r.getSurchargeCny();
+        if (importeViejo == null) {
+            return null;
+        }
+        // Un cero explícito NO necesita la base para convertirse: cero por ciento de cualquier coste es
+        // cero. Sin este atajo, un JSON viejo que borra el recargo mandando 0 y sin precio no lo borraba.
+        if (importeViejo.signum() == 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal base = r.getPrice();
+        if (base == null || base.signum() <= 0) {
+            return null;
+        }
+        return importeViejo.multiply(CIEN).divide(base, 3, RoundingMode.HALF_UP);
     }
 
     /**
@@ -312,8 +343,8 @@ public final class BulkProductFields {
                 // bus viendo el texto viejo.
                 String texto = TallaCanonica.para(vv.getValueZh(), idioma)
                         .orElseGet(() -> TextoTraducido.normaliza(e.getValue(), idioma));
-                vv.getTranslations().add(VariantValueTranslationEntity.builder().variantValue(vv)
-                        .language(idioma).value(texto).build());
+                vv.getTranslations().add(
+                        VariantValueTranslationEntity.builder().variantValue(vv).language(idioma).value(texto).build());
             }
         }
     }

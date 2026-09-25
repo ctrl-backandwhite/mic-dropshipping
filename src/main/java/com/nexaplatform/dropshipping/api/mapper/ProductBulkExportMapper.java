@@ -86,9 +86,9 @@ public class ProductBulkExportMapper {
         d.setPrice(p.getBasePrice());
         d.setShippingCny(p.getShippingCny());
         d.setMargenInternoPct(p.getMargenInternoPct());
-        // El recargo fijo (surcharge_cny) viaja en el export igual que envío e IVA: es un componente
-        // del precio y el destino (el otro entorno por el bus) tiene que quedárselo igual.
-        d.setSurchargeCny(p.getSurchargeCny());
+        // El recargo (surcharge_pct) viaja en el export igual que el envío y el margen interno: es un
+        // componente del precio y el destino (el otro entorno por el bus) tiene que quedárselo igual.
+        d.setSurchargePct(p.getSurchargePct());
         // Las bolsas de subvención viajan en el export igual que el recargo: son componentes de lo que
         // paga el cliente y el destino tiene que quedárselas iguales.
         d.setShippingUserCny(p.getShippingUserCny());
@@ -142,7 +142,7 @@ public class ProductBulkExportMapper {
         d.setReviewsSummary(p.getReviewsSummary());
 
         d.setTieredPricing(safe(tiers).stream().map(
-                t -> new BulkTier(t.getMinQty(), t.getMaxQty(), t.getUnitPrice(), t.getCurrency(), t.getSurchargeCny()))
+                t -> new BulkTier(t.getMinQty(), t.getMaxQty(), t.getUnitPrice(), t.getCurrency(), t.getSurchargePct()))
                 .toList());
 
         d.setVariantAxes(safe(p.getVariantOptions()).stream()

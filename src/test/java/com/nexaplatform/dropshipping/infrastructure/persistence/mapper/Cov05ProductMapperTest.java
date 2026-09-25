@@ -512,7 +512,7 @@ class Cov05ProductMapperTest {
         // tabla que le promete que comprar mas sale mas barato.
         ProductEntity p = product();
         ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(200)
-                .unitPrice(new BigDecimal("9.00")).currency("CNY").surchargeCny(new BigDecimal("0.80")).build();
+                .unitPrice(new BigDecimal("9.00")).currency("CNY").surchargePct(new BigDecimal("8.00")).build();
         when(pricingService.priceFor(any(ProductEntity.class), any(), anyInt(), any()))
                 .thenReturn(precio(new BigDecimal("18.00"), "EUR", "18,00 €"));
 

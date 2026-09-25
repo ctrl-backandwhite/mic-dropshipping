@@ -145,7 +145,7 @@ public class ProductMapper {
         // recargo: valor tecleado + valor ya convertido a la moneda de la peticion.
         // El porcentaje crudo es dato interno: solo viaja para quien administra, igual que el recargo.
         BigDecimal margenInternoPct = admin ? p.getMargenInternoPct() : null;
-        BigDecimal surchargeCny = admin ? p.getSurchargeCny() : null;
+        BigDecimal surchargePct = admin ? p.getSurchargePct() : null;
         // Las bolsas de subvención son SOLO admin: el cliente ve su efecto en el desglose del checkout,
         // nunca el importe que se les ha asignado.
         BigDecimal shippingUserCny = admin ? p.getShippingUserCny() : null;
@@ -166,12 +166,12 @@ public class ProductMapper {
                 p.getVariants().stream().map(v -> toVariantView(p, v, language)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(x -> toPriceTierView(x, tiers)).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(), priced.displaySymbol(),
-                priced.displayFormatted(), appliedMarginPercent, baseFormatted, margenInternoFormatted, shippingFormatted,
-                margenInternoPct,
-                surchargeCny, surchargeFormatted, shippingUserCny, dutyUserCny, shippingUserFormatted,
-                dutyUserFormatted, tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
-                Boolean.TRUE.equals(p.getVerified()), videoUrlOf(p), Boolean.TRUE.equals(p.getHasVideo()),
-                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(),
+                priced.displayFormatted(), appliedMarginPercent, baseFormatted, margenInternoFormatted,
+                shippingFormatted, margenInternoPct, surchargePct, surchargeFormatted, shippingUserCny, dutyUserCny,
+                shippingUserFormatted, dutyUserFormatted, tr != null ? tr.getMetaTitle() : null,
+                tr != null ? tr.getMetaDescription() : null, Boolean.TRUE.equals(p.getVerified()), videoUrlOf(p),
+                Boolean.TRUE.equals(p.getHasVideo()), priced.originalFormatted(), priced.discountPercent(),
+                priced.promotionName(),
                 // Cumplimiento del Reglamento (UE) 2023/988. Va en TODAS las fichas, también las del admin:
                 // el art. 19 obliga a mostrarlo en la oferta, y el panel necesita el mismo bloque para saber
                 // qué le falta a cada referencia.
@@ -317,14 +317,14 @@ public class ProductMapper {
         String displayCode = priced.displayCurrency() != null
                 ? priced.displayCurrency()
                 : pricingService.displayCurrencyCode();
-        // El recargo crudo es un importe interno: viaja SOLO para quien administra, como el resto del
+        // El recargo crudo es un dato interno: viaja SOLO para quien administra, como el resto del
         // desglose. Para todos los demas lo borra ademas sinDatosInternos(), que es el segundo cerrojo.
-        BigDecimal surchargeCny = SecurityUtils.isAdmin() ? t.getSurchargeCny() : null;
+        BigDecimal surchargePct = SecurityUtils.isAdmin() ? t.getSurchargePct() : null;
         return new PriceTierView(t.getMinQty(), t.getMaxQty(), displayAmount, displayCode,
                 priced.displayFormatted() != null
                         ? priced.displayFormatted()
                         : currencyRateService.formatDisplay(displayAmount, displayCode),
-                surchargeCny);
+                surchargePct);
     }
 
     /* ------------------ helpers ------------------ */

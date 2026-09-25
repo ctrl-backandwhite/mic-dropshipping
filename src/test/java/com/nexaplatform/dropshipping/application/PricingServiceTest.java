@@ -364,11 +364,11 @@ class PricingServiceTest {
         when(currencyService.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("2,00 $");
 
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
-                .surchargeCny(new BigDecimal("20.00")).build();
+                .surchargePct(new BigDecimal("20.00")).build();
 
         PricedAmount priced = service.priceFor(p);
 
-        // base 25,00 + recargo 2,00 (20 CNY / 10) = 27,00. El recargo NO se multiplica por el margen.
+        // base 25,00 + recargo 2,00 (el 20 % de un coste de 10,00) = 27,00. NO lleva margen encima.
         assertThat(priced.surchargeUsd()).isEqualByComparingTo("2.00");
         assertThat(priced.baseRetailUsd()).isEqualByComparingTo("25.00");
         assertThat(priced.retailUsd()).isEqualByComparingTo("27.00");
@@ -386,7 +386,7 @@ class PricingServiceTest {
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
-                .surchargeCny(BigDecimal.ZERO).build();
+                .surchargePct(BigDecimal.ZERO).build();
 
         PricedAmount priced = service.priceFor(p);
 
@@ -404,7 +404,7 @@ class PricingServiceTest {
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
-        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").surchargeCny(null)
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").surchargePct(null)
                 .build();
 
         PricedAmount priced = service.priceFor(p);
@@ -461,7 +461,7 @@ class PricingServiceTest {
         when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(325);
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("28.00")).currency("CNY")
                 .margenInternoPct(new BigDecimal("13")).shippingCny(new BigDecimal("16.00"))
-                .surchargeCny(new BigDecimal("2.50")).shippingUserCny(new BigDecimal("16.00"))
+                .surchargePct(new BigDecimal("9.00")).shippingUserCny(new BigDecimal("16.00"))
                 .dutyUserCny(new BigDecimal("8.00")).build();
 
         PricedAmount priced = service.priceFor(p);

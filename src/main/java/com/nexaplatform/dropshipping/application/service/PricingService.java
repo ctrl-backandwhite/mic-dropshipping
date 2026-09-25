@@ -71,7 +71,11 @@ public class PricingService {
         BigDecimal factor = factorDelTramo(tiers, quantity);
         ProductPriceTierEntity aplicable = tramoAplicable(tiers, quantity);
         // El recargo del tramo manda sobre el del producto; nulo = el tramo no tiene uno propio.
-        BigDecimal recargoDelTramo = aplicable != null ? aplicable.getSurchargeCny() : null;
+        //
+        // PORCENTAJE desde el 25-sep-2026, igual que el margen interno: como importe fijo no seguía al
+        // coste del proveedor, así que al subir el coste el recargo se quedaba donde estaba y había que
+        // rehacerlo a mano producto a producto.
+        BigDecimal recargoDelTramo = aplicable != null ? aplicable.getSurchargePct() : null;
         // REGLA DEL TITULAR (25-sep-2026): las rebajas son del PRECIO UNITARIO. Sobre un precio de
         // mayoreo no se descuenta nada. Ver esMayoreo().
         boolean aplicaRebaja = !esMayoreo(tiers, aplicable);
@@ -81,7 +85,7 @@ public class PricingService {
         // Las dos condiciones, y la segunda faltaba: `factorDelTramo` devuelve nulo cuando el tramo
         // ES el primero —no hay proporcion que medir contra si mismo— y por ahi se salia al precio
         // normal, que usa el recargo del PRODUCTO. Resultado: un recargo escrito para 1-9 unidades
-        // se guardaba en `product_price_tier.surcharge_cny` y no se cobraba nunca, sin un solo
+        // se guardaba en `product_price_tier.surcharge_pct` y no se cobraba nunca, sin un solo
         // error. Y el primer tramo lo tienen TODOS los productos, asi que era justo el caso mas
         // comun del cambio del 23-sep-2026.
         if (factor == null && recargoDelTramo == null) {
@@ -242,13 +246,13 @@ public class PricingService {
      * encarece el pedido grande justo donde la tabla de cantidades promete lo contrario. El envio y el
      * arancel NO se tocan: esos si escalan con el bulto y siguen siendo uno por producto.
      *
-     * <p>{@code surchargeOverrideCny} nulo significa «este tramo no tiene recargo propio», y entonces
+     * <p>{@code surchargeOverridePct} nulo significa «este tramo no tiene recargo propio», y entonces
      * se usa el del producto. Nulo y cero son cosas distintas a proposito: cero es un recargo de cero
      * que alguien ha escrito, y tiene que poder escribirse.
      */
     public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
-            BigDecimal supplierAmount, BigDecimal surchargeOverrideCny) {
-        return priceForSupplierAmount(product, effective, supplierAmount, surchargeOverrideCny, true);
+            BigDecimal supplierAmount, BigDecimal surchargeOverridePct) {
+        return priceForSupplierAmount(product, effective, supplierAmount, surchargeOverridePct, true);
     }
 
     /**
@@ -260,7 +264,7 @@ public class PricingService {
      * porque se aplican al pedido entero y no a un precio suelto.
      */
     public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
-            BigDecimal supplierAmount, BigDecimal surchargeOverrideCny, boolean aplicaRebaja) {
+            BigDecimal supplierAmount, BigDecimal surchargeOverridePct, boolean aplicaRebaja) {
         if (product == null) {
             return unpriced();
         }
@@ -305,11 +309,25 @@ public class PricingService {
         BigDecimal supplierShippingUsd = envioCny != null
                 ? currencyService.toUsd(envioCny, sourceCurrency)
                 : BigDecimal.ZERO;
-        // Recargo fijo por producto (surcharge_cny, default 0): lo fija el admin y se suma al precio de
-        // venta tal cual, SIN margen — es un cargo directo que él decide, no un coste de proveedor.
-        BigDecimal surchargeCny = surchargeOverrideCny != null ? surchargeOverrideCny : product.getSurchargeCny();
-        BigDecimal surchargeUsd = surchargeCny != null && surchargeCny.signum() != 0
-                ? currencyService.toUsd(surchargeCny, sourceCurrency)
+        // RECARGO, en PORCENTAJE sobre el coste del proveedor (25-sep-2026). Lo fija el admin y se suma
+        // al precio de venta tal cual, SIN margen: es un cargo directo que él decide, no un coste de
+        // proveedor. Por eso NO se multiplica por marginFactor, al revés que la base y el envío.
+        //
+        // Antes era un importe fijo en yuanes y no seguía al coste: si el proveedor subía el precio, el
+        // recargo se quedaba donde estaba y había que rehacerlo a mano producto a producto, o se
+        // desfasaba en silencio. Mismo arreglo que se le hizo al margen interno.
+        //
+        // EL RECARGO DEL TRAMO MANDA SOBRE TODO LO DEMÁS, que es lo que pidió el titular: si el tramo
+        // declara el suyo, se aplica ese y no se mira nada más; si no declara nada —nulo—, se hereda el
+        // global del producto. Nulo y cero no son lo mismo, y confundirlos pondría a cero los 3.240
+        // tramos que hoy heredan.
+        //
+        // Se calcula sobre `costUsd`, el importe que se está tarificando, así que con la tabla de
+        // cantidades el recargo baja con el tramo en la misma proporción que el coste. Nulo aporta CERO:
+        // no se inventa un porcentaje por defecto, que encarecería en silencio lo que no traiga el dato.
+        BigDecimal surchargePct = surchargeOverridePct != null ? surchargeOverridePct : product.getSurchargePct();
+        BigDecimal surchargeUsd = costUsd != null && surchargePct != null && surchargePct.signum() != 0
+                ? costUsd.multiply(surchargePct).divide(CIEN, 10, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         // Bolsas de subvención (1-sep-2026): igual que el recargo, se suman al precio de venta SIN margen.
         // El cliente las paga aquí y se le descuentan después del envío y del arancel del pedido, que es
@@ -436,9 +454,10 @@ public class PricingService {
         String dutyUserFormatted = currencyService.formatDisplay(dutyUserR, displayCode);
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
-                withMargin.appliedPercentage(), baseUsd, margenInternoUsd, shippingUsd, baseFormatted, margenInternoFormatted,
-                shippingFormatted, surchargeUsd, surchargeFormatted, shippingUserFormatted, dutyUserFormatted,
-                originalFormatted, discountPercent, promotionName, originalRetailUsd, supplierShippingUsd);
+                withMargin.appliedPercentage(), baseUsd, margenInternoUsd, shippingUsd, baseFormatted,
+                margenInternoFormatted, shippingFormatted, surchargeUsd, surchargeFormatted, shippingUserFormatted,
+                dutyUserFormatted, originalFormatted, discountPercent, promotionName, originalRetailUsd,
+                supplierShippingUsd);
     }
 
     /**
@@ -578,8 +597,9 @@ public class PricingService {
                 String margenInternoFormatted, String shippingFormatted) {
             // Sin promoción ni recargo: los constructores heredados (tests/llamadas previas) no los usan.
             this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted, appliedRuleId,
-                    appliedMarginPercent, baseRetailUsd, margenInternoUsd, shippingUsd, baseFormatted, margenInternoFormatted,
-                    shippingFormatted, null, null, null, null, null, null, null, null, shippingUsd);
+                    appliedMarginPercent, baseRetailUsd, margenInternoUsd, shippingUsd, baseFormatted,
+                    margenInternoFormatted, shippingFormatted, null, null, null, null, null, null, null, null,
+                    shippingUsd);
         }
 
         /** ¿Este precio lleva rebaja? Lo pregunta el frontend para tachar el precio anterior. */

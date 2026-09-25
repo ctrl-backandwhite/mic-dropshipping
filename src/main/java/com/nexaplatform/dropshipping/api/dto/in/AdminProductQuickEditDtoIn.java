@@ -40,8 +40,8 @@ public class AdminProductQuickEditDtoIn {
     /** Margen interno en PORCENTAJE sobre el coste (antes viajaba como importe, «ivaCny»). */
     private BigDecimal margenInternoPct;
 
-    @Schema(description = "Recargo fijo por producto en CNY (default 0). Se suma al precio final.")
-    private BigDecimal surchargeCny;
+    @Schema(description = "Recargo por producto en % sobre el coste. Se suma al precio final sin margen.")
+    private BigDecimal surchargePct;
 
     @Schema(description = "Bolsa de subvención del porte en CNY (default 0). Se descuenta del envío del pedido.")
     private BigDecimal shippingUserCny;
