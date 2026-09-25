@@ -45,6 +45,8 @@ public class AffiliateProgramService {
     private static final String APPROVED = "APPROVED";
     private static final String PENDING = "PENDING";
     private static final String ACTIVE = "ACTIVE";
+    /** Tope del porcentaje propio: por encima, la comisión superaría lo cobrado en la venta. */
+    private static final BigDecimal CIEN = new BigDecimal("100");
     private static final String WALLET = "WALLET";
 
     /**
@@ -908,6 +910,50 @@ public class AffiliateProgramService {
                     "¡Enhorabuena! Ya puedes usar el programa de afiliados: comparte tu enlace para empezar a "
                             + "ganar comisiones.");
         }
+        return saved;
+    }
+
+    /**
+     * Fija el porcentaje de comisión de UN afiliado, sin tocar el de los demás.
+     *
+     * <p><b>Por qué hace falta y qué estaba roto (25-sep-2026).</b> La columna
+     * {@code commission_percent_override} existía, se leía al calcular cada comisión y se enseñaba en
+     * el listado del panel, pero <b>no había forma de escribirla</b>: ni endpoint, ni método, ni
+     * pantalla. Siempre valía nulo, así que todo el mundo cobraba el porcentaje global y la única
+     * palanca disponible era {@code PUT /config}, que lo cambia <b>para todos</b> — justo lo contrario
+     * de lo que se pedía. La columna daba la impresión de que la función estaba hecha.
+     *
+     * <p>{@code percent} nulo BORRA el porcentaje propio y devuelve al afiliado al general. Nulo y cero
+     * son cosas distintas a propósito: cero es una comisión de cero que alguien ha decidido escribir, y
+     * tiene que poder escribirse —por ejemplo, para dejar de pagar a un afiliado sin expulsarlo—.
+     *
+     * <p>El tope es del 100 %: por encima, cada venta costaría más comisión que el importe cobrado. No
+     * se compara contra el porcentaje general a propósito, porque este mecanismo sirve igual para subir
+     * a un buen prescriptor que para bajar a uno en revisión.
+     */
+    @Transactional
+    public AffiliateEntity setCommissionPercent(UUID affiliateId, BigDecimal percent) {
+        if (percent != null && (percent.signum() < 0 || percent.compareTo(CIEN) > 0)) {
+            throw new BusinessException("El porcentaje de comisión debe estar entre 0 y 100");
+        }
+        AffiliateEntity a = affiliateRepo.findById(affiliateId)
+                .orElseThrow(() -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        BigDecimal anterior = a.getCommissionPercentOverride() != null
+                ? a.getCommissionPercentOverride()
+                : currentConfig().getDefaultPercent();
+        a.setCommissionPercentOverride(percent);
+        AffiliateEntity saved = affiliateRepo.save(a);
+        BigDecimal ahora = percent != null ? percent : currentConfig().getDefaultPercent();
+        // Se avisa porque es dinero suyo: enterarse por el importe de la siguiente comisión es peor que
+        // saberlo antes, y deja rastro de cuándo cambió.
+        if (a.getUser() != null && anterior.compareTo(ahora) != 0) {
+            notify(a.getUser().getId(), "AFFILIATE_COMMISSION_PERCENT", "Tu comisión ha cambiado",
+                    "Tu comisión pasa del " + anterior.stripTrailingZeros().toPlainString() + "% al "
+                            + ahora.stripTrailingZeros().toPlainString()
+                            + "%. Se aplica a las ventas nuevas de tu código; las comisiones ya generadas no cambian.");
+        }
+        log.info("::> [AFFILIATE] Comisión de {} fijada a {} (antes {})", affiliateId,
+                percent != null ? percent + "%" : "la del programa", anterior);
         return saved;
     }
 }

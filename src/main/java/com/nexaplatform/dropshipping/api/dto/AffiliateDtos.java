@@ -64,6 +64,16 @@ public final class AffiliateDtos {
     public record StatusRequest(String status) {
     }
 
+    /**
+     * El porcentaje de comisión de UN afiliado.
+     *
+     * <p>{@code percent} nulo borra el porcentaje propio y devuelve al afiliado al general del
+     * programa. Es un endpoint distinto de {@code PUT /config} a propósito: aquel cambia el porcentaje
+     * de TODOS, y la regla del titular es que subírselo a uno no se lo suba al resto.
+     */
+    public record CommissionPercentRequest(BigDecimal percent) {
+    }
+
     public record ConfigUpdateRequest(BigDecimal defaultPercent, Integer attributionWindowDays,
             Integer returnPeriodDays, Long minPayoutCents, String currency, Long maxCommissionPeriodCents) {
     }

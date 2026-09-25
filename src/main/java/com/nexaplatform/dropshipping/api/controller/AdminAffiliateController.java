@@ -72,6 +72,19 @@ public class AdminAffiliateController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Sube o baja la comisión de UN afiliado. Cuerpo con {@code percent} nulo: vuelve a la del programa.
+     *
+     * <p>No confundir con {@code PUT /config}, que cambia el porcentaje de TODOS. Este es el que
+     * cumple la regla del titular: el porcentaje propio es de su cuenta y de su código, y no toca a
+     * los demás.
+     */
+    @PostMapping("/{id}/commission")
+    public ResponseEntity<Void> setCommission(@PathVariable UUID id, @RequestBody CommissionPercentRequest req) {
+        service.setCommissionPercent(id, req.percent());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{id}/payout")
     public ResponseEntity<Map<String, Long>> payout(@PathVariable UUID id) {
         long paid = service.payoutApproved(id, true);
