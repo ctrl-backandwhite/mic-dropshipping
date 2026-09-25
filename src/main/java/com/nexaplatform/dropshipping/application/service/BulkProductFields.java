@@ -300,10 +300,20 @@ public final class BulkProductFields {
         for (Map.Entry<String, String> e : trMap.entrySet()) {
             if (has(e.getKey()) && has(e.getValue())) {
                 String idioma = e.getKey().trim().toLowerCase();
-                // Normalizado al entrar, no al pintar: si se arreglara en la vista, el buscador, el
-                // export y el bus seguirían viendo «17.3 cm» en español.
+                // Si el ORIGINAL chino es un patrón conocido —una talla con su largo interior, un lote
+                // de pares—, manda la forma canónica y no lo que devolvió el traductor. El chino es
+                // uniforme y el traductor no: el mismo «26码内长16.7» llegaba de treinta formas por
+                // idioma, y algunas mal («plantilla», «entrepierna», que no es lo que dice 内长).
+                //
+                // Lo que no encaja en un patrón se queda como vino, solo con la ortografía corregida:
+                // ahí el traductor es la única fuente y reescribirlo sería inventar.
+                //
+                // Y se hace al ENTRAR, no al pintar: en la vista dejaría al buscador, al export y al
+                // bus viendo el texto viejo.
+                String texto = TallaCanonica.para(vv.getValueZh(), idioma)
+                        .orElseGet(() -> TextoTraducido.normaliza(e.getValue(), idioma));
                 vv.getTranslations().add(VariantValueTranslationEntity.builder().variantValue(vv)
-                        .language(idioma).value(TextoTraducido.normaliza(e.getValue(), idioma)).build());
+                        .language(idioma).value(texto).build());
             }
         }
     }
