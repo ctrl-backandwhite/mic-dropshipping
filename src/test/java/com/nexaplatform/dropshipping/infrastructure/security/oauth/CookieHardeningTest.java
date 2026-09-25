@@ -100,7 +100,11 @@ class CookieHardeningTest {
         assertThat(propiedad("application.yml", "server.servlet.session.cookie.same-site")).isEqualTo("lax");
         assertThat(propiedad("application.yml", "server.servlet.session.cookie.http-only")).isEqualTo(true);
 
-        for (String perfil : List.of("application-dev.yml", "application-pre.yml", "application-pro.yml")) {
+        // Los TRES perfiles que existen y van por HTTPS. Aquí decía «dev», un perfil que se retiró con
+        // Railway el 25-sep-2026 y que ningún overlay activaba; la prueba seguía leyéndolo y en local
+        // pasaba igual, porque el fichero sobrevivía compilado en target/. Solo se cayó en el CI, que
+        // construye limpio. Si mañana nace otro entorno, va en esta lista.
+        for (String perfil : List.of("application-des.yml", "application-pre.yml", "application-pro.yml")) {
             assertThat(propiedad(perfil, "server.servlet.session.cookie.secure"))
                     .as("la cookie de sesión debe ser Secure en %s (va por HTTPS)", perfil).isEqualTo(true);
             assertThat(propiedad(perfil, "server.servlet.session.cookie.same-site"))
