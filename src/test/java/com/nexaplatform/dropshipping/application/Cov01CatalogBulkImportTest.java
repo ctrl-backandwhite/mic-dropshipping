@@ -951,6 +951,39 @@ class Cov01CatalogBulkImportTest {
     }
 
     @Test
+    void unaFichaTecnicaCuyoValorNoDiceNadaNoEntra() {
+        // 1688 devuelve valores que son un signo suelto: «Elementos populares: .». Entraban tal cual y
+        // el cliente veía una fila que no informa de nada. Y algo peor: el traductor devuelve vacío
+        // para un punto, así que la fila se guardaba en seis idiomas y se caía en el séptimo — eso es
+        // lo que dejaba las fichas técnicas desparejas entre idiomas. Eran 17 de las 18 filas que
+        // faltaban en preproducción el 25-sep-2026.
+        BulkProductDtoIn r = validRow();
+        r.setSpecifications(List.of(new BulkProductDtoIn.BulkSpec(null, "Elementos populares", ".", null),
+                new BulkProductDtoIn.BulkSpec(null, "Guion", "-", null),
+                new BulkProductDtoIn.BulkSpec(null, "Barra", " / ", null),
+                new BulkProductDtoIn.BulkSpec(null, "Material", "Algodón", null)));
+
+        useCase.createProductManual(r);
+
+        ArgumentCaptor<ProductSpecificationEntity> captor = ArgumentCaptor.forClass(ProductSpecificationEntity.class);
+        verify(productSpecificationRepository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getSpecKey()).isEqualTo("Material");
+    }
+
+    @Test
+    void unaFichaTecnicaConCifrasSiEntra() {
+        // EL control. «100%», «2» o «40» son datos, no ruido: si la guarda pidiera letras se perderían
+        // la talla, la tasa de calidad y el plazo de envío, que es medio catálogo.
+        BulkProductDtoIn r = validRow();
+        r.setSpecifications(List.of(new BulkProductDtoIn.BulkSpec(null, "Tasa de calidad", "100%", null),
+                new BulkProductDtoIn.BulkSpec(null, "Talla", "40", null)));
+
+        useCase.createProductManual(r);
+
+        verify(productSpecificationRepository, times(2)).save(any(ProductSpecificationEntity.class));
+    }
+
+    @Test
     void laPosicionDeLaFichaTecnicaAvanzaTambienConLasFilasDescartadas() {
         // Así una fila incompleta descartada no reordena las siguientes respecto al fichero original.
         BulkProductDtoIn r = validRow();

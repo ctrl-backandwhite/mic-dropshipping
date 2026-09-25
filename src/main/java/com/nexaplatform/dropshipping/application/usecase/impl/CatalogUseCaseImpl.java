@@ -2596,6 +2596,25 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * fila incompleta descartada no reordena las siguientes respecto al fichero
      * original.
      */
+    /**
+     * Si el valor de una ficha técnica dice algo, más allá de un signo suelto.
+     *
+     * <p><b>Por qué no basta con «no está en blanco» (25-sep-2026).</b> 1688 devuelve valores que son
+     * un punto —«Elementos populares: .»— y así entraban al catálogo: una fila que no informa de nada
+     * y que el cliente ve en la ficha. Peor aún, el traductor devuelve vacío para un punto, así que la
+     * fila se guardaba en seis idiomas y se caía en el séptimo: eso es lo que dejaba las fichas
+     * técnicas desparejas entre idiomas, 17 de las 18 filas que faltaban en preproducción.
+     *
+     * <p>Se exige al menos una letra o un número. Un valor como «100%» o «2» sí pasa: son datos. Un
+     * «.», un «-» o un «/» no.
+     */
+    private static boolean tieneContenido(String valor) {
+        if (!Texts.has(valor)) {
+            return false;
+        }
+        return valor.codePoints().anyMatch(Character::isLetterOrDigit);
+    }
+
     private void replaceProductSpecifications(ProductEntity p, BulkProductDtoIn r) {
         if (r.getSpecifications() == null || r.getSpecifications().isEmpty()) {
             return;
@@ -2604,7 +2623,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .deleteAll(productSpecificationRepository.findByProduct_IdOrderByPositionAsc(p.getId()));
         int fallbackPosition = 0;
         for (BulkProductDtoIn.BulkSpec s : r.getSpecifications()) {
-            if (Texts.has(s.getKey()) && Texts.has(s.getValue())) {
+            if (Texts.has(s.getKey()) && tieneContenido(s.getValue())) {
                 productSpecificationRepository.save(ProductSpecificationEntity.builder().product(p)
                         .locale(Texts.firstNonBlankOr("es", s.getLocale()).trim().toLowerCase()).specKey(s.getKey())
                         .specValue(s.getValue()).position(s.getPosition() != null ? s.getPosition() : fallbackPosition)
