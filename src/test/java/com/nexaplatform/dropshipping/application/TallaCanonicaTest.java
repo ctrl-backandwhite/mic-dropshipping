@@ -57,6 +57,78 @@ class TallaCanonicaTest {
     }
 
     @Test
+    @DisplayName("la talla por peso sale en KG y con el mismo texto en los siete idiomas")
+    void tallaPorPeso() {
+        // Formato pedido por el titular el 25-sep-2026. No lleva ni una palabra dentro, así que es el
+        // MISMO en todos los idiomas: la letra de la talla y «KG» se entienden en los siete, y el
+        // texto que había alrededor —«talla europea», «recomendado», «1 jin ≈ 0,5 kg»— no añadía nada
+        // y llegaba de siete formas distintas.
+        for (String idioma : new String[] {"es", "en", "pt", "fr", "de", "it", "nl"}) {
+            assertThat(TallaCanonica.para("欧码XS(建议90-110斤）", idioma)).contains("XS - (45 - 55 KG)");
+        }
+    }
+
+    @Test
+    @DisplayName("el jin se convierte a kilos: son 500 gramos, no un kilo")
+    void elJinSonMedioKilo() {
+        // Dejar «90-110 jin» en la ficha es pedirle al comprador que convierta una unidad china para
+        // saber si la prenda le vale. Y tomarlo por kilos doblaría el peso recomendado.
+        assertThat(TallaCanonica.para("欧码XXL(建议180-200斤)", "es")).contains("XXL - (90 - 100 KG)");
+        assertThat(TallaCanonica.para("2XL【建议150-170斤】", "es")).contains("2XL - (75 - 85 KG)");
+    }
+
+    @Test
+    @DisplayName("los kilos y los gramos del proveedor también acaban en KG")
+    void kilosYGramos() {
+        assertThat(TallaCanonica.para("L【50-60公斤】", "es")).contains("L - (50 - 60 KG)");
+        assertThat(TallaCanonica.para("M(45000-55000克)", "es")).contains("M - (45 - 55 KG)");
+    }
+
+    @Test
+    @DisplayName("medio kilo se conserva; un kilo redondo no arrastra decimales")
+    void medioKiloSeConserva() {
+        // 105 jin son 52,5 kg y ese medio kilo es información real. Lo que no se quiere es «50,0 KG».
+        assertThat(TallaCanonica.para("S(建议95-105斤)", "es")).contains("S - (47,5 - 52,5 KG)");
+        assertThat(TallaCanonica.para("S(建议100-120斤)", "es")).contains("S - (50 - 60 KG)");
+    }
+
+    @Test
+    @DisplayName("las siete formas de escribirlo dan el mismo resultado")
+    void lasSieteFormasConvergen() {
+        // El proveedor escribe lo mismo con corchetes, con paréntesis, con «建议» o sin nada. En el
+        // catálogo hay siete variantes y todas significan lo mismo.
+        assertThat(TallaCanonica.para("欧码L(建议140-160斤)", "es")).contains("L - (70 - 80 KG)");
+        assertThat(TallaCanonica.para("L【建议140-160斤】", "es")).contains("L - (70 - 80 KG)");
+        assertThat(TallaCanonica.para("L【140-160斤】", "es")).contains("L - (70 - 80 KG)");
+        assertThat(TallaCanonica.para("L 140-160斤", "es")).contains("L - (70 - 80 KG)");
+        assertThat(TallaCanonica.para("L建议140-160斤", "es")).contains("L - (70 - 80 KG)");
+    }
+
+    @Test
+    @DisplayName("las formas raras del proveedor también convergen")
+    void formasRaras() {
+        // Talla repetida dentro del paréntesis, «推荐» en vez de «建议», la unidad puesta en los dos
+        // números y un «内» («dentro de») al final. Todas dicen lo mismo.
+        assertThat(TallaCanonica.para("3XL(3XL【建议145-160斤】)", "es")).contains("3XL - (72,5 - 80 KG)");
+        assertThat(TallaCanonica.para("L(推荐112-128斤）", "es")).contains("L - (56 - 64 KG)");
+        assertThat(TallaCanonica.para("XL 【建议135斤~150斤】", "es")).contains("XL - (67,5 - 75 KG)");
+    }
+
+    /**
+     * EL control del formato nuevo, y el que más importa: una talla con código compuesto NO se
+     * simplifica.
+     *
+     * <p>El «34/75ABC» es la talla de sujetador. Dejar una «M» más limpia a costa de perderla sería
+     * quitarle al comprador justo el dato con el que decide, y en lencería es el que manda.
+     */
+    @Test
+    @DisplayName("una talla con código de sujetador no se simplifica")
+    void codigoCompuestoNoSeToca() {
+        assertThat(TallaCanonica.para("M（34/75ABC）建议90-105斤", "es")).isEmpty();
+        assertThat(TallaCanonica.para("58/195/4XL适合200-220斤", "es")).isEmpty();
+    }
+
+    @Test
     @DisplayName("un lote por rango de tallas")
     void loteDePares() {
         assertThat(TallaCanonica.para("22-26一手拍5双", "es")).contains("22-26, 5 pares");
