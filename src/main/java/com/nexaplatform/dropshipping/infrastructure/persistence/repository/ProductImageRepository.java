@@ -72,6 +72,24 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
     void marcaComprimida(@Param("id") UUID id, @Param("cdnUrl") String cdnUrl, @Param("bytes") Long bytes,
             @Param("hash") String hash, @Param("at") Instant at);
 
+    /**
+     * Apunta al comprimido TODAS las filas que compartían el original.
+     *
+     * <p><b>El objeto se nombra por el hash de su CONTENIDO</b>, así que la misma foto usada por dos
+     * productos —o en la galería y en una variante— es UN objeto y VARIAS filas. Medido en
+     * preproducción el 25-sep-2026: 891 URLs compartidas por 1.896 filas.
+     *
+     * <p>Sin esto, comprimir una fila y borrar su original dejaba a las demás apuntando a un objeto que
+     * ya no existe: la imagen desaparecía del escaparate sin dar un solo error, y la fila seguía
+     * diciendo MIRRORED. Como el contenido es el mismo, el comprimido vale para todas.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.comprimidaEn = :at, i.cdnUrl = :cdnUrl, i.bytes = :bytes, "
+            + "i.hash = :hash WHERE i.cdnUrl = :anterior")
+    int reapuntaLasQueCompartianElOriginal(@Param("anterior") String anterior, @Param("cdnUrl") String cdnUrl,
+            @Param("bytes") Long bytes, @Param("hash") String hash, @Param("at") Instant at);
+
     /** Anota que no hay nada que comprimir aquí (ya venía comprimida, o el compresor se rindió). */
     @Modifying
     @Transactional

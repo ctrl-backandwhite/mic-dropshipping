@@ -123,8 +123,8 @@ class SoloViveLaImagenComprimidaTest {
         // `never()` en orden no dice «no antes», dice «nunca» — la primera versión de esta prueba fallaba
         // por eso, no por el código.
         InOrder orden = inOrder(imageRepository, storage);
-        orden.verify(imageRepository).marcaComprimida(eq(img.getId()), anyString(), anyLong(), anyString(),
-                any(Instant.class));
+        orden.verify(imageRepository).reapuntaLasQueCompartianElOriginal(eq(ORIGINAL), anyString(), anyLong(),
+                anyString(), any(Instant.class));
         orden.verify(storage).deleteByPublicUrl(ORIGINAL);
     }
 
@@ -143,6 +143,39 @@ class SoloViveLaImagenComprimidaTest {
 
         verify(storage, never()).deleteByPublicUrl(any());
         verify(storage, never()).upload(any(), any(), any());
+    }
+
+    /**
+     * EL fallo que rompió preproducción el 25-sep-2026, y el que esta clase no cubría.
+     *
+     * <p>El objeto se nombra por el hash de su CONTENIDO, así que la misma foto usada por dos productos
+     * —o en la galería y en una variante— es UN objeto y VARIAS filas. Medido: 891 URLs compartidas por
+     * 1.896 filas. Al comprimir se actualizaba SOLO la fila del lote y se borraba el original, dejando a
+     * las hermanas apuntando a un objeto inexistente: la foto desaparecía del escaparate sin dar un solo
+     * error y la fila seguía diciendo MIRRORED.
+     *
+     * <p>Lo que se vio: fichas con el hueco gris en el escaparate, con la base de datos afirmando que
+     * estaban espejadas y el objeto ausente del cubo. Un 404 que además el borde cachea un año.
+     */
+    @Test
+    @DisplayName("comprimir reapunta TODAS las filas que compartían el original, no solo la del lote")
+    void reapuntaALasHermanasQueCompartianElOriginal() {
+        ProductImageEntity img = imagenSinComprimir();
+        when(imageRepository.findPendientesDeComprimir(any())).thenReturn(List.of(img));
+        when(storage.bytesFromPublicUrl(ORIGINAL)).thenReturn(bytes(240_000));
+        when(compresor.comprimir(any(), any()))
+                .thenReturn(new CompresorDeImagen.Comprimida(bytes(90_000), "webp", "image/webp", 800, 800));
+        String comprimida = "https://img.nx036.com/product-images/media/cd/cdef.webp";
+        when(storage.upload(anyString(), any(), anyString())).thenReturn(comprimida);
+
+        service.comprimirPendientesBatch(10);
+
+        // Se reapunta por la URL DEL ORIGINAL, que es lo que alcanza a las hermanas. Hacerlo por el id de
+        // la fila —como antes— es justo lo que las dejaba huérfanas.
+        verify(imageRepository).reapuntaLasQueCompartianElOriginal(eq(ORIGINAL), eq(comprimida), anyLong(), anyString(),
+                any(Instant.class));
+        verify(imageRepository, never()).marcaComprimida(any(), anyString(), anyLong(), anyString(),
+                any(Instant.class));
     }
 
     @Test
