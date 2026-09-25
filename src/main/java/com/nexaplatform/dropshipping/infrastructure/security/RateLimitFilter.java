@@ -65,7 +65,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     // Nº de proxies de confianza por delante (LB/edge). La IP real del cliente es la que
     // añade el proxy de confianza al final de X-Forwarded-For; los valores que el cliente
-    // pueda inyectar quedan a la izquierda. 1 = un único proxy (típico Railway/Nginx).
+    // pueda inyectar quedan a la izquierda. 1 = un único proxy (el caso de Traefik delante).
     @Value("${nexadrop.security.trusted-proxy-count:1}")
     private int trustedProxyCount;
 
@@ -337,7 +337,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // Detrás de Cloudflare (producción: api.nx036.com), CF-Connecting-IP es la IP REAL del cliente y
         // Cloudflare SOBRESCRIBE cualquier valor que mande el cliente → no es falsificable por tráfico que
         // pasa por CF. Es la fuente autoritativa cuando existe, y evita el bypass del rate-limit por
-        // X-Forwarded-For rotado. (Requiere además bloquear el acceso DIRECTO al origen Railway para que
+        // X-Forwarded-For rotado. (Requiere además bloquear el acceso DIRECTO al origen para que
         // nadie salte Cloudflare; ver nota de despliegue.)
         String cf = req.getHeader("CF-Connecting-IP");
         if (cf != null && !cf.isBlank()) {

@@ -3,12 +3,12 @@
 #   Frontend: https://nx036.com
 #   Backend : ${NX_API_URL:https://api-dev.nx036.com}  (servidor de autorización)
 #
-# Réplica de application-dev.yml pero con las URLs públicas de PRE: issuer del authorization
+# Mismo esquema que los demás entornos, con las URLs públicas de PRE: issuer del authorization
 # server (backend), callback de Google, CORS y enlaces de email apuntan al entorno pre. Solo se
 # carga cuando SPRING_PROFILES_ACTIVE=des → no afecta a dev (perfil dev) ni a pro (perfil pro).
 #
 # Los SECRETOS (Google client id/secret, BD, KEKs, etc.) NUNCA van aquí: se inyectan por
-# variables de entorno en Railway (ya soportadas en application.yml).
+# variables de entorno del entorno (ya soportadas en application.yml).
 # =====================================================================================
 spring:
   jpa:
@@ -19,7 +19,7 @@ spring:
     # Datos reales: NO ejecutar los seeds demo (context:demo), que asumen usuarios/catálogo previos.
     contexts: "!demo"
   kafka:
-    # Kafka KRaft seguro (SASL/SCRAM) en Railway. El JAAS (usuario+password) llega por env.
+    # Kafka KRaft seguro (SASL/SCRAM). El JAAS (usuario+password) llega por env.
     properties:
       security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
       sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
@@ -54,7 +54,7 @@ server:
   servlet:
     session:
       cookie:
-        secure: true        # HTTPS en Railway
+        secure: true        # HTTPS detrás de Traefik
         same-site: lax       # el SPA usa el dominio del frontend (mismo origen vía proxy) → lax es correcto
 
 nexadrop:

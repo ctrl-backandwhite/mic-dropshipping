@@ -24,7 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><b>URL a registrar</b> en 开发配置 → 事件管理 (debe ser pública; localhost no es alcanzable desde
  * YunExpress, hace falta un túnel):
  * <ul>
- *   <li>Desarrollo: {@code https://back-dropshipping-des.up.railway.app/api/webhooks/yunexpress}</li>
+ *   <li>Desarrollo: {@code https://api-dev.nx036.com/api/webhooks/yunexpress}</li>
+ *   <li>Preproducción: {@code https://api-pre.nx036.com/api/webhooks/yunexpress}</li>
+ *   <li>Producción: {@code https://api.nx036.com/api/webhooks/yunexpress}</li>
  * </ul>
  *
  * <p>La ruta {@code /api/webhooks/**} ya es pública en la configuración de seguridad.

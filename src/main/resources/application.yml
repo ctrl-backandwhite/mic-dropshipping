@@ -100,7 +100,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6479}
-      # Railway/managed Redis exige auth. Vacío en local (sin password). SSL solo si el proveedor lo pide.
+      # Un Redis gestionado exige auth. Vacío en local (sin password). SSL solo si el proveedor lo pide.
       username: ${REDIS_USERNAME:}
       password: ${REDIS_PASSWORD:}
       ssl:
@@ -183,7 +183,7 @@ spring:
             redirect-uri: "${GITHUB_REDIRECT_URI:http://localhost:3003/login/oauth2/code/github}"
 
 server:
-  # Railway/Heroku inyectan PORT en runtime; si no, usamos SERVER_PORT y por último 18082 (local).
+  # Algunas plataformas inyectan PORT en runtime; si no, usamos SERVER_PORT y por último 18082 (local).
   port: ${PORT:${SERVER_PORT:18082}}
   forward-headers-strategy: framework
   max-http-request-header-size: 16KB
@@ -331,7 +331,7 @@ nexadrop:
     # URL pública que codifica el QR de verificación de la factura.
     verify-base-url: ${INVOICE_VERIFY_BASE_URL:${nexadrop.storefront.base-url:http://localhost:3003}}
     # Datos fiscales del EMISOR para que la factura sea un documento legal. Rellénalos por
-    # entorno (Railway). Si legal-name queda vacío, el bloque del emisor NO se pinta.
+    # entorno. Si legal-name queda vacío, el bloque del emisor NO se pinta.
     issuer:
       # Titular: NX036 LLC, sociedad de Wyoming (EE. UU.) de un solo miembro. Los mismos datos que
       # figuran en el aviso legal y en los términos — «NX036» es el nombre comercial; quien contrata y

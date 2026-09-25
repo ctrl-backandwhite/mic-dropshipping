@@ -106,7 +106,7 @@ public class InvoiceService {
     // Base pública para el QR de verificación de la factura. Debe apuntar al entorno donde se emite
     // (localhost / DES / PRE). Si no se fija una URL de verificación propia, usa la base del storefront
     // (ya configurada por entorno: localhost:3003 / front-des / front-pre), cuyo nginx proxya /api al
-    // backend → el QR queda con la URL correcta del entorno sin necesidad de variables extra en Railway.
+    // backend → el QR queda con la URL correcta del entorno sin necesidad de variables extra por entorno.
     @Value("${nexadrop.invoice.verify-base-url:${nexadrop.storefront.base-url:http://localhost:3003}}")
     private String verifyBaseUrl;
 

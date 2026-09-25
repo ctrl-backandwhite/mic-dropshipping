@@ -62,7 +62,7 @@ public class BffSecurityConfig {
     /**
      * Cadena interna admin/storefront para el SPA — auth por <b>token Bearer (JWT)</b>, stateless.
      *
-     * <p>Migrada desde sesión+cookies: el SPA estático vive en otro dominio (Railway) y manda
+     * <p>Migrada desde sesión+cookies: el SPA estático vive en otro dominio y manda
      * {@code Authorization: Bearer <token>}. Al no haber cookies no hay CSRF, y el resource server
      * valida el JWT (firmado por el JWKSource RSA compartido). Las autoridades salen del claim
      * {@code authorities} del token (p.ej. {@code ROLE_ADMIN}), sin prefijo extra.

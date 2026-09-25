@@ -120,7 +120,7 @@ public class ObjectStorageService {
     /**
      * Bytes de un objeto a partir de su URL pública (la que se guarda en snapshots/cdn). Deriva la clave
      * quitando el prefijo {@code public-url} y descarga por el endpoint interno. Agnóstico del entorno:
-     * en local usa {@code minio:9000}; en Railway, el {@code STORAGE_ENDPOINT} configurado.
+     * en local usa {@code minio:9000}; en los entornos, el {@code STORAGE_ENDPOINT} configurado.
      *
      * @return los bytes, o un array VACÍO si el storage no está listo, la URL no es de este bucket o el
      *         objeto no se puede leer. Vacío y no {@code null} porque para quien llama significan lo mismo

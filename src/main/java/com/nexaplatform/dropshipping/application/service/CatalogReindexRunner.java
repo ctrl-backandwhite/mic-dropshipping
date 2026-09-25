@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>Reindexar todo el catálogo es una operación larga que crece con el nº de productos (con miles
  * tarda más de un minuto). Hacerlo de forma síncrona dentro de la petición HTTP la mataba: el proxy
- * del frontend (nginx, 60s por defecto) y, sobre todo, el edge de Railway/Cloudflare delante del
+ * del frontend (nginx, 60s por defecto) y, sobre todo, el borde de Cloudflare delante del
  * backend cortan la conexión y el admin veía "No se pudo reindexar" aunque el backend siguiera
  * trabajando. Por eso se dispara aquí en background y el endpoint responde al instante; el admin
  * consulta el estado (en curso / terminado) con un endpoint aparte.

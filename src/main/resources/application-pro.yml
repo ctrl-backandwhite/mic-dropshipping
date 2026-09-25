@@ -8,7 +8,7 @@
 # para redirects OAuth, callback de Google, CORS y enlaces de email.
 #
 # Los SECRETOS (Google client id/secret, BD, KEKs, etc.) NUNCA van aquí: se inyectan por
-# variables de entorno en Railway (ya soportadas en application.yml).
+# variables de entorno del entorno (ya soportadas en application.yml).
 # =====================================================================================
 spring:
   jpa:
