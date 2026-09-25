@@ -59,7 +59,7 @@ Ojo: no existe `./mvnw` en este repositorio. Se usa `mvn` del sistema.
 
 ### Que la batería siga siendo rápida
 
-La suite tarda **unos 2 minutos para 3.694 pruebas**. Ese número hay que defenderlo a medida que se
+La suite tarda **unos 2-3 minutos para unas 4.150 pruebas**. Ese número hay que defenderlo a medida que se
 añaden pruebas, y se defiende escribiéndolas bien, no con trucos de configuración.
 
 **Lo que hay que evitar al escribir una prueba nueva:**
@@ -68,10 +68,13 @@ añaden pruebas, y se defiende escribiéndolas bien, no con trucos de configurac
   Generarlo en `@BeforeEach` lo multiplica por el número de pruebas de la clase; en agosto de 2026
   dos clases se llevaban así ~10 s de la batería. Una clave de prueba es dato inmutable: va en un
   `static final` que se genera una vez. Lo mismo aplica a BCrypt y a cualquier derivación de clave.
-- **Nada de `Thread.sleep` ni esperas por reloj.** Hoy no hay ni una en toda la batería y así debe
-  seguir. Si hay que esperar a algo, se espera a la condición, no al tiempo.
+- **Nada de `Thread.sleep` ni esperas por reloj.** Si hay que esperar a algo, se espera a la
+  condición, no al tiempo. La norma sigue en pie, pero **ya hay una excepción viva** y conviene
+  saberlo en vez de creer que la batería está limpia:
+  `ResilientOidcIdTokenDecoderFactoryTest:201`. O se corrige ese test o se documenta por qué no
+  puede corregirse; lo que no vale es seguir diciendo que no hay ninguna.
 - **`@SpringBootTest` solo en los `*IT`.** Levantar el contexto de Spring en una prueba unitaria
-  cuesta segundos; hoy solo hay una unitaria que lo haga. Una prueba unitaria construye su clase con
+  cuesta segundos; hoy no queda ninguna unitaria que lo haga. Una prueba unitaria construye su clase con
   `new` y simulacros.
 - **Vigila el coste por prueba.** Si una clase supera el segundo por prueba, casi siempre es que
   monta algo caro que podría compartirse.
@@ -84,10 +87,10 @@ añaden pruebas, y se defiende escribiéndolas bien, no con trucos de configurac
 | `forkCount=4` | 3:33 |
 | `forkCount=1C` (8 forks) | 3:28 |
 
-Con 335 clases pequeñas, el arranque de cada JVM extra —carga de clases más el agente de ByteBuddy
+Con 388 clases pequeñas, el arranque de cada JVM extra —carga de clases más el agente de ByteBuddy
 de Mockito— cuesta más de lo que se gana solapando. Y paralelizar **por hilos** dentro de un mismo
 JVM está directamente descartado: 5 clases usan `mockStatic`, que sustituye estáticos de forma global
-al proceso, y 13 manipulan `SecurityContextHolder`, `PricingCountryHolder` o `LocaleHolder`. Con
+al proceso, y 16 manipulan `SecurityContextHolder`, `PricingCountryHolder` o `LocaleHolder`. Con
 hilos compartiendo JVM aparecerían fallos intermitentes imposibles de reproducir.
 
 Ojo también con `-T1C`: este proyecto es **de un solo módulo**, así que esa bandera no hace nada.
@@ -105,7 +108,7 @@ Ojo también con `-T1C`: este proyecto es **de un solo módulo**, así que esa b
 **Lo que NO hay que hacer: compartir un solo Postgres entre contextos.** Se probó el 19-ago-2026 y
 **rompe la batería de integración**: 23 pruebas en rojo. La idea era tentadora —siete clases `*IT`
 fuerzan su propio contexto de Spring con `@MockitoBean` o `@TestPropertySource`, y cada contexto
-levanta su Postgres y repite las 154 migraciones de Liquibase—, pero convertir el contenedor de
+levanta su Postgres y repite las 178 migraciones de Liquibase—, pero convertir el contenedor de
 `TestContainersConfiguration` en un `static final` compartido falla por dos motivos:
 
 - **Se pierden los datos de referencia.** `BaseIntegration` vacía las tablas antes de cada prueba, y
