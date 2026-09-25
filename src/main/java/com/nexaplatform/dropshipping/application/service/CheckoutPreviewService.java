@@ -171,6 +171,9 @@ public class CheckoutPreviewService {
                 ? Map.of()
                 : priceTierRepository.findByProductIdInOrderByMinQtyAsc(unidadesPorProducto.keySet()).stream()
                         .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        // Subtotal que admite descuento: sin las lineas cobradas a precio de mayoreo. Base del descuento
+        // de referido, por la misma regla que deja el cupon fuera del mayoreo.
+        int subtotalRebajableUsdCents = 0;
         List<PreviewLine> previewLines = new ArrayList<>();
         for (Line it : lines) {
             Integer unitCents = unitPriceUsdCents(it, unidadesPorProducto, escaleras);
@@ -182,7 +185,20 @@ public class CheckoutPreviewService {
             Integer originalCents = unitOriginalUsdCents(it, unidadesPorProducto, escaleras);
             int lineGross = Math.multiplyExact(originalCents != null ? originalCents : unitCents, qty);
             grossSubtotalUsdCents = Math.addExact(grossSubtotalUsdCents, lineGross);
-            if (it.productId() != null) {
+            // REGLA DEL TITULAR (25-sep-2026): los descuentos son del precio unitario. Una linea a
+            // precio de mayoreo no entra en el alcance del cupon ni en la base del referido, y se deja
+            // FUERA del mapa -no a cero- para que un cupon que solo alcance lineas de mayoreo no
+            // descuente nada en vez de descontar sobre las demas. Mismo criterio que el cobro real
+            // (OrderUseCaseImpl): si la vista previa y el cargo no contaran igual, se enseñaria un total
+            // y se cobraria otro.
+            boolean mayoreo = it.productId() != null && pricingService
+                    .esPrecioDeMayoreo(escaleras.getOrDefault(it.productId(), List.of()),
+                            unidadesPorProducto.getOrDefault(it.productId(), qty));
+            if (!mayoreo) {
+                subtotalRebajableUsdCents = Math.addExact(subtotalRebajableUsdCents,
+                        Math.multiplyExact(unitCents, qty));
+            }
+            if (it.productId() != null && !mayoreo) {
                 grossByProduct.merge(it.productId(), lineGross, Integer::sum);
             }
             // REGLA (14-ago-2026): el importe de la línea se obtiene multiplicando en DÓLARES y
@@ -210,7 +226,8 @@ public class CheckoutPreviewService {
         // Descuento de referido del COMPRADOR (10% del subtotal de producto) si tiene atribución de
         // afiliado viva y NO es su propio código. Mismo cálculo que el pedido (AffiliateProgramService),
         // para que el total mostrado coincida al céntimo con lo que se cobra. Anónimo → sin descuento.
-        int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId, subtotalUsdCents);
+        int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId,
+                subtotalRebajableUsdCents);
         // El cupón compite con el descuento de referido y con la rebaja que el producto ya trae: se
         // queda el MAYOR, nunca la suma. El subtotal aquí ya viene con la rebaja automática aplicada,
         // así que el cupón se mide sobre el importe SIN rebajar para que la comparación sea justa.
@@ -227,7 +244,14 @@ public class CheckoutPreviewService {
                 // ALCANCE del cupón: solo descuenta sobre las líneas que alcanza (todo si es global).
                 int base = promotionService.reachableGrossCents(check.promotion(), grossByProduct);
                 int couponCents = couponDiscountCents(check.promotion(), base);
-                if (couponCents > Math.max(alreadyOff, discountUsdCents)) {
+                if (base == 0) {
+                    // El cupón no alcanza NADA de este carrito. Hace falta decirlo con estas palabras y
+                    // no dejar que caiga al «ya tienes un descuento mejor» de más abajo, que es lo que
+                    // pasaba: con todas las líneas a precio de mayoreo el cliente leía que tenía un
+                    // descuento mejor aplicado cuando no tenía ninguno, y volvía a intentarlo con otro
+                    // código pensando que el suyo estaba caducado.
+                    couponError = "Los precios por cantidad no admiten cupones";
+                } else if (couponCents > Math.max(alreadyOff, discountUsdCents)) {
                     // El cupón gana: sustituye a la rebaja, no se suma. El descuento que se aplica es
                     // solo la DIFERENCIA, porque la rebaja ya está descontada del precio de línea.
                     discountUsdCents = couponCents - alreadyOff;

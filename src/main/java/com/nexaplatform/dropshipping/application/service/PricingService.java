@@ -70,6 +70,9 @@ public class PricingService {
         ProductPriceTierEntity aplicable = tramoAplicable(tiers, quantity);
         // El recargo del tramo manda sobre el del producto; nulo = el tramo no tiene uno propio.
         BigDecimal recargoDelTramo = aplicable != null ? aplicable.getSurchargeCny() : null;
+        // REGLA DEL TITULAR (25-sep-2026): las rebajas son del PRECIO UNITARIO. Sobre un precio de
+        // mayoreo no se descuenta nada. Ver esMayoreo().
+        boolean aplicaRebaja = !esMayoreo(tiers, aplicable);
 
         // Sin descuento que aplicar Y sin recargo propio no hay nada que cambiar.
         //
@@ -80,19 +83,57 @@ public class PricingService {
         // error. Y el primer tramo lo tienen TODOS los productos, asi que era justo el caso mas
         // comun del cambio del 23-sep-2026.
         if (factor == null && recargoDelTramo == null) {
-            return priceFor(product, variant);
+            return priceFor(product, variant, aplicaRebaja);
         }
         ProductVariantEntity effective = variant != null ? variant : representativeVariant(product);
         BigDecimal base = effective != null && effective.getPrice() != null
                 ? effective.getPrice()
                 : product.getBasePrice();
         if (base == null) {
-            return priceFor(product, variant);
+            return priceFor(product, variant, aplicaRebaja);
         }
         // Sin proporcion se cobra la base tal cual: el primer escalon no descuenta nada, pero su
         // recargo si cuenta.
         BigDecimal proporcion = factor != null ? factor : BigDecimal.ONE;
-        return priceForSupplierAmount(product, effective, base.multiply(proporcion), recargoDelTramo);
+        return priceForSupplierAmount(product, effective, base.multiply(proporcion), recargoDelTramo, aplicaRebaja);
+    }
+
+    /**
+     * Si esta cantidad se esta cobrando a precio de MAYOREO, es decir, con un escalon de la tabla de
+     * cantidades que no es el primero.
+     *
+     * <p><b>Por qué existe (regla del titular, 25-sep-2026):</b> las rebajas y los cupones son del
+     * precio unitario. El precio de mayoreo ya ES el descuento —lo concede el proveedor por volumen— y
+     * encadenar encima una promoción del escaparate descuenta dos veces sobre el mismo margen, que en
+     * los tramos altos es justo el más estrecho. Un −30 % sobre el tramo de 1.000 unidades no es una
+     * campaña: es vender por debajo de coste mil veces.
+     *
+     * <p>El PRIMER escalón no cuenta como mayoreo: vale exactamente lo mismo que la cifra grande de la
+     * ficha —factor 1— y es el precio por unidad de toda la vida. Ahí la rebaja se aplica igual que
+     * siempre, que es lo que sostiene las campañas del escaparate.
+     *
+     * <p>Basta con que el escalón aplicado no sea el primero, sin mirar si de verdad baja el precio: un
+     * tramo que solo cambia el recargo sigue siendo una venta al por mayor, y la regla se escribió sobre
+     * la tabla de cantidades, no sobre la proporción.
+     */
+    /**
+     * Si esta cantidad de este producto se cobra a precio de mayoreo.
+     *
+     * <p>Lo necesitan el checkout y el pedido para dejar las líneas de mayoreo FUERA del alcance de los
+     * cupones y del descuento de referido. La rebaja automática se corta antes, dentro del propio
+     * cálculo del precio; estos dos no, porque se aplican al pedido entero y no a un precio suelto.
+     */
+    public boolean esPrecioDeMayoreo(List<ProductPriceTierEntity> tiers, int quantity) {
+        return esMayoreo(tiers, tramoAplicable(tiers, quantity));
+    }
+
+    private boolean esMayoreo(List<ProductPriceTierEntity> tiers, ProductPriceTierEntity aplicable) {
+        if (aplicable == null || tiers == null || tiers.isEmpty()) {
+            return false;
+        }
+        ProductPriceTierEntity primero = tiers.stream().min(Comparator.comparingInt(ProductPriceTierEntity::getMinQty))
+                .orElse(null);
+        return primero != null && aplicable != primero;
     }
 
     /**
@@ -139,6 +180,16 @@ public class PricingService {
     }
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
+        return priceFor(product, variant, true);
+    }
+
+    /**
+     * Lo mismo, indicando si este precio admite rebaja.
+     *
+     * <p>{@code aplicaRebaja} en false es la regla del titular del 25-sep-2026: un precio de mayoreo no
+     * se rebaja. Ver {@link #esMayoreo}.
+     */
+    private PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant, boolean aplicaRebaja) {
         // DROP-629: the product's headline price must be traceable to a real, purchasable
         // variant — not the disconnected base_price. When no specific variant is requested
         // (catalog list / detail headline) and the product has active variants, derive the
@@ -156,7 +207,7 @@ public class PricingService {
         BigDecimal supplierAmount = effective != null && effective.getPrice() != null
                 ? effective.getPrice()
                 : product.getBasePrice();
-        return priceForSupplierAmount(product, effective, supplierAmount);
+        return priceForSupplierAmount(product, effective, supplierAmount, null, aplicaRebaja);
     }
 
     /**
@@ -195,6 +246,19 @@ public class PricingService {
      */
     public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
             BigDecimal supplierAmount, BigDecimal surchargeOverrideCny) {
+        return priceForSupplierAmount(product, effective, supplierAmount, surchargeOverrideCny, true);
+    }
+
+    /**
+     * Lo mismo, diciendo ademas si este precio admite rebaja.
+     *
+     * <p>{@code aplicaRebaja} en false deja fuera TODA promoción del escaparate —rebajas, campañas y
+     * cualquier otra— porque el importe que se está tarificando es de mayoreo y ya lleva dentro el
+     * descuento por volumen del proveedor. Los cupones se cortan aparte, en el checkout y en el pedido,
+     * porque se aplican al pedido entero y no a un precio suelto.
+     */
+    public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
+            BigDecimal supplierAmount, BigDecimal surchargeOverrideCny, boolean aplicaRebaja) {
         if (product == null) {
             return unpriced();
         }
@@ -321,7 +385,11 @@ public class PricingService {
         // canal de integración (Shopify/WooCommerce/API de partners) vende con su propio margen y NUNCA
         // se le aplica un descuento: si un partner revende, la promoción es decisión suya, no nuestra, y
         // regalársela le comería el margen que paga por integrarse. Ver [[price-rule-channel]].
-        PromotionService.Discounted deal = PricingChannelHolder.get() == PriceRuleChannel.STOREFRONT
+        //
+        // Y SEGUNDA REGLA ESTRICTA (25-sep-2026): tampoco se rebaja un precio de MAYOREO. El escalón por
+        // cantidad ya es el descuento que concede el proveedor por volumen; encadenarle encima una
+        // campaña descuenta dos veces sobre el margen más estrecho del catálogo. Ver esMayoreo().
+        PromotionService.Discounted deal = aplicaRebaja && PricingChannelHolder.get() == PriceRuleChannel.STOREFRONT
                 ? promotionService.applyAutomatic(product, displayTotal, floorDisplay)
                 : PromotionService.Discounted.none(displayTotal);
         String originalFormatted = null;

@@ -241,15 +241,22 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 ? Map.of()
                 : priceTierRepository.findByProductIdInOrderByMinQtyAsc(unidadesPorProducto.keySet()).stream()
                         .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        // Subtotal que admite descuento: el de arriba menos las líneas cobradas a precio de mayoreo. Es
+        // la base del descuento de referido, por la misma regla que deja el cupón fuera del mayoreo.
+        int subtotalRebajable = 0;
         for (OrderItemInput itemReq : req.items()) {
             OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct, order.getShippingCountry(),
                     unidadesPorProducto, escaleras);
             order.getItems().add(line);
             subtotal = Math.addExact(subtotal, line.getLineTotalCents());
+            if (!pricingService.esPrecioDeMayoreo(escaleras.getOrDefault(itemReq.productId(), List.of()),
+                    unidadesPorProducto.getOrDefault(itemReq.productId(), itemReq.quantity()))) {
+                subtotalRebajable = Math.addExact(subtotalRebajable, line.getLineTotalCents());
+            }
         }
         requireMinimumOrderQuantities(order.getItems());
-        cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(), grossByProduct,
-                req.shippingOptionCode());
+        cuponAplicado = applyTotals(order, userId, subtotal, subtotalRebajable, gross.cents(), parcel,
+                req.couponCode(), grossByProduct, req.shippingOptionCode());
 
         Order saved = orderRepository.save(order);
         // El canje se apunta con el pedido ya guardado: si el guardado falla, el cupón no se gasta.
@@ -366,7 +373,20 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int lineGross = Math.multiplyExact(
                 sinRebaja.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact(), itemReq.quantity());
         gross.add(lineGross);
-        grossByProduct.merge(product.getId(), lineGross, Integer::sum);
+        // ALCANCE DE LOS DESCUENTOS (regla del titular, 25-sep-2026): una línea que se está cobrando a
+        // precio de MAYOREO no entra en el alcance del cupón. El escalón por cantidad ya es el descuento
+        // que concede el proveedor por volumen; un cupón encima descuenta dos veces sobre el margen más
+        // estrecho del catálogo. Se deja fuera del mapa, no a cero, para que un cupón con alcance
+        // PRODUCT/CATEGORY que SOLO alcance líneas de mayoreo no descuente nada en vez de descontar
+        // sobre las demás.
+        //
+        // Al gross total (gross.add) sí suma, y tiene que seguir sumando: ese acumulado sirve para medir
+        // cuánto rebajó ya la promoción automática, y una línea de mayoreo aporta lo mismo al bruto que
+        // al neto, así que no altera esa medida.
+        if (!pricingService.esPrecioDeMayoreo(escaleras.getOrDefault(product.getId(), List.of()),
+                unidadesDelProducto)) {
+            grossByProduct.merge(product.getId(), lineGross, Integer::sum);
+        }
 
         parcel.add(product, variant, itemReq.quantity());
         return OrderItem.builder().productId(product.getId()).variantId(variant != null ? variant.getId() : null)
@@ -429,8 +449,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * <p>Se calculan con los MISMOS servicios que la vista previa del checkout para que lo mostrado
      * coincida al céntimo con lo cobrado.
      */
-    private UUID applyTotals(Order order, UUID userId, int subtotal, int grossSubtotal, ParcelAggregator parcel,
-            String couponCode, Map<UUID, Integer> grossByProduct, String shippingOptionCode) {
+    private UUID applyTotals(Order order, UUID userId, int subtotal, int subtotalRebajable, int grossSubtotal,
+            ParcelAggregator parcel, String couponCode, Map<UUID, Integer> grossByProduct, String shippingOptionCode) {
         // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
         // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
         // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
@@ -457,7 +477,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
         // de afiliado viva (y no es su propio código). El envío y el IVA se calculan sobre (subtotal −
         // descuento).
-        int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotal);
+        // Sobre el subtotal REBAJABLE: las líneas a precio de mayoreo quedan fuera, igual que del cupón.
+        int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotalRebajable);
 
         // Cupón tecleado en el checkout. Compite con el descuento de referido y se queda el MAYOR: dos
         // descuentos sumados sobre el mismo pedido se comen el margen entero. La rebaja automática del
