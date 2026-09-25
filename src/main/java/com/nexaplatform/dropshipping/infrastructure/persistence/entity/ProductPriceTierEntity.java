@@ -64,7 +64,7 @@ public class ProductPriceTierEntity {
      * tengo uno propio, hereda el global»; cero es «un recargo de cero»— y confundirlos pondría a cero
      * los 3.240 tramos que hoy heredan.
      */
-    @Column(name = "surcharge_pct", precision = 6, scale = 3)
+    @Column(name = "surcharge_pct", precision = 9, scale = 3)
     private BigDecimal surchargePct;
 
     @CreatedDate

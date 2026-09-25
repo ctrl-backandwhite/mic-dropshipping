@@ -187,6 +187,32 @@ class RecargoEnPorcentajeTest {
         assertThat(cien.surchargeUsd()).isEqualByComparingTo("2.40");
     }
 
+    /**
+     * El recargo REAL más alto del catálogo, que es de cuatro cifras.
+     *
+     * <p>Lo destapó el despliegue a preproducción: la columna se declaró `numeric(6,3)` copiando la del
+     * margen interno, y el traslado abortó entero con «numeric field overflow». La causa de fondo fue
+     * medir mal —se tomaron los diez porcentajes MÁS FRECUENTES por los extremos del rango—, y el
+     * máximo de verdad es una ficha de base ¥7,10 con ¥78 de recargo: el 1.098,6 %.
+     *
+     * <p>Esta prueba fija que un recargo de cuatro cifras se tarifica sin perder precisión. La anchura
+     * de la columna la fija la v176 con `numeric(9,3)`.
+     */
+    @Test
+    @DisplayName("un recargo de cuatro cifras, como el mayor del catálogo, se cobra entero")
+    void unRecargoDeCuatroCifras() {
+        ProductEntity p = productoCon(new BigDecimal("7.10"), new BigDecimal("1098.592"));
+
+        PricingService.PricedAmount precio = pricingService.priceFor(p);
+
+        // El importe que tenía esa ficha eran 78,00, y vuelve a salir 78,00 AL CÉNTIMO. No al bit: el
+        // traslado guarda el porcentaje con tres decimales —1.098,592 en vez de 1.098,59154929…— y esa
+        // poda deja un residuo de 0,000032. Se lo come el redondeo a céntimos con el que se compone el
+        // total, así que el precio no se mueve; pero conviene saber que el traslado es exacto al
+        // céntimo y no más, porque «no se mueve ni un céntimo» es lo que promete la v176.
+        assertThat(precio.surchargeUsd().setScale(2, java.math.RoundingMode.HALF_UP)).isEqualByComparingTo("78.00");
+    }
+
     private static ProductEntity productoCon(BigDecimal coste, BigDecimal recargoPct) {
         ProductEntity p = ProductEntity.builder().source("1688").externalId("X").basePrice(coste).currency("CNY")
                 .surchargePct(recargoPct).build();

@@ -8,17 +8,22 @@
 -- a mano producto a producto, o se desfasaba en silencio.
 --
 -- A diferencia del margen interno —que valía el 50 % exacto en los 263 productos— aquí el porcentaje
--- equivalente NO es uniforme: medido sobre preproducción el 25-sep-2026, los 257 productos con
--- recargo van del 59 % al 250 % de la base. Por eso el traslado es producto a producto y no una
+-- equivalente NO es uniforme: medido sobre preproducción el 25-sep-2026, los 279 productos con
+-- recargo van del 17,3 % al 1.098,6 % de la base. Por eso el traslado es producto a producto y no una
 -- constante: poner un porcentaje único movería el precio de casi todos.
 --
 -- Nulables a propósito, y aquí nulo y cero son cosas DISTINTAS: en el tramo, nulo significa «este
 -- tramo no tiene recargo propio, hereda el del producto» y cero es un recargo de cero de verdad.
 -- Confundirlos pondría a cero los 3.240 tramos que hoy heredan.
+--
+-- PRECISIÓN (9,3) y no (6,3), que es la del margen interno: el recargo llega HASTA EL 1.098,6 % —una
+-- ficha de base ¥7,10 con ¥78 de recargo— y con seis dígitos el traslado aborta entero con
+-- «numeric field overflow». Pasó en el despliegue a preproducción. La cuenta hay que hacerla sobre
+-- el MÁXIMO real, no sobre los valores más frecuentes.
 SET lock_timeout = '5s';
 
-ALTER TABLE product ADD COLUMN IF NOT EXISTS surcharge_pct numeric(6,3);
-ALTER TABLE product_price_tier ADD COLUMN IF NOT EXISTS surcharge_pct numeric(6,3);
+ALTER TABLE product ADD COLUMN IF NOT EXISTS surcharge_pct numeric(9,3);
+ALTER TABLE product_price_tier ADD COLUMN IF NOT EXISTS surcharge_pct numeric(9,3);
 
 COMMENT ON COLUMN product.surcharge_pct IS
   'Recargo en porcentaje sobre el coste del proveedor. Nulo o cero = sin recargo.';

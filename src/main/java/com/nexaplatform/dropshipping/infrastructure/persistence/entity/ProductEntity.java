@@ -122,7 +122,7 @@ public class ProductEntity extends BaseEntity {
      * <p>Nulable, y nulo aporta CERO. No se inventa un porcentaje por defecto: eso encarecería en
      * silencio cualquier producto al que le falte el dato.
      */
-    @Column(name = "surcharge_pct", precision = 6, scale = 3)
+    @Column(name = "surcharge_pct", precision = 9, scale = 3)
     private BigDecimal surchargePct;
 
     /**
