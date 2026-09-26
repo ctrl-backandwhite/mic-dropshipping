@@ -178,6 +178,38 @@ class SoloViveLaImagenComprimidaTest {
                 any(Instant.class));
     }
 
+    /**
+     * La MEMORIA de descargas también se reapunta, o reencolar deja de arreglar nada.
+     *
+     * <p>{@code imagen_origen_espejada} guarda {@code url_de_origen → cdn_url} para no volver a bajar lo
+     * que ya se bajó. Si la compresión borra el original y no la toca, esa memoria queda apuntando a un
+     * objeto muerto, y entonces el espejador consulta la tabla, encuentra una URL y da la foto por
+     * espejada <b>sin descargar ni subir nada</b>: la fila vuelve a MIRRORED apuntando al mismo objeto
+     * borrado.
+     *
+     * <p>Se vio en preproducción el 25-sep-2026: el auto-sanado reencoló 806 imágenes, la cola se vació
+     * en segundos y las 806 seguían rotas. 8.083 entradas de la memoria estaban envenenadas así.
+     */
+    @Test
+    @DisplayName("comprimir reapunta también la memoria de descargas, no solo las fichas")
+    void reapuntaLaMemoriaDeDescargas() {
+        ProductImageEntity img = imagenSinComprimir();
+        when(imageRepository.findPendientesDeComprimir(any())).thenReturn(List.of(img));
+        when(storage.bytesFromPublicUrl(ORIGINAL)).thenReturn(bytes(240_000));
+        when(compresor.comprimir(any(), any()))
+                .thenReturn(new CompresorDeImagen.Comprimida(bytes(90_000), "webp", "image/webp", 800, 800));
+        String comprimida = "https://img.nx036.com/product-images/media/cd/cdef.webp";
+        when(storage.upload(anyString(), any(), anyString())).thenReturn(comprimida);
+
+        service.comprimirPendientesBatch(10);
+
+        // Y ANTES de borrar: si se borra primero y falla la escritura, la memoria sigue mandando a todo
+        // el mundo a un objeto que ya no está.
+        InOrder orden = inOrder(origenesEspejados, storage);
+        orden.verify(origenesEspejados).reapunta(ORIGINAL, comprimida);
+        orden.verify(storage).deleteByPublicUrl(ORIGINAL);
+    }
+
     @Test
     @DisplayName("si la comprimida cae en la misma clave, no se borra: sería borrar la buena")
     void mismaClaveNoSeBorra() {

@@ -797,6 +797,11 @@ public class ImageMirrorService {
                 imageRepository.reapuntaLasQueCompartianElOriginal(anterior, url, (long) lista.datos().length, hash,
                         Instant.now());
                 if (anterior != null && !anterior.equals(url)) {
+                    // Y la MEMORIA de descargas también, o reencolar la imagen deja de arreglarla: el
+                    // espejador consulta esa tabla, encuentra la URL vieja y da la foto por espejada sin
+                    // bajar ni subir nada. La fila vuelve a MIRRORED apuntando al objeto que se acaba de
+                    // borrar, y el auto-sanado la reencola en bucle sin que nada cambie.
+                    origenesEspejados.reapunta(anterior, url);
                     storage.deleteByPublicUrl(anterior);
                 }
                 bytesAntes += original.length;

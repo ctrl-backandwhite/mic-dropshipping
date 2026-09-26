@@ -96,10 +96,9 @@ class ComisionPropiaDelAfiliadoTest {
 
     @BeforeEach
     void setup() {
-        when(configRepo.findFirstByOrderByCreatedAtAsc())
-                .thenReturn(Optional.of(AffiliateProgramConfigEntity.builder().defaultPercent(new BigDecimal("10.000"))
-                        .attributionWindowDays(30).returnPeriodDays(14).minPayoutCents(5000).currency("EUR")
-                        .attributionModel("LAST_CLICK").build()));
+        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(AffiliateProgramConfigEntity.builder()
+                .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
+                .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build()));
         when(conversionRepo.save(any())).thenAnswer(i -> {
             var c = i.<com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateConversionEntity>getArgument(
                     0);

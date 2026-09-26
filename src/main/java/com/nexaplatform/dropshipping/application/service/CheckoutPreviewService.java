@@ -191,8 +191,8 @@ public class CheckoutPreviewService {
             // descuente nada en vez de descontar sobre las demas. Mismo criterio que el cobro real
             // (OrderUseCaseImpl): si la vista previa y el cargo no contaran igual, se enseñaria un total
             // y se cobraria otro.
-            boolean mayoreo = it.productId() != null && pricingService
-                    .esPrecioDeMayoreo(escaleras.getOrDefault(it.productId(), List.of()),
+            boolean mayoreo = it.productId() != null
+                    && pricingService.esPrecioDeMayoreo(escaleras.getOrDefault(it.productId(), List.of()),
                             unidadesPorProducto.getOrDefault(it.productId(), qty));
             if (!mayoreo) {
                 subtotalRebajableUsdCents = Math.addExact(subtotalRebajableUsdCents,
@@ -226,8 +226,7 @@ public class CheckoutPreviewService {
         // Descuento de referido del COMPRADOR (10% del subtotal de producto) si tiene atribución de
         // afiliado viva y NO es su propio código. Mismo cálculo que el pedido (AffiliateProgramService),
         // para que el total mostrado coincida al céntimo con lo que se cobra. Anónimo → sin descuento.
-        int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId,
-                subtotalRebajableUsdCents);
+        int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId, subtotalRebajableUsdCents);
         // El cupón compite con el descuento de referido y con la rebaja que el producto ya trae: se
         // queda el MAYOR, nunca la suma. El subtotal aquí ya viene con la rebaja automática aplicada,
         // así que el cupón se mide sobre el importe SIN rebajar para que la comparación sea justa.

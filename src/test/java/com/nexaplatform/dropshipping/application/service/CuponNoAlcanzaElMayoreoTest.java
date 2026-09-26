@@ -155,9 +155,8 @@ class CuponNoAlcanzaElMayoreoTest {
                 .build();
         when(promociones.checkCoupon(anyString(), any(), anyInt()))
                 .thenReturn(new PromotionService.CouponCheck(true, null, cupon));
-        when(promociones.reachableGrossCents(any(), any()))
-                .thenAnswer(i -> i.<Map<UUID, Integer>>getArgument(1).values().stream().mapToInt(Integer::intValue)
-                        .sum());
+        when(promociones.reachableGrossCents(any(), any())).thenAnswer(
+                i -> i.<Map<UUID, Integer>>getArgument(1).values().stream().mapToInt(Integer::intValue).sum());
         lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
     }
 }

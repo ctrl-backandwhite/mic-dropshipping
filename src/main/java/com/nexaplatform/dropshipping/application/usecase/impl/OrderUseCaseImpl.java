@@ -255,8 +255,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
         }
         requireMinimumOrderQuantities(order.getItems());
-        cuponAplicado = applyTotals(order, userId, subtotal, subtotalRebajable, gross.cents(), parcel,
-                req.couponCode(), grossByProduct, req.shippingOptionCode());
+        cuponAplicado = applyTotals(order, userId, subtotal, subtotalRebajable, gross.cents(), parcel, req.couponCode(),
+                grossByProduct, req.shippingOptionCode());
 
         Order saved = orderRepository.save(order);
         // El canje se apunta con el pedido ya guardado: si el guardado falla, el cupón no se gasta.
