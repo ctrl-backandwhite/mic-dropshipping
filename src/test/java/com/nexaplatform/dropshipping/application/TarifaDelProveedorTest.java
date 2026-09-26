@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
@@ -223,5 +224,52 @@ class TarifaDelProveedorTest {
         BulkProductFields.applyVariantLogistics(p, r);
 
         assertThat(p.getVariants().get(0).getSupplierShipFirstCny()).isEqualByComparingTo("8");
+    }
+
+    /**
+     * La tarifa tiene que sobrevivir al volcado que propaga el producto al otro entorno.
+     *
+     * <p>El bus no manda el producto entero: manda identificadores, y el destino lo reimporta con
+     * el MISMO formato de bulk que produce {@link ProductBulkExportMapper}. Lo que no salga en ese
+     * volcado no llega a producción, y no hay ningún error que lo delate — igual que le pasó al
+     * envío por variante, que se perdía en cada ida y vuelta «en silencio» hasta que se añadió su
+     * línea.
+     *
+     * <p>Con la tarifa perdida, pro vuelve a calcular cinco unidades como cinco veces la primera:
+     * ¥40 donde el proveedor cobra ¥20.
+     */
+    @Test
+    void la_tarifa_sobrevive_al_volcado_que_propaga_a_produccion() {
+        ProductVariantEntity pv = new ProductVariantEntity();
+        pv.setSku("SKU-1");
+        pv.setSupplierShipFirstCny(new BigDecimal("8"));
+        pv.setSupplierShipExtraCny(new BigDecimal("3"));
+
+        BulkProductDtoIn.BulkVariant volcada = volcar(pv);
+
+        assertThat(volcada.getSupplierShipping()).isNotNull();
+        assertThat(volcada.getSupplierShipping().getFirstUnitCny()).isEqualByComparingTo("8");
+        assertThat(volcada.getSupplierShipping().getExtraUnitCny()).isEqualByComparingTo("3");
+    }
+
+    /**
+     * EL control: una variante sin tarifa medida no inventa un bloque vacío en el volcado. Un
+     * {@code supplierShipping} con los dos importes a nulo llegaría al destino y no diría nada,
+     * pero ensucia el payload de las dos de cada tres fichas que no se pueden sondar.
+     */
+    @Test
+    void sin_tarifa_el_volcado_no_lleva_el_bloque() {
+        ProductVariantEntity pv = new ProductVariantEntity();
+        pv.setSku("SKU-1");
+
+        assertThat(volcar(pv).getSupplierShipping()).isNull();
+    }
+
+    /** El volcado real que usa el bus para propagar al otro entorno. */
+    private static BulkProductDtoIn.BulkVariant volcar(ProductVariantEntity pv) {
+        ProductEntity p = ProductEntity.builder().externalId("1688-1").build();
+        p.setVariants(new java.util.ArrayList<>(List.of(pv)));
+
+        return new ProductBulkExportMapper().toBulk(p, null, null, null, null).getVariants().get(0);
     }
 }

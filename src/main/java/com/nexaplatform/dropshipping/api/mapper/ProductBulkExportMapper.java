@@ -230,6 +230,19 @@ public class ProductBulkExportMapper {
         // ida y vuelta, en silencio. El dato sólo se echaría de menos al llegar la factura del
         // transportista.
         b.setShippingCny(v.getShippingCny());
+        // La tarifa del proveedor viaja por el mismo motivo y con el mismo riesgo que el envío de
+        // aquí arriba: el bus no manda el producto, manda identificadores, y el destino lo
+        // reimporta con ESTE volcado. Lo que no salga aquí no llega a producción, y no hay ningún
+        // error que lo delate — sin ella, pro volvería a calcular cinco unidades como cinco veces
+        // la primera: ¥40 donde el proveedor cobra ¥20.
+        //
+        // Sin tarifa medida no se escribe un bloque vacío: dos de cada tres fichas no se pueden
+        // sondar, y un `supplierShipping` con los dos importes a nulo no dice nada y ensucia el
+        // payload de todas ellas.
+        if (v.getSupplierShipFirstCny() != null || v.getSupplierShipExtraCny() != null) {
+            b.setSupplierShipping(new BulkProductDtoIn.BulkSupplierShipping(v.getSupplierShipFirstCny(),
+                    v.getSupplierShipExtraCny()));
+        }
         return b;
     }
 
